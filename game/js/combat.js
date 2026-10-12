@@ -280,7 +280,7 @@ window.COMBAT = (function () {
     if (a.tpl === 'marauder') G.flags.marauderKilled = true;
     if (a.tpl === 'mytar') G.openBridge();
     if (a.tpl === 'klyk_city') { G.flags.klykCityDead = true; if (G.q('column') >= 1 && G.q('column') < 4) G.setQuest('column', 4); }
-    if (a.tpl === 'granit' && G.q('column') < 9) G.columnEnd('exposed');
+    if (a.tpl === 'granit') { G.flags.granitDead = true; if (G.q('column') < 9) G.columnEnd('exposed'); }
     if (window.SOC && by && by.isPlayer) SOC.onKill(a);
     if (a.faction === 'town' && by && by.isPlayer) G.addRep(-40, `убит ${a.name}`);
     NET.syncEnt(a);

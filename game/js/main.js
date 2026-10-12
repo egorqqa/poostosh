@@ -89,6 +89,38 @@
     if (arm !== c.armor) { if (c.armor) R.addItem(c, c.armor, 1); R.removeItem(c, arm, 1); c.armor = arm; }
     if (verbose) G.log(`${c.name}: оружие — ${c.weapon ? DATA.ITEMS[c.weapon].name : 'кулаки'}, броня — ${c.armor ? DATA.ITEMS[c.armor].name : 'нет'}.`, 'sys');
   };
+  // развитие напарника
+  G.companionXP = function (n) {
+    const c = G.companion;
+    if (!c || n <= 0) return;
+    c.level = c.level || 1; c.xp = (c.xp || 0) + n; c.freePts = c.freePts || 0;
+    while (c.xp >= R.xpForLevel(c.level)) {
+      c.level++; c.freePts += 3; c.baseHP += 5; c.hp = R.maxHP(c);
+      G.log(`${c.name} получает уровень ${c.level}! Очки навыков напарника: ${c.freePts} (разговор → «Развитие напарника»).`, 'good');
+    }
+  };
+  G.companionSkillUp = function (k) {
+    const c = G.companion;
+    if (!c || !c.freePts) return;
+    c.skillOverride[k] = R.skill(c, k) + 4; c.freePts--;
+  };
+  G.healCompanion = function (useKit) {
+    const c = G.companion, p = G.player;
+    if (!c) return;
+    if (useKit) {
+      R.removeItem(p, 'medkit', 1);
+      const h = R.healAmount(p, 'medkit');
+      c.hp = Math.min(R.maxHP(c), c.hp + h); G.log(`${c.name}: +${h} ОЗ (аптечка).`, 'good'); SND.play('heal');
+      return;
+    }
+    if (G.time - (c.lastAid || -999) < 60) { G.log(`Перевязывать ${c.name} можно раз в час.`, 'warn'); return; }
+    c.lastAid = G.time;
+    const res = R.check(R.skill(p, 'medic') + 15, p.stats.luck);
+    if (!res.ok) { G.log(`Перевязка не удалась (${res.chance}%).`, 'warn'); return; }
+    const h = 4 + Math.floor(R.skill(p, 'medic') / 5);
+    c.hp = Math.min(R.maxHP(c), c.hp + h); G.passTime(15);
+    G.log(`Вы перевязали ${c.name}: +${h} ОЗ (${res.chance}%).`, 'good'); SND.play('heal'); G.giveXP(5);
+  };
   G.dismissCompanion = function () {
     const c = G.companion;
     if (!c) return;
@@ -157,6 +189,22 @@
     G.log('Конец главы 3. Колонна уходит на север, к старой обсерватории... Продолжение следует.', 'warn');
     if (G.loc && G.loc.id === 'city') for (const a of G.loc.actors) if (a.faction === 'column' && !a.dead) { a.leaving = true; a.hostile = false; NET.syncEnt(a); }
   };
+  // ---------- глава 4 ----------
+  G.granitYields = function () {
+    G.flags.granitYield = true;
+    for (const a of G.loc.actors) if (a.faction === 'column' && !a.dead) { a.hostile = false; a.leaving = true; NET.syncEnt(a); }
+    G.giveXP(150);
+  };
+  G.obsFinish = function (how) {
+    G.flags.obsDone = how;
+    if (how === 'dark') {
+      G.setQuest('obs', 9); G.reward(300, 500, []); G.addRep(-60, 'облако «З-2» над пустошью');
+      G.log('КОНЕЦ КАМПАНИИ (тёмный). Колонна правит пустошью, а на юге поднимаются обращённые...', 'bad');
+      return;
+    }
+    G.giveXP(how === 'boom' ? 250 : 300);
+    if (G.q('obs') < 4) G.setQuest('obs', 4);
+  };
   G.openBridge = function () {
     if (G.flags.bridgeOpen) return;
     G.flags.bridgeOpen = true;
@@ -167,6 +215,7 @@
   G.onRadio = function () { WMAP.siteState(G, 'bridge').known = true; WMAP.siteState(G, 'rassvet').known = true; };
   G.siteQuestMark = function (id) {
     const q = G.q, f = G.flags;
+    if (id === 'observatory') return q('obs') >= 1 && q('obs') < 4 ? '!' : q('obs') === 9 ? '✔' : null;
     if (id === 'city') return q('column') >= 1 && q('column') < 9 ? '!' : q('column') === 9 ? '✔' : null;
     if (id === 'bridge') return !f.bridgeOpen && q('thread') >= 1 ? '!' : f.bridgeOpen ? '✔' : null;
     if (id === 'rassvet') { if (q('thread') === 4 || q('mast') === 2) return '?'; if (q('thread') === 1 || q('mast') === 0) return '!'; return q('thread') === 9 ? '✔' : null; }
@@ -194,7 +243,8 @@
       case 'granit': return q('column') >= 1 && q('column') < 3 ? '!' : q('column') === 4 ? '?' : null;
       case 'klyk_city': return q('column') === 3 ? '!' : null;
       case 'vera': return q('thread') === 1 ? '!' : q('thread') === 4 && (G.flags.z2Destroyed || G.hasItem('z2_crate')) ? '?' : null;
-      case 'kuzma': return q('mast') === 2 ? '?' : q('mast') === 0 || (q('thread') === 9 && q('column') === 0) ? '!' : null;
+      case 'lada': return G.flags.ladaFree ? null : '!';
+      case 'kuzma': return q('obs') === 4 ? '?' : q('column') === 9 && q('obs') === 0 ? '!' : q('mast') === 2 ? '?' : q('mast') === 0 || (q('thread') === 9 && q('column') === 0) ? '!' : null;
       case 'palych': return q('thread') >= 2 && q('thread') < 9 && !G.hasItem('explosive') && !G.flags.z2Done && !G.flags.palychExplosive ? '!' : null;
       case 'mitya': return G.hasItem('samples') && !G.flags.mityaCured ? '?' : null;
       case 'mytar': return !G.flags.bridgeOpen && q('thread') >= 1 ? '!' : null;
@@ -249,6 +299,7 @@
   G.giveXP = function (n, noShare) {
     const p = G.player;
     if (!noShare && window.SOC) SOC.shareXP(n);
+    if (G.companion && !G.companion.dead) G.companionXP(Math.round(n * 0.6));
     p.xp += n;
     G.log(`+${n} опыта.`, 'good');
     while (p.xp >= R.xpForLevel(p.level)) {

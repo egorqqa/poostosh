@@ -10,7 +10,7 @@ window.WORLD_API = (function () {
       const auto = Math.max(1, Math.round((im ? im.width : 64) / 64 * 0.7));
       return {
         uid: i, sprite, x, y, fw: o.fw || auto, fh: o.fh || auto, oy: o.oy != null ? o.oy : 4,
-        block: o.block !== false, desc: o.desc || null, gate: o.gate || null, interact: o.container ? null : DATA.INTERACT[o.interact || sprite] || null,
+        block: o.block !== false, desc: o.desc || null, gate: o.gate || null, showIf: o.showIf || null, interact: o.container ? null : DATA.INTERACT[o.interact || sprite] || null,
         name: o.name || (o.container ? 'Ящик' : DATA.INTERACT[o.interact || sprite] ? DATA.INTERACT[o.interact || sprite].name : null),
         container: !!o.container, lock: o.lock || 0, owner: o.owner || null, caps: o.caps || 0,
         inv: (o.items || []).map(([id, n]) => ({ id, n })), jammed: false,
@@ -25,6 +25,7 @@ window.WORLD_API = (function () {
     if (rv) for (let y = rv.y0; y <= rv.y1; y++) for (let x = 0; x < L.w; x++) if (x < rv.bx0 || x > rv.bx1) L.blocked[y * L.w + x] = 1;
     for (const o of L.objects) {
       if (o.gate) o.hidden = !!(window.G && G.flags && G.flags[o.gate]);
+      if (o.showIf) o.hidden = !(window.G && G.flags && G.flags[o.showIf]);
       if (!o.block || o.hidden) continue;
       for (let y = o.y; y < o.y + o.fh; y++) for (let x = o.x; x < o.x + o.fw; x++) {
         if (x < 0 || y < 0 || x >= L.w || y >= L.h) continue;
@@ -128,6 +129,7 @@ window.WORLD_API = (function () {
     ENG.buildGround(L);
     G.loc = L;
     G.scene = 'local';
+    if (G.combat) { G.combat = null; SND.setCombat(false); }
     G.sneaking = false;
     G.detectT = 0;
     G.grace = 0;
@@ -135,6 +137,14 @@ window.WORLD_API = (function () {
     ENG.cam.x = c.x; ENG.cam.y = c.y - 40;
     G.log(`— ${def.name} —`, 'sys');
     SND.setScene(LOCATIONS[id] ? id : 'wild');
+    if (id === 'observatory' || id === 'obs_dome') {
+      const friendly = G.flags.columnEnd === 'joined' || G.flags.granitYield || G.flags.obsDone;
+      for (const a of L.actors) {
+        if (a.faction === 'column' && !a.dead) { a.hostile = !friendly; if (G.flags.granitYield || G.flags.obsDone) a.gone = true; }
+        if (a.tpl === 'lada' && G.flags.ladaFree) a.gone = true;
+        if (a.tpl === 'granit_obs' && G.flags.granitDead) a.name = 'Майор Сталь';
+      }
+    }
     if (id === 'city') {
       const k = L.actors.find(a => a.tpl === 'klyk_city');
       if (k && G.flags.klykDead) k.name = 'Шрам';
@@ -184,6 +194,7 @@ window.WORLD_API = (function () {
     if (id === 'zarya_lab' && G.q('zarya') >= 1 && G.q('zarya') < 3) G.setQuest('zarya', 3);
     if (id === 'object9' && G.q('thread') === 2) G.setQuest('thread', 3);
     if (id === 'city' && G.q('column') === 1) G.setQuest('column', 2);
+    if (id === 'observatory' && G.q('obs') === 1) G.setQuest('obs', 2);
     if (!NET.active) { W.loadLocation(G, id, opts); setTimeout(() => G.autosave(), 300); return; }
     const res = await NET.enter(id);
     if (res.state) G.locStates[id] = res.state; else delete G.locStates[id];
@@ -655,7 +666,8 @@ window.WORLD_API = (function () {
       return null;
     };
     if (G.combat) return 'Сейчас не до того — идёт бой.';
-    if (G.flags[k] || e.open) return go();
+    if (e.flag && !G.flags[e.flag]) return e.text;
+    if (G.flags[k] || e.open || e.flag) return go();
     if (e.code && G.flags[e.code]) { SND.play('lock_open'); return go(e.codeMsg || 'Вы набираете код 4-1-7. Замок щёлкает.'); }
     if (e.key && G.hasItem(e.key)) { SND.play('lock_open'); return go(`Вы открываете дверь: ${DATA.ITEMS[e.key].name}.`); }
     if (e.lock) {
@@ -680,7 +692,7 @@ window.WORLD_API = (function () {
         const nm = c.stat ? DATA.SPECIAL.find(s => s.id === c.stat).name : DATA.SKILLS.find(s => s.id === c.skill).name;
         opts.push({ t: G.flags[objKey(G, o, 'check')] ? `<span class="muted">${c.label} (сделано)</span>` : `<span class="chk">[${nm} ${c.diff}]</span> ${c.label}`, act: () => node(W.checkObject(G, o)) });
       }
-      for (const ac of it.actions || []) if (!ac.if || ac.if(G, o)) opts.push({ t: ac.label, act: () => node(ac.act(G, o)) });
+      for (const ac of it.actions || []) if (!ac.if || ac.if(G, o)) opts.push({ t: ac.label, act: () => { const r = ac.act(G, o); if (r != null && G.dialog) node(r); } });
       opts.push({ t: 'Отойти', end: true });
       return { text, opts };
     };

@@ -185,6 +185,11 @@ window.DATA = (function () {
     klyk_city: { name: 'Клык', tint: 'boss', faction: 'klyk', dialog: 'klyk_city',
       stats: { str: 7, per: 6, end: 8, cha: 5, int: 5, agi: 7, luck: 6 }, hp: 60,
       inv: [['ammo762', 20], ['column_orders', 1], ['token', 1]], caps: 70, weapon: 'ak', armor: 'leather', skills: { guns: 65 }, xp: 150 },
+    lada: { name: 'Инженер Лада', tint: 'doctor', faction: 'prisoner', dialog: 'lada',
+      stats: { str: 4, per: 7, end: 5, cha: 6, int: 9, agi: 5, luck: 5 }, hp: 24, inv: [], caps: 0 },
+    granit_obs: { name: 'Командор Гранит', tint: 'guard', faction: 'column', dialog: 'granit_obs', guard: true,
+      stats: { str: 8, per: 7, end: 9, cha: 6, int: 6, agi: 6, luck: 5 }, hp: 110,
+      inv: [['ammo762', 30], ['medkit', 2]], caps: 300, weapon: 'ak', armor: 'col_armor', skills: { guns: 78 }, xp: 450 },
     klyk_man: { name: 'Шакал Клыка', tint: 'raider', faction: 'klyk', guard: true,
       stats: { str: 6, per: 5, end: 5, cha: 3, int: 4, agi: 6, luck: 4 }, hp: 28,
       inv: [['ammo9', 10], ['token', 1]], caps: 12, weapon: 'pistol', armor: 'jacket', skills: { guns: 48 }, xp: 50 },
@@ -430,6 +435,8 @@ window.DATA = (function () {
         hello: { text: 'Кузьма, радист. Был радистом. Антенна молчит — и станция глохнет без вестей.',
           opts: [
             { t: 'Что слышно в эфире?', if: g => g.q('thread') === 9 && g.q('column') === 0, go: 'column' },
+            { t: 'Куда ушла Колонна?', if: g => g.q('column') === 9 && g.q('obs') === 0, go: 'obs' },
+            { t: 'Распылитель «З-2» под куполом остановлен.', if: g => g.q('obs') === 4, go: 'obs_done' },
             { t: 'Чем помочь с антенной?', if: g => g.q('mast') === 0, go: 'mast' },
             { t: 'Антенна снова работает.', if: g => g.q('mast') === 2, go: 'mast_done' },
             { t: 'Вера говорит, ты служил на Объекте 9. Какой там код?', if: g => g.q('thread') >= 2 && !g.flags.z9code && g.q('mast') !== 2, go: 'code' },
@@ -437,6 +444,11 @@ window.DATA = (function () {
           ] },
         column: { text: g => `Слышно, и недоброе. Какая-то «Стальная Колонна» — военные, броня, порядок — вошла в Старый город на юго-западе. Передают по кругу: «Ищем ${g.klykN()}. Награда тому, кто выдаст». Похоже, ${g.klykN()} увёл у них что-то ценное. А Колонна... они ведь и «З-2» могли скупать — больше некому было.`,
           opts: [{ t: 'Схожу в Старый город.', act: g => { g.setQuest('column', 1); g.revealSite('city'); }, end: true }, { t: 'Не сейчас.', end: true }] },
+        obs: { text: 'На север, к старой обсерватории. Я ловлю их переговоры: «Купол готов на восемьдесят процентов», «реагент залит». Если они сделали из телескопа распылитель — ветер разнесёт «З-2» по всей пустоши. Каждый станет их солдатом... или чудовищем. Останови их.',
+          opts: [{ t: 'Иду на север.', act: g => { g.setQuest('obs', 1); g.revealSite('observatory'); }, end: true }, { t: 'Позже.', end: true }] },
+        obs_done: { text: 'Значит, небо над пустошью останется чистым. Ты сделал то, чего не смогли армии до войны. Держи — всё, что у «Рассвета» есть ценного. И знай: здесь тебя будут помнить.',
+          onEnter: g => { g.setQuest('obs', 9); g.reward(800, 400, [['medkit', 3]]); g.addRep(30, 'спасение пустоши'); g.log('КОНЕЦ КАМПАНИИ. Спасибо за игру! Пустошь продолжает жить — контракты, стаи и отряды ждут.', 'warn'); },
+          opts: [{ t: 'Спасибо, Кузьма.', end: true }] },
         mast: { text: 'Мачта стоит, а усилитель сгорел и кабели перебиты. Нужно три единицы хлама на провода — и голова (Интеллект 6) или ловкие руки (Взлом 35). Почини — расскажу всё, что знаю.',
           opts: [{ t: 'Займусь.', act: g => g.setQuest('mast', 1), end: true }, { t: 'Позже.', end: true }] },
         mast_done: { text: 'Есть сигнал! Слышишь? Это Ржавый Ручей... а это караван с юга. Спасибо тебе! И раз уж ты спрашивал про Объект 9 — код хранилища: 9-0-4-1. Вспомнил, как только услышал старую частоту.',
@@ -565,6 +577,37 @@ window.DATA = (function () {
         gone: { text: '...', opts: [{ t: '...', end: true }] },
       },
     },
+    lada: {
+      start: g => g.flags.ladaFree ? 'free' : 'hello',
+      nodes: {
+        hello: { text: 'Тише! Я Лада, инженер. Колонна заставила меня переделать телескоп: вместо зеркала — распылитель, вместо обзора неба — облако «З-2» над всей округой. Развяжи меня — дам код от двери купола.',
+          opts: [
+            { t: 'Развязать верёвки.', act: g => { g.flags.ladaFree = true; g.flags.obsCode = true; if (g.q('obs') < 3) g.setQuest('obs', 3); g.giveXP(80); const l = g.findNpc('lada'); if (l) { l.leaving = true; NET.syncEnt(l); } }, go: 'freed' },
+            { t: 'Как остановить распылитель?', go: 'how' },
+            { t: 'Позже.', end: true },
+          ] },
+        how: { text: 'Пульт рядом с баками. Отключить можно руками (Взлом 50) или головой (Интеллект 7). Надёжнее — взорвать, если есть чем. Только Гранит там, внутри, и он не уйдёт без боя... или без очень убедительных слов.', opts: [{ t: 'Понял.', go: 'hello' }] },
+        freed: { text: 'Спасибо! Код от купола — 7-7-1-2. Я ухожу к «Рассвету». Удачи — она тебе понадобится.', opts: [{ t: 'Беги.', end: true }] },
+        free: { text: '...', opts: [{ t: '...', end: true }] },
+      },
+    },
+    granit_obs: {
+      start: g => g.flags.columnEnd === 'joined' ? 'ally' : 'enemy',
+      nodes: {
+        enemy: { text: 'Опять ты. Зря пришёл. Через час распылитель даст первое облако — и пустошь получит армию, которая не знает страха и боли. Порядок, о котором вы все мечтали.',
+          opts: [
+            { t: 'Это не порядок, а мор. Твои люди сами станут чудовищами — посмотри на Объект 9. Останови машину.', check: { skill: 'speech', diff: 70 }, ok: 'yield', fail: 'nofight' },
+            { t: '[Атаковать]', act: 'fight', end: true },
+          ] },
+        yield: { text: '...Зорин. Он тоже верил. Ладно. Колонна уходит. Делай с этой машиной что хочешь — я больше не командор.', onEnter: g => g.granitYields(), opts: [{ t: '[Отпустить]', end: true }] },
+        nofight: { text: 'Слова. Только слова. К бою!', opts: [{ t: '[Бой]', act: 'fight', end: true }] },
+        ally: { text: 'Боец! Ты вовремя. Распылитель готов — осталось запустить. Пульт у баков. Сделай это, и Колонна станет единственной властью в пустоши.',
+          opts: [
+            { t: 'Слушаюсь, командор. (Запустить распылитель у пульта)', end: true },
+            { t: 'Нет. Я не дам тебе отравить пустошь.', act: 'fight', end: true },
+          ] },
+      },
+    },
     companion: {
       start: () => 'hello',
       nodes: {
@@ -573,6 +616,9 @@ window.DATA = (function () {
             { t: g => g.companion.waiting ? 'Идём со мной.' : 'Жди здесь.', act: g => { g.companion.waiting = !g.companion.waiting; g.companion.homeX = g.companion.x; g.companion.homeY = g.companion.y; }, end: true },
             { t: 'Давай обменяемся вещами.', act: g => { setTimeout(() => UI.openLoot(g.companion), 0); }, end: true },
             { t: 'Возьми оружие и броню получше из того, что у тебя есть.', act: g => g.companionEquip(true), end: true },
+            { t: g => `Развитие напарника${g.companion.freePts ? ' (очков: ' + g.companion.freePts + ')' : ''}`, act: g => { setTimeout(() => UI.openCompanion(), 0); }, end: true },
+            { t: g => `[Медицина ${R.skill(g.player, 'medic')}] Перевязать раны`, if: g => g.companion.hp < R.maxHP(g.companion), act: g => g.healCompanion(false), end: true },
+            { t: 'Дать аптечку', if: g => g.companion.hp < R.maxHP(g.companion) && g.hasItem('medkit'), act: g => g.healCompanion(true), end: true },
             { t: 'Мы расстаёмся. Возвращайся в Ручей.', go: 'bye' },
             { t: 'Ничего, идём.', end: true },
           ] },
@@ -644,6 +690,77 @@ window.DATA = (function () {
   // ---- локации ----
   // объекты: [спрайт, x, y, {fw, fh, oy, block, name, container, lock, items, owner, desc}]
   const LOCATIONS = {
+    pharmacy_in: {
+      name: 'Аптека (внутри)', w: 16, h: 13, interior: true, ground: ['ruined_concrete_yard', 'broken_pavement'], groundW: [2, 2], base: '#2a2824',
+      wallColor: [150, 150, 136], entry: { x: 8, y: 10 },
+      exits: [{ x0: 6, y0: 12, x1: 10, y1: 12, to: 'city', at: { x: 8, y: 27 }, label: 'НАРУЖУ' }],
+      desc: 'Торговый зал аптеки. Опрокинутые витрины, хруст стекла под ногами, из подсобки — писк.',
+      objects: [
+        ['mil_locker', 2, 2, { name: 'Шкаф с лекарствами', container: true, lock: 30, items: [['medkit', 2], ['bandage', 3], ['water', 1]], caps: 20 }],
+        ['locker_green', 6, 2, { name: 'Холодильник для вакцин', container: true, items: [['bandage', 2]], desc: 'Дверца приоткрыта. Пахнет спиртом.' }],
+        ['crate_pile', 11, 2, {}], ['pallet_boxes', 13, 6, {}], ['barrels', 2, 8, {}], ['crate_small', 12, 9, { name: 'Коробка под прилавком', container: true, items: [['food', 1], ['junk', 2]], caps: 9 }],
+        ['concrete_blocks', 7, 6, {}],
+      ],
+      npcs: [['rat', 4, 5, { wander: 2 }], ['rat', 10, 5, { wander: 2 }], ['rat_big', 12, 4, { wander: 1 }]],
+    },
+    podezd: {
+      name: 'Подъезд девятиэтажки', w: 14, h: 16, interior: true, ground: ['ruined_concrete_yard', 'rubble_ground'], groundW: [2, 2], base: '#27241f',
+      wallColor: [126, 104, 84], entry: { x: 7, y: 13 },
+      exits: [{ x0: 5, y0: 15, x1: 9, y1: 15, to: 'city', at: { x: 22, y: 10 }, label: 'НАРУЖУ' }],
+      desc: 'Тёмный подъезд. Почтовые ящики выломаны, лифт застрял между этажами. Наверху — двери квартир.',
+      objects: [
+        ['mil_locker', 2, 2, { interact: 'apt_door' }],
+        ['city_rubble', 9, 3, {}], ['pallet', 2, 8, {}], ['barrels', 11, 9, {}], ['crate_small', 11, 12, { name: 'Почтовые ящики', container: true, items: [['junk', 1], ['holotape', 1]], caps: 6 }],
+        ['city_dumpsters', 3, 12, {}],
+      ],
+      npcs: [['scav', 7, 5, { wander: 2 }], ['scav_gun', 10, 6, { wander: 1 }], ['rat', 4, 9, { wander: 2 }]],
+    },
+    apartment: {
+      name: 'Моя квартира', w: 12, h: 11, interior: true, ground: ['broken_pavement', 'ruined_concrete_yard'], groundW: [3, 1], base: '#3a3128',
+      wallColor: [168, 142, 112], entry: { x: 6, y: 8 },
+      exits: [{ x0: 4, y0: 10, x1: 8, y1: 10, to: 'podezd', at: { x: 3, y: 5 }, label: 'В ПОДЪЕЗД' }],
+      desc: 'Своя квартира. Окна заколочены, дверь держится. Здесь можно отдохнуть и спрятать добро.',
+      objects: [
+        ['pallet', 2, 2, { interact: 'bed' }],
+        ['mil_locker', 6, 1, { name: 'Мой схрон', container: true, items: [], desc: 'Ваш личный шкаф. Вещи здесь в безопасности.' }],
+        ['crate_long', 9, 3, { interact: 'workbench', showIf: 'benchBuilt' }],
+        ['pallet_boxes', 9, 3, { interact: 'bench_spot', gate: 'benchBuilt' }],
+        ['barrels', 2, 7, {}], ['cable_spool', 10, 7, {}],
+      ],
+      npcs: [],
+    },
+    observatory: {
+      name: 'Обсерватория', w: 44, h: 40, ground: ['ruined_concrete_yard', 'cracked_road', 'overgrown_grassland', 'rubble_ground'], groundW: [3, 1, 2, 2], base: '#46463f',
+      entry: { x: 22, y: 36 },
+      exits: [{ x0: 17, y0: 38, x1: 27, y1: 39 }],
+      desc: 'Старая обсерватория на холме. Над куполом Колонна поставила мачты с трубами, по склону — палатки и посты.',
+      objects: [
+        ['office_hq', 18, 4, { fw: 6, fh: 5, oy: 8, interact: 'obs_dome' }],
+        ['mil_radar', 28, 3, { fw: 4, fh: 4, oy: 6, name: 'Радиотелескоп' }],
+        ['silo', 9, 4, { fw: 3, fh: 3, oy: 6, name: 'Бак с реагентом' }], ['tank_horizontal', 4, 10, { fw: 4, fh: 4, oy: 6 }],
+        ['transformer_big', 33, 10, { fw: 5, fh: 5, oy: 8 }], ['power_pole2', 27, 12, {}], ['power_pole2', 14, 13, {}],
+        ['mil_tent', 8, 22, { fw: 4, fh: 3, oy: 6, name: 'Палатка Колонны' }], ['mil_tent', 30, 22, { fw: 4, fh: 3, oy: 6, name: 'Палатка Колонны' }],
+        ['mil_camo_net', 18, 20, { fw: 5, fh: 4, oy: 6, name: 'Склад Колонны' }],
+        ['mil_crates', 24, 21, { name: 'Ящики Колонны', container: true, items: [['ammo762', 25], ['medkit', 2], ['explosive', 1]], caps: 40 }],
+        ['tent_green', 37, 28, { fw: 4, fh: 3, oy: 6, name: 'Палатка для пленных' }],
+        ['checkpoint2', 20, 31, { fw: 3, fh: 2, oy: 4, name: 'КПП Колонны' }], ['mil_sandwall', 12, 29, { fw: 4, fh: 1 }], ['mil_sandwall', 28, 29, { fw: 4, fh: 1 }],
+        ['floodlight', 16, 17, {}], ['floodlight', 29, 17, {}], ['mil_lamp', 22, 27, {}],
+        ['tree_dead', 2, 30, {}], ['tree_dead2', 41, 6, {}], ['rocks_big', 39, 18, {}], ['rocks', 3, 18, {}], ['grass2', 12, 34, { block: false }], ['grass4', 33, 34, { block: false }],
+      ],
+      npcs: [['col_soldier', 21, 29, {}], ['col_soldier', 13, 26, { wander: 2 }], ['col_soldier', 31, 26, { wander: 2 }], ['col_soldier', 24, 13, { wander: 2 }], ['lada', 38, 32, {}]],
+    },
+    obs_dome: {
+      name: 'Под куполом', w: 24, h: 18, interior: true, lab: true, ground: ['ruined_concrete_yard', 'broken_pavement'], groundW: [3, 1], base: '#22241f',
+      wallColor: [90, 96, 104], entry: { x: 12, y: 15 },
+      exits: [{ x0: 10, y0: 17, x1: 14, y1: 17, to: 'observatory', at: { x: 21, y: 11 }, label: 'НАРУЖУ' }],
+      desc: 'Зал телескопа. Вместо линз — баки и трубы, уходящие в купол. Распылитель гудит.',
+      objects: [
+        ['transformer_big', 9, 2, { fw: 5, fh: 4, oy: 8, interact: 'sprayer' }],
+        ['tank_horizontal', 16, 3, { fw: 4, fh: 3, oy: 6, name: 'Бак «З-2»' }], ['silo', 3, 3, { fw: 3, fh: 3, oy: 6, name: 'Бак «З-2»' }],
+        ['elec_cabinet', 18, 9, { interact: 'obs_terminal' }], ['pipes', 4, 10, {}], ['big_pipes', 13, 9, { fw: 4, fh: 2, oy: 4 }], ['barrels', 20, 13, {}],
+      ],
+      npcs: [['granit_obs', 12, 8, {}], ['col_soldier', 7, 11, {}], ['col_soldier', 17, 12, {}]],
+    },
     city: {
       name: 'Старый город', w: 50, h: 46, ground: ['cracked_road', 'broken_pavement', 'ruined_concrete_yard', 'rubble_ground', 'overgrown_grassland'], groundW: [3, 3, 2, 2, 1], base: '#4a4740',
       entry: { x: 25, y: 42 },
@@ -987,6 +1104,7 @@ window.DATA = (function () {
       { id: 'camp', x: 4, y: 8, name: 'Ржавый Ручей', sprite: 'booth', known: true },
       { id: 'post', x: 13, y: 2, name: 'Блокпост 17', sprite: 'mil_tower', known: false },
       { id: 'zarya', x: 15, y: 9, name: 'Промзона «Заря»', sprite: 'brick_factory', known: false },
+      { id: 'observatory', x: 12, y: 0, name: 'Обсерватория', sprite: 'mil_radar', known: false },
       { id: 'city', x: 2, y: 10, name: 'Старый город', sprite: 'city_panel_tower', known: false },
       { id: 'forest', x: 7, y: 2, name: 'Мёртвый лес', sprite: 'tree_spruce', known: false },
       { id: 'bridge', x: 18, y: 5, name: 'Ржавый мост', sprite: 'checkpoint2', known: false },
@@ -1013,6 +1131,11 @@ window.DATA = (function () {
       3: 'Объект 9: проникните в хранилище (код — у радиста Кузьмы, ключ-карта — у охраны, или Взлом 60) и разберитесь со складом «З-2».',
       4: 'Вернитесь к коменданту Вере на станцию «Рассвет».' } },
     mast: { title: 'Молчащая антенна', giver: 'kuzma', steps: { 1: 'Почините радиомачту «Рассвета»: нужно 3 хлама и Интеллект 6 или Взлом 35.', 2: 'Антенна работает — сообщите радисту Кузьме.' } },
+    obs: { title: 'Обсерватория', giver: 'kuzma', steps: {
+      1: 'Колонна ушла на север, к старой обсерватории (север карты). Узнайте, что она там строит.',
+      2: 'У обсерватории стоит лагерь Колонны. Найдите пленницу — говорят, они держат учёного.',
+      3: 'Проникните под купол обсерватории (код от Лады, Взлом 55 или ключ Гранита) и решите судьбу распылителя «З-2».',
+      4: 'Вернитесь к радисту Кузьме на станцию «Рассвет».' } },
     column: { title: 'Стальная Колонна', giver: 'kuzma', steps: {
       1: 'Кузьма перехватил передачу: «Стальная Колонна» вошла в Старый город (юго-запад карты) и охотится за Клыком. Отправляйтесь туда.',
       2: 'Найдите командора Колонны Гранита в лагере на юго-востоке Старого города.',
@@ -1096,6 +1219,7 @@ window.DATA = (function () {
     contracts: { name: 'Доска контрактов', look: 'Старая остановка, обклеенная объявлениями: «Требуются стрелки», «Плачу за хвосты», «Волки у леса — 200 крышек артели».', lookXp: 5,
       actions: [{ label: 'Контракты (для одного или отряда)', act: g => { setTimeout(() => SOC.openContracts(), 0); return 'Вы изучаете объявления.'; } }] },
     city_pharmacy: { name: 'Аптека', look: 'Разграбленная аптека. Витрины выбиты, но под прилавком может что-то остаться.', lookXp: 10,
+      enter: { to: 'pharmacy_in', at: { x: 8, y: 10 }, label: 'Войти в аптеку', open: true },
       search: { loot: [['bandage', 1, 3, 80], ['medkit', 1, 1, 45], ['water', 1, 1, 30]], caps: [0, 15] } },
     city_kiosk: { name: 'Киоск', look: 'Ларёк «Печать». Пожелтевшие газеты: «Город готов к эвакуации».', lookXp: 5,
       search: { loot: [['food', 1, 2, 60], ['junk', 1, 2, 60], ['holotape', 1, 1, 10]], caps: [0, 8] } },
@@ -1107,7 +1231,44 @@ window.DATA = (function () {
     city_rubble: { name: 'Завал', look: 'Обломки бетона и кирпича. Под ними что-то поблёскивает.', lookXp: 0,
       search: { loot: [['junk', 1, 2, 70], ['ammo9', 3, 8, 30]], caps: [0, 6] } },
     city_panel_double: { name: 'Панельные дома', look: 'Две девятиэтажки. В окнах — ни огонька. Подъезды завалены.', lookXp: 10 },
-    city_panel_long: { name: 'Длинный дом', look: 'Многоподъездная девятиэтажка. Одна секция обрушилась.', lookXp: 10 },
+    city_panel_long: { name: 'Длинный дом', look: 'Многоподъездная девятиэтажка. Одна секция обрушилась, но крайний подъезд цел.', lookXp: 10,
+      enter: { to: 'podezd', at: { x: 7, y: 13 }, label: 'Войти в подъезд', open: true } },
+    apt_door: { name: 'Дверь квартиры', look: 'Обитая дерматином дверь. Внутри, похоже, ничего не тронуто.', lookXp: 5,
+      enter: { to: 'apartment', at: { x: 6, y: 8 }, label: 'Войти в квартиру', flag: 'aptClaimed', text: 'Квартира ещё не ваша. Сначала очистите подъезд и займите её.' },
+      actions: [{ label: 'Занять квартиру (сделать своей базой)', if: g => !g.flags.aptClaimed, act: g => {
+        if (G.loc.actors.some(a => a.hostile && !a.dead && !a.gone)) return 'В подъезде ещё есть враги. Сначала разберитесь с ними.';
+        g.flags.aptClaimed = true; g.giveXP(50); SND.play('lock_open');
+        g.log('Квартира в панельке теперь ваша: кровать, личный схрон, место под верстак.', 'good');
+        return 'Вы меняете замок и подпираете дверь. Теперь это ваш дом.'; } }] },
+    bed: { name: 'Кровать', look: 'Старый матрас на поддоне. Лучше, чем земля.', lookXp: 0,
+      actions: [{ label: 'Поспать 8 часов (полное лечение, сохранение)', act: g => {
+        if (G.combat) return 'Не время спать.';
+        g.player.hp = R.maxHP(g.player); if (g.companion) g.companion.hp = R.maxHP(g.companion);
+        g.passTime(480); g.autosave(); SND.play('heal');
+        return 'Вы спите как убитый. Раны затянулись, голова ясная.'; } }] },
+    bench_spot: { name: 'Место под верстак', look: 'Ящики у стены. Сюда отлично встанет верстак.', lookXp: 0,
+      actions: [{ label: 'Собрать верстак (6 хлама, 30 крышек)', act: g => {
+        if (R.count(g.player, 'junk') < 6 || g.player.caps < 30) return 'Не хватает: нужно 6 хлама и 30 крышек.';
+        R.removeItem(g.player, 'junk', 6); g.player.caps -= 30; g.flags.benchBuilt = true; WORLD_API.refreshGates(g); g.giveXP(40); SND.play('reload');
+        WORLD_API.endDialog(g);
+        return null; } }] },
+    workbench: { name: 'Верстак', look: 'Ваш верстак: тиски, напильники, паяльник.', lookXp: 0,
+      actions: [{ label: 'Работать за верстаком', act: g => { setTimeout(() => UI.openCraft({ name: 'Ваш верстак' }, true), 0); return 'Вы раскладываете инструменты.'; } }] },
+    obs_dome: { name: 'Купол обсерватории', look: 'Под куполом гудят насосы. На двери — кодовый замок и знак шестерни.', lookXp: 10,
+      enter: { to: 'obs_dome', at: { x: 12, y: 15 }, label: 'Войти под купол', code: 'obsCode', codeMsg: 'Вы набираете 7-7-1-2. Замок щёлкает.', lock: 55, text: 'Дверь заперта. Код знает пленный инженер в лагере (или Взлом 55).' } },
+    obs_terminal: { name: 'Журнал купола', look: 'Терминал с графиком запуска.', lookXp: 5,
+      check: { stat: 'int', diff: 5, label: 'Прочитать журнал', xp: 40, text: '«Распыление по ветру, радиус 40 км. Ожидаемый выход: 70% обращённых, 30% пригодны для службы. Приемлемо. — Гранит»' } },
+    sprayer: { name: 'Распылитель «З-2»', look: 'Огромный бак с насосами, трубы уходят в купол. Пульт мигает красным.', lookXp: 10,
+      actions: [
+        { label: 'Отключить распылитель (Взлом 50 или Интеллект 7)', if: g => !g.flags.obsDone, act: g => {
+          if (R.skill(g.player, 'lockpick') < 50 && g.player.stats.int < 7) return 'Не выходит: нужен Взлом 50 или Интеллект 7.';
+          if (G.loc.actors.some(a => a.faction === 'column' && a.hostile && !a.dead && !a.gone)) return 'Охрана не даст вам возиться с пультом.';
+          g.obsFinish('off'); return 'Вы перерезаете питание насосов и сливаете реагент в дренаж. Распылитель мёртв.'; } },
+        { label: 'Взорвать распылитель (взрывчатка)', if: g => !g.flags.obsDone && g.hasItem('explosive'), act: g => {
+          if (G.loc.actors.some(a => a.faction === 'column' && a.hostile && !a.dead && !a.gone)) return 'Охрана не даст заложить заряд.';
+          R.removeItem(g.player, 'explosive', 1); SND.play('shot', { weapon: 'shotgun' }); g.obsFinish('boom'); return 'Грохот! Баки лопаются, купол заволакивает дымом. С распылителем покончено.'; } },
+        { label: 'Запустить распылитель', if: g => !g.flags.obsDone && g.flags.columnEnd === 'joined', act: g => { g.obsFinish('dark'); return 'Насосы взвывают. Над куполом поднимается жёлтое облако и плывёт по ветру на юг...'; } },
+      ] },
     city_panel_tower: { name: 'Башня', look: 'Высотка с выбитым углом. На крыше — антенна, обвитая проводами.', lookXp: 10 },
     director_terminal: { name: 'Терминал директора', look: 'Старый терминал. Экран ещё мерцает зелёным.', lookXp: 5,
       check: { stat: 'int', diff: 4, label: 'Прочитать записи', xp: 40, effect: 'zaryaLog',

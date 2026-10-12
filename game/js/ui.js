@@ -305,11 +305,12 @@ window.UI = (function () {
 
   // ---------- лут / контейнеры ----------
   U.openLoot = function (src) {
+    const comp = !!src.isCompanion;
     const title = src.fw != null ? (src.name || 'Контейнер') : src.isCompanion ? `Вещи напарника: ${src.name}` : `Тело: ${src.name}`;
     U.openModal('loot', `<div class="modal" style="width:760px;height:min(520px,100%)">
       <h2>${title} <button class="close" data-close>✕</button></h2>
       <div class="cols" style="flex:1;min-height:0">
-        <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-height:0"><div class="warn">Содержимое</div><div class="screen" id="l-src" style="flex:1"></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-height:0"><div class="warn">${comp ? 'У напарника' : 'Содержимое'}</div><div class="screen" id="l-src" style="flex:1"></div></div>
         <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-height:0"><div class="warn">Ваш инвентарь</div><div class="screen" id="l-me" style="flex:1"></div></div>
       </div>
       <div class="cols" style="margin-top:8px;justify-content:space-between"><span class="muted" id="l-w"></span><span><button class="primary" id="l-all">Взять всё</button> <button data-close>Закрыть</button></span></div>
@@ -317,15 +318,30 @@ window.UI = (function () {
       const draw = () => {
         const p = G.player;
         const caps = src.caps ? `<div class="item" data-caps="1"><div class="ico">${ICONS.ITEM.caps}</div><div><div class="nm">Крышки</div><div class="sub">валюта</div></div><div class="qty">${src.caps}</div></div>` : '';
-        root.querySelector('#l-src').innerHTML = (caps + src.inv.map(s => itemRow(s.id, s.n, '', '', `data-id="${s.id}"`)).join('')) || '<div class="muted">Пусто</div>';
-        root.querySelector('#l-me').innerHTML = p.inv.map(s => itemRow(s.id, s.n, '', '', `data-mine="${s.id}"`)).join('') || '<div class="muted">Пусто</div>';
+        const btns = (n, k, id) => comp && n > 1 ? ` <button data-${k}1="${id}" style="padding:0 5px;font-size:11px">1</button> <button data-${k}a="${id}" style="padding:0 5px;font-size:11px">все</button>` : '';
+        root.querySelector('#l-src').innerHTML = (caps + src.inv.map(s => itemRow(s.id, s.n, btns(s.n, 's', s.id), '', `data-id="${s.id}"`)).join('')) || '<div class="muted">Пусто</div>';
+        root.querySelector('#l-me').innerHTML = p.inv.map(s => itemRow(s.id, s.n, btns(s.n, 'm', s.id), '', `data-mine="${s.id}"`)).join('') || '<div class="muted">Пусто</div>';
+        if (comp) root.querySelector('#l-w').textContent = `Вы: ${R.weight(p)}/${R.carryMax(p)} кг · ${src.name}: ${R.weight(src)}/${R.carryMax(src)} кг · клик по предмету — 1 шт., «все» — всю стопку`;
         root.querySelector('#l-w').textContent = `Вес: ${R.weight(p)} / ${R.carryMax(p)} кг · Крышки: ${p.caps}`;
       };
       root.addEventListener('click', e => {
+        const p = G.player;
+        const bs = e.target.closest('[data-s1],[data-sa],[data-m1],[data-ma]');
+        if (bs) {
+          const d = bs.dataset, mine = d.m1 || d.ma, id = d.s1 || d.sa || mine;
+          const from = mine ? p : src, to = mine ? src : p;
+          if (mine && ITEMS[id].type === 'quest') return;
+          const n = (d.sa || d.ma) ? R.count(from, id) : 1;
+          R.removeItem(from, id, n); R.addItem(to, id, n); SND.play('pickup'); NET.touch(src); U.refresh(); return;
+        }
         const r = e.target.closest('.item');
         if (!r) return;
-        const p = G.player;
         SND.play('pickup');
+        if (comp && (r.dataset.id || r.dataset.mine)) {
+          const id = r.dataset.id || r.dataset.mine, from = r.dataset.id ? src : p, to = r.dataset.id ? p : src;
+          if (r.dataset.mine && ITEMS[id].type === 'quest') return;
+          R.removeItem(from, id, 1); R.addItem(to, id, 1); U.refresh(); return;
+        }
         if (r.dataset.caps) { p.caps += src.caps; src.caps = 0; }
         else if (r.dataset.id) { const s = src.inv.find(i => i.id === r.dataset.id); const n = s.n; R.removeItem(src, s.id, n); R.addItem(p, s.id, n); }
         else if (r.dataset.mine) { const s = p.inv.find(i => i.id === r.dataset.mine); if (ITEMS[s.id].type === 'quest') return; const n = s.n; R.removeItem(p, s.id, n); R.addItem(src, s.id, n); }
@@ -748,10 +764,10 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
     });
   };
 
-  U.openCraft = function (npc) {
+  U.openCraft = function (npc, own) {
     U.openModal('craft', `<div class="modal" style="width:min(680px,96vw);max-height:100%">
       <h2>Мастерская: ${npc.name} <button class="close" data-close>✕</button></h2>
-      <div class="muted" style="margin-bottom:6px">Борис делает полезное из хлама. Хлам находится при обыске и у торговцев.</div>
+      <div class="muted" style="margin-bottom:6px">${own ? 'Свой верстак: работа бесплатная, нужны только материалы.' : 'Борис делает полезное из хлама. Хлам находится при обыске и у торговцев.'}</div>
       <div class="screen" style="flex:1" id="cr-list"></div>
       <div class="muted" style="margin-top:6px" id="cr-st"></div></div>`, root => {
       const p = G.player;
@@ -759,9 +775,10 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
         root.querySelector('#cr-st').textContent = `Крышки: ${p.caps} · Хлам: ${R.count(p, 'junk')}`;
         root.querySelector('#cr-list').innerHTML = DATA.RECIPES.map((r, i) => {
           const needs = r.need.map(([id, n]) => `<span class="${R.count(p, id) >= n ? '' : 'bad'}">${ITEMS[id].name} ×${n} (${R.count(p, id)})</span>`).join(', ');
-          const ok = r.need.every(([id, n]) => R.count(p, id) >= n) && p.caps >= r.caps;
+          const cost = own ? 0 : r.caps;
+          const ok = r.need.every(([id, n]) => R.count(p, id) >= n) && p.caps >= cost;
           return `<div class="item" style="grid-template-columns:40px 1fr auto;cursor:default"><div class="ico">${itemIcon(r.id)}</div>
-            <div><div class="nm">${ITEMS[r.id].name}${r.n > 1 ? ' ×' + r.n : ''}</div><div class="sub">${r.desc}<br>Нужно: ${needs}${r.caps ? `, <span class="${p.caps >= r.caps ? '' : 'bad'}">${r.caps} крышек</span>` : ''}</div></div>
+            <div><div class="nm">${ITEMS[r.id].name}${r.n > 1 ? ' ×' + r.n : ''}</div><div class="sub">${r.desc}<br>Нужно: ${needs}${cost ? `, <span class="${p.caps >= cost ? '' : 'bad'}">${cost} крышек</span>` : ''}</div></div>
             <div><button ${ok ? '' : 'disabled'} data-cr="${i}">Сделать</button></div></div>`;
         }).join('');
       };
@@ -769,11 +786,12 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
         const b = e.target.closest('[data-cr]');
         if (!b) return;
         const r = DATA.RECIPES[+b.dataset.cr];
-        if (!r.need.every(([id, n]) => R.count(p, id) >= n) || p.caps < r.caps) return;
+        const cost = own ? 0 : r.caps;
+        if (!r.need.every(([id, n]) => R.count(p, id) >= n) || p.caps < cost) return;
         r.need.forEach(([id, n]) => R.removeItem(p, id, n));
-        p.caps -= r.caps;
+        p.caps -= cost;
         R.addItem(p, r.id, r.n);
-        G.log(`Борис сделал: ${ITEMS[r.id].name}${r.n > 1 ? ' ×' + r.n : ''}.`, 'good');
+        G.log(`${own ? 'Сделано' : 'Борис сделал'}: ${ITEMS[r.id].name}${r.n > 1 ? ' ×' + r.n : ''}.`, 'good');
         SND.play('reload');
         U.refresh();
       });
@@ -824,7 +842,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
 
   // ---------- журнал заданий ----------
   const SITE_OF = {
-    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', rats: 'camp', column: g => ({ 1: 'city', 2: 'city', 3: 'city', 4: 'city' })[g.q('column')],
+    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', obs: g => ({ 1: 'observatory', 2: 'observatory', 3: 'observatory', 4: 'rassvet' })[g.q('obs')], rats: 'camp', column: g => ({ 1: 'city', 2: 'city', 3: 'city', 4: 'city' })[g.q('column')],
     battery: g => g.hasItem('battery') ? 'camp' : 'zarya', zarya: g => ({ 1: 'zarya', 2: 'zarya', 3: 'zarya', 4: 'camp' })[g.q('zarya')],
     thread: g => ({ 1: g.flags.bridgeOpen ? 'rassvet' : 'bridge', 2: 'object9', 3: 'object9', 4: 'rassvet' })[g.q('thread')], mast: 'rassvet',
   };
@@ -872,6 +890,27 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
         if (g) { G.world.target = G.world.target === g.dataset.tgt ? null : g.dataset.tgt; WMAP.siteState(G, g.dataset.tgt).known = true; G.hint(G.world.target ? 'Цель отмечена на карте мира' : 'Отметка снята'); draw(); }
       });
       modalRefresh = draw;
+      draw();
+    });
+  };
+
+  U.openCompanion = function () {
+    const c = G.companion;
+    if (!c) return;
+    const SK = ['guns', 'melee', 'medic', 'sneak'];
+    U.openModal('companion', `<div class="modal" style="width:min(520px,94vw)">
+      <h2>Напарник: ${c.name} <button class="close" data-close>✕</button></h2><div class="screen" id="cp-body"></div></div>`, root => {
+      const draw = () => {
+        c.level = c.level || 1; c.xp = c.xp || 0; c.freePts = c.freePts || 0;
+        root.querySelector('#cp-body').innerHTML = `
+          <div class="stat-row"><span>Уровень</span><b>${c.level}</b><span class="muted">${c.xp}/${R.xpForLevel(c.level)}</span></div>
+          <div class="stat-row"><span>Очки здоровья</span><b>${c.hp}/${R.maxHP(c)}</b><span></span></div>
+          <div class="stat-row"><span>Оружие · броня</span><b style="font-size:11px">${c.weapon ? ITEMS[c.weapon].name : 'кулаки'}</b><span style="font-size:11px">${c.armor ? ITEMS[c.armor].name : '—'}</span></div>
+          <div class="warn" style="margin:8px 0 4px">Навыки${c.freePts ? ' · свободных очков: <b>' + c.freePts + '</b> (+4% за очко)' : ''}</div>
+          ${SK.map(k => `<div class="stat-row skill-row"><span></span><span>${DATA.SKILLS.find(s => s.id === k).name}</span><b>${R.skill(c, k)}%</b><span class="pm">${c.freePts ? `<button data-cs="${k}">+</button>` : ''}</span></div>`).join('')}
+          <div class="muted" style="font-size:11px;margin-top:8px">Напарник получает 60% вашего опыта. Каждый уровень: +3 очка навыков и +5 ОЗ.</div>`;
+      };
+      root.addEventListener('click', e => { const b = e.target.closest('[data-cs]'); if (b) { G.companionSkillUp(b.dataset.cs); draw(); } });
       draw();
     });
   };
