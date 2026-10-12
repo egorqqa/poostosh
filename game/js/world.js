@@ -194,6 +194,7 @@ window.WORLD_API = (function () {
         if (!a.path.length) a.stepCb = () => finishPath(a);
       }
     }
+    if (G.loc !== L) return; // игрок вышел из локации в этом кадре
     if (!G.combat && NET.sim()) {
       updateWander(G, dt);
       updateDetection(G, dt);

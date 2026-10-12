@@ -306,6 +306,10 @@
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     const t = now / 1000;
+    requestAnimationFrame(frame);
+    try { step(dt, t); } catch (e) { console.error(e); }
+  }
+  function step(dt, t) {
     if (G.scene === 'local' && G.loc) {
       WORLD_API.update(G, dt);
       ENG.updateFx(dt);
@@ -322,14 +326,15 @@
       ENG.ctx.fillStyle = '#000';
       ENG.ctx.fillRect(0, 0, ENG.canvas.width, ENG.canvas.height);
     }
-    requestAnimationFrame(frame);
   }
   // свёрнутое окно: продолжаем симуляцию (важно для ведущего в сетевой игре)
   setInterval(() => {
     if (performance.now() - lastFrameAt < 250) return;
     last = performance.now();
-    if (G.scene === 'local' && G.loc) { WORLD_API.update(G, 0.1); ENG.updateFx(0.1); }
-    else if (G.scene === 'world') WMAP.update(G, 0.1);
+    try {
+      if (G.scene === 'local' && G.loc) { WORLD_API.update(G, 0.1); ENG.updateFx(0.1); }
+      else if (G.scene === 'world') WMAP.update(G, 0.1);
+    } catch (e) { console.error(e); }
   }, 100);
 
   // ---------- старт ----------
