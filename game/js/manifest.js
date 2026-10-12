@@ -708,6 +708,66 @@ window.ASSET_MANIFEST = {
 ],
 "rows_found": 7
 },
+"city_panel_double": {
+"src": "assets/sprites/city_panel_double.png",
+"w": 609,
+"h": 640
+},
+"city_panel_long": {
+"src": "assets/sprites/city_panel_long.png",
+"w": 587,
+"h": 580
+},
+"city_panel_tower": {
+"src": "assets/sprites/city_panel_tower.png",
+"w": 481,
+"h": 660
+},
+"city_kiosk": {
+"src": "assets/sprites/city_kiosk.png",
+"w": 265,
+"h": 230
+},
+"city_pharmacy": {
+"src": "assets/sprites/city_pharmacy.png",
+"w": 288,
+"h": 220
+},
+"city_fence": {
+"src": "assets/sprites/city_fence.png",
+"w": 159,
+"h": 150
+},
+"city_substation": {
+"src": "assets/sprites/city_substation.png",
+"w": 249,
+"h": 240
+},
+"city_busstop": {
+"src": "assets/sprites/city_busstop.png",
+"w": 165,
+"h": 165
+},
+"city_dumpsters": {
+"src": "assets/sprites/city_dumpsters.png",
+"w": 114,
+"h": 95
+},
+"city_rubble": {
+"src": "assets/sprites/city_rubble.png",
+"w": 146,
+"h": 105
+},
+"city_bench": {
+"src": "assets/sprites/city_bench.png",
+"w": 55,
+"h": 52
+},
+"city_playground": {
+"src": "assets/sprites/city_playground.png",
+"w": 218,
+"h": 210
+},
 "ui_portrait": {
 "src": "assets/ui/portrait.png",
 "w": 120,

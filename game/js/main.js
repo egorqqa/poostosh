@@ -128,6 +128,35 @@
     if (v <= -15) return '(смотрит с подозрением) ';
     return '';
   };
+  // ---------- глава 3 ----------
+  G.klykN = () => (G.flags.klykDead ? 'Шрам' : 'Клык');
+  G.klykSurrenders = function () {
+    G.flags.klykSurrender = true;
+    const k = G.findNpc('klyk_city'); if (k) { k.gone = true; NET.syncEnt(k); }
+    G.loc.actors.filter(a => a.tpl === 'klyk_man').forEach(a => { a.gone = true; NET.syncEnt(a); });
+    if (G.q('column') < 4) G.setQuest('column', 4);
+    G.giveXP(60);
+  };
+  G.klykFlee = function () {
+    G.flags.klykFled = true;
+    const k = G.findNpc('klyk_city');
+    if (k) { R.removeItem(k, 'column_orders', 1); k.gone = true; NET.syncEnt(k); }
+    G.loc.actors.filter(a => a.tpl === 'klyk_man').forEach(a => { a.gone = true; NET.syncEnt(a); });
+    R.addItem(G.player, 'column_orders', 1); R.addItem(G.player, 'ak', 1);
+    G.log('Получено: Приказ Колонны, Автомат АК.', 'good');
+    if (G.q('column') < 4) G.setQuest('column', 4);
+    G.giveXP(60);
+  };
+  G.columnEnd = function (how) {
+    const rewards = { alive: [400, 300, [['col_armor', 1]]], dead: [300, 200, []], joined: [400, 150, [['col_armor', 1]]], exposed: [500, 0, []], lied: [100, 0, []] };
+    const [xp, caps, items] = rewards[how] || [100, 0, []];
+    G.flags.columnEnd = how;
+    G.setQuest('column', 9);
+    G.reward(xp, caps, items);
+    if (how === 'exposed') G.addRep(20, 'Колонна изгнана');
+    G.log('Конец главы 3. Колонна уходит на север, к старой обсерватории... Продолжение следует.', 'warn');
+    if (G.loc && G.loc.id === 'city') for (const a of G.loc.actors) if (a.faction === 'column' && !a.dead) { a.leaving = true; a.hostile = false; NET.syncEnt(a); }
+  };
   G.openBridge = function () {
     if (G.flags.bridgeOpen) return;
     G.flags.bridgeOpen = true;
@@ -138,6 +167,7 @@
   G.onRadio = function () { WMAP.siteState(G, 'bridge').known = true; WMAP.siteState(G, 'rassvet').known = true; };
   G.siteQuestMark = function (id) {
     const q = G.q, f = G.flags;
+    if (id === 'city') return q('column') >= 1 && q('column') < 9 ? '!' : q('column') === 9 ? '✔' : null;
     if (id === 'bridge') return !f.bridgeOpen && q('thread') >= 1 ? '!' : f.bridgeOpen ? '✔' : null;
     if (id === 'rassvet') { if (q('thread') === 4 || q('mast') === 2) return '?'; if (q('thread') === 1 || q('mast') === 0) return '!'; return q('thread') === 9 ? '✔' : null; }
     if (id === 'object9') { if (q('thread') === 2 || q('thread') === 3) return '!'; return f.z2Done ? '✔' : null; }
@@ -161,8 +191,10 @@
     switch (a.tpl) {
       case 'mihalych': return (G.hasItem('meds') && G.quests.meds < 3) || (q('rats') === 1 && R.count(p, 'rat_tail') >= 5) ? '?' : G.quests.meds === 0 || q('rats') === 0 ? '!' : null;
       case 'semyon': return (G.hasItem('samples') && q('zarya') < 9) || (q('pelts') === 1 && R.count(p, 'wolf_pelt') >= 3) ? '?' : q('pelts') === 0 && q('debt') !== 0 ? '!' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
+      case 'granit': return q('column') >= 1 && q('column') < 3 ? '!' : q('column') === 4 ? '?' : null;
+      case 'klyk_city': return q('column') === 3 ? '!' : null;
       case 'vera': return q('thread') === 1 ? '!' : q('thread') === 4 && (G.flags.z2Destroyed || G.hasItem('z2_crate')) ? '?' : null;
-      case 'kuzma': return q('mast') === 2 ? '?' : q('mast') === 0 ? '!' : null;
+      case 'kuzma': return q('mast') === 2 ? '?' : q('mast') === 0 || (q('thread') === 9 && q('column') === 0) ? '!' : null;
       case 'palych': return q('thread') >= 2 && q('thread') < 9 && !G.hasItem('explosive') && !G.flags.z2Done && !G.flags.palychExplosive ? '!' : null;
       case 'mitya': return G.hasItem('samples') && !G.flags.mityaCured ? '?' : null;
       case 'mytar': return !G.flags.bridgeOpen && q('thread') >= 1 ? '!' : null;
@@ -396,7 +428,7 @@
     const p = { ...G.player };
     delete p.path; delete p.onArrive; delete p.stepCb;
     const comp = G.companion ? { ...G.companion, path: [], onArrive: null, stepCb: null } : null;
-    const data = { player: p, companion: comp, locStates: G.locStates, quests: G.quests, flags: G.flags, time: G.time, world: G.world,
+    const data = { contract: window.SOC ? SOC.contract : null, player: p, companion: comp, locStates: G.locStates, quests: G.quests, flags: G.flags, time: G.time, world: G.world,
       scene: G.scene, locId: G.loc && !G.loc.def.temp ? G.loc.id : null };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); G.log(auto ? 'Автосохранение.' : 'Игра сохранена.', auto ? 'sys' : 'good'); }
     catch (e) { G.log('Не удалось сохранить: ' + e.message, 'bad'); }
@@ -408,6 +440,7 @@
     try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { data = null; }
     if (!data) { G.hint('Сохранений нет'); return; }
     UI.closeModal();
+    if (window.SOC) { SOC.contract = data.contract || null; setTimeout(() => SOC.renderContract(), 0); }
     Object.assign(G, { player: data.player, companion: data.companion || null, locStates: data.locStates, quests: data.quests, flags: data.flags, time: data.time, world: data.world, combat: null, dialog: null, mode: 'play' });
     G.player.dead = false;
     if (G.flags.tutStep == null && G.player.xp > 0) G.flags.tutStep = 99;

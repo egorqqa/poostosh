@@ -135,6 +135,12 @@ window.WORLD_API = (function () {
     ENG.cam.x = c.x; ENG.cam.y = c.y - 40;
     G.log(`— ${def.name} —`, 'sys');
     SND.setScene(LOCATIONS[id] ? id : 'wild');
+    if (id === 'city') {
+      const k = L.actors.find(a => a.tpl === 'klyk_city');
+      if (k && G.flags.klykDead) k.name = 'Шрам';
+      if (G.flags.klykSurrender || G.flags.klykFled) L.actors.forEach(a => { if (a.tpl === 'klyk_city' || a.tpl === 'klyk_man') a.gone = true; });
+      if (G.q('column') === 9) L.actors.forEach(a => { if (a.faction === 'column') a.gone = true; });
+    }
     if (id === 'camp' && !NET.active && G.rep() <= -50) {
       for (const a of L.actors) if (a.guard && !a.dead) { a.hostile = true; a.alerted = false; }
       G.log('Охрана Ручья узнаёт вас. Здесь вам не рады.', 'bad');
@@ -177,6 +183,7 @@ window.WORLD_API = (function () {
     if (G.world) { G.world.visited = G.world.visited || {}; G.world.visited[id] = true; if (G.world.target === id) G.world.target = null; }
     if (id === 'zarya_lab' && G.q('zarya') >= 1 && G.q('zarya') < 3) G.setQuest('zarya', 3);
     if (id === 'object9' && G.q('thread') === 2) G.setQuest('thread', 3);
+    if (id === 'city' && G.q('column') === 1) G.setQuest('column', 2);
     if (!NET.active) { W.loadLocation(G, id, opts); setTimeout(() => G.autosave(), 300); return; }
     const res = await NET.enter(id);
     if (res.state) G.locStates[id] = res.state; else delete G.locStates[id];

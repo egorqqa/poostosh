@@ -158,6 +158,7 @@ window.SOC = (function () {
 
   S.onEv = function (m) {
     const from = m.from, name = m.fromName || nameOf(from);
+    if ((m.kind === 'party_contract' || m.kind === 'party_prog') && S.onContractEv(m)) return;
     switch (m.kind) {
       case 'trade_req':
         if (S.trade || G.combat || UI.modalOpen()) { send(from, { kind: 'trade_ans', ok: false, busy: true }); return; }
@@ -182,7 +183,7 @@ window.SOC = (function () {
           () => { S.party[from] = name; send(from, { kind: 'party_ans', ok: true }); renderParty(); }, () => send(from, { kind: 'party_ans', ok: false }));
         break;
       case 'party_ans':
-        if (m.ok) { S.party[from] = name; G.log(`${name} теперь в вашем отряде.`, 'good'); syncParty(); renderParty(); }
+        if (m.ok) { S.party[from] = name; G.log(`${name} теперь в вашем отряде.`, 'good'); syncParty(); renderParty(); if (S.contract) send(from, { kind: 'party_contract', c: S.contract }); }
         else G.log(`${name} отказался вступать в отряд.`, 'warn');
         break;
       case 'party_sync':
@@ -207,6 +208,91 @@ window.SOC = (function () {
         break;
     }
   };
+
+
+  // ---------- контракты (совместные задания отряда) ----------
+  const CONTRACTS = [
+    { id: 'c_wolves', title: 'Волчья напасть', target: ['wolf', 'wolf_alpha'], need: 6, xp: 250, caps: 120, where: 'Мёртвый лес, стаи в пути' },
+    { id: 'c_rats', title: 'Крысоловы', target: ['rat', 'rat_big'], need: 10, xp: 150, caps: 70, where: 'подвал водокачки, Заря, Старый город' },
+    { id: 'c_infected', title: 'Санитары', target: ['infected', 'infected_brute', 'z_soldier', 'z_officer'], need: 6, xp: 350, caps: 180, where: 'лаборатория «Заря-2», Объект 9' },
+    { id: 'c_raiders', title: 'Охота на бандитов', target: ['raider', 'raider_melee', 'raider_rifle', 'scav', 'scav_gun', 'toll'], need: 6, xp: 280, caps: 150, where: 'Блокпост 17, Заря, Ржавый мост, пустошь' },
+  ];
+  S.contract = null; // { id, have, uid }
+  const cdef = id => CONTRACTS.find(c => c.id === id);
+  const members = () => Object.keys(S.party).map(Number);
+  function bcast(o) { if (NET.active) for (const pid of members()) send(pid, o); }
+
+  S.openContracts = function () {
+    const c = S.contract, d = c && cdef(c.id);
+    const inParty = NET.active && members().length > 0;
+    UI.openModal('contracts', `<div class="modal" style="width:min(640px,96vw)">
+      <h2>Доска контрактов <button class="close" data-close>✕</button></h2>
+      <div class="muted" style="margin-bottom:6px">${inParty ? `Вы в отряде (${members().length + 1} чел.): прогресс общий, награда — каждому участнику, +15% за каждого бойца.` : 'Контракт можно выполнять одному или в отряде (сетевая игра): тогда счёт убийств общий.'}</div>
+      ${c ? `<div class="screen" style="margin-bottom:8px"><b class="warn">Текущий: ${d.title}</b> — ${c.have}/${d.need}<div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, c.have / d.need * 100)}%;background:var(--amber)"></i></div>
+        <div style="margin-top:6px;text-align:right"><button id="ct-drop">Отказаться</button></div></div>` : ''}
+      <div class="screen">${CONTRACTS.map(x => `<div class="item" style="grid-template-columns:1fr auto;cursor:default"><div><div class="nm">${x.title}: убить ${x.need}</div>
+        <div class="sub">Где: ${x.where}. Награда: ${x.xp} опыта и ${x.caps} крышек</div></div>
+        <div><button ${c ? 'disabled' : ''} data-ct="${x.id}">Взять</button></div></div>`).join('')}</div></div>`, root => {
+      root.addEventListener('click', e => {
+        const b = e.target.closest('[data-ct]');
+        if (b) { S.takeContract(b.dataset.ct); UI.closeModal(); }
+        if (e.target.id === 'ct-drop') { S.contract = null; bcast({ kind: 'party_contract', c: null }); G.log('Контракт отменён.', 'warn'); UI.closeModal(); }
+      });
+    });
+  };
+  S.takeContract = function (id) {
+    S.contract = { id, have: 0, uid: Date.now() + '_' + NET.id };
+    G.log(`Контракт «${cdef(id).title}» взят${members().length ? ' на весь отряд' : ''}.`, 'good');
+    bcast({ kind: 'party_contract', c: S.contract });
+    renderContract();
+  };
+  S.onKill = function (a) {
+    const c = S.contract;
+    if (!c || !cdef(c.id).target.includes(a.tpl)) return;
+    c.have++;
+    G.log(`Контракт «${cdef(c.id).title}»: ${Math.min(c.have, cdef(c.id).need)}/${cdef(c.id).need}.`, 'sys');
+    bcast({ kind: 'party_prog', uid: c.uid, have: c.have });
+    checkDone();
+    renderContract();
+  };
+  function checkDone() {
+    const c = S.contract;
+    if (!c) return;
+    const d = cdef(c.id);
+    if (c.have < d.need || c.paid) return;
+    c.paid = true;
+    const bonus = 1 + 0.15 * members().length;
+    G.log(`Контракт «${d.title}» выполнен${members().length ? ' всем отрядом' : ''}!`, 'good');
+    SND.play('quest');
+    const caps = Math.round(d.caps * bonus);
+    G.player.caps += caps; G.log(`+${caps} крышек.`, 'good');
+    G.giveXP(Math.round(d.xp * bonus), true); // награда уже у каждого — без доли отряду
+    S.contract = null;
+    renderContract();
+  }
+  S.onContractEv = function (m) {
+    if (!S.party[m.from]) return false;
+    if (m.kind === 'party_contract') {
+      S.contract = m.c ? { ...m.c } : null;
+      G.log(m.c ? `Отряд взял контракт «${cdef(m.c.id).title}».` : 'Отряд отменил контракт.', 'sys');
+      renderContract(); return true;
+    }
+    if (m.kind === 'party_prog' && S.contract && S.contract.uid === m.uid) {
+      S.contract.have = Math.max(S.contract.have, m.have);
+      checkDone(); renderContract(); return true;
+    }
+    return false;
+  };
+  function renderContract() {
+    let el = document.getElementById('contract-box');
+    if (!el) { el = document.createElement('div'); el.id = 'contract-box'; document.getElementById('game').appendChild(el); }
+    const c = S.contract;
+    if (!c) { el.classList.add('hidden'); return; }
+    const d = cdef(c.id);
+    el.classList.remove('hidden');
+    el.innerHTML = `<b>КОНТРАКТ</b> ${d.title}: ${Math.min(c.have, d.need)}/${d.need}`;
+  }
+  S.renderContract = renderContract;
 
   // ---------- панель отряда ----------
   function renderParty() {

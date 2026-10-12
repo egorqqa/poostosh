@@ -339,6 +339,39 @@ def build_wolf(manifest):
                              "fw": CW, "fh": CH, "ax": AX, "ay": AY, "frames": counts, "rows_found": len(rows)}
 
 
+# ---- город: объекты из папки «Город», высота в пикселях подобрана к росту героя (~85 px) ----
+CITY = [
+    ("photo_2026-10-13_00-07-12.jpg", "city_panel_double", 640, {}),
+    ("photo_2026-10-13_00-07-13.jpg", "city_panel_long", 580, {}),
+    ("photo_2026-10-13_00-07-14.jpg", "city_panel_tower", 660, {}),
+    ("photo_2026-10-13_00-07-15.jpg", "city_kiosk", 230, {}),
+    ("photo_2026-10-13_00-07-16.jpg", "city_pharmacy", 220, {}),
+    ("photo_2026-10-13_00-15-10.jpg", "city_fence", 150, {}),
+    ("photo_2026-10-13_00-15-11.jpg", "city_substation", 240, {"thin": True}),
+    ("photo_2026-10-13_00-15-12 (2).jpg", "city_busstop", 165, {}),
+    ("photo_2026-10-13_00-15-12.jpg", "city_dumpsters", 95, {}),
+    ("photo_2026-10-13_00-15-13.jpg", "city_rubble", 105, {}),
+    ("photo_2026-10-13_00-19-55.jpg", "city_bench", 52, {"holes": True}),
+    ("photo_2026-10-13_00-19-56.jpg", "city_playground", 210, {}),
+]
+
+
+def build_city(manifest):
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from city_cutout import cutout, stylize
+    for fname, name, h, opt in CITY:
+        path = os.path.join(ROOT, "Город", fname)
+        if not os.path.exists(path):
+            continue
+        im = stylize(cutout(path, **opt))
+        k = h / im.height
+        im = im.resize((max(1, round(im.width * k)), h), Image.LANCZOS)
+        im.save(os.path.join(OUT, "sprites", name + ".png"))
+        manifest[name] = {"src": f"assets/sprites/{name}.png", "w": im.width, "h": im.height}
+        print(name, im.size)
+
+
 def build_portrait(manifest):
     src = Image.open(os.path.join(ROOT, "Пиксельный лист солдата в противогазе.png")).convert("RGBA")
     face = src.crop((40, 0, 160, 120)).resize((120, 120), Image.LANCZOS)
@@ -391,6 +424,7 @@ def main():
     build_soldier(manifest)
     build_rat(manifest)
     build_wolf(manifest)
+    build_city(manifest)
     build_portrait(manifest)
     build_ground(manifest)
     with open(os.path.join(ROOT, "game", "js", "manifest.js"), "w", encoding="utf-8") as f:

@@ -824,7 +824,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
 
   // ---------- журнал заданий ----------
   const SITE_OF = {
-    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', rats: 'camp',
+    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', rats: 'camp', column: g => ({ 1: 'city', 2: 'city', 3: 'city', 4: 'city' })[g.q('column')],
     battery: g => g.hasItem('battery') ? 'camp' : 'zarya', zarya: g => ({ 1: 'zarya', 2: 'zarya', 3: 'zarya', 4: 'camp' })[g.q('zarya')],
     thread: g => ({ 1: g.flags.bridgeOpen ? 'rassvet' : 'bridge', 2: 'object9', 3: 'object9', 4: 'rassvet' })[g.q('thread')], mast: 'rassvet',
   };
