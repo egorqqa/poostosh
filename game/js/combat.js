@@ -276,6 +276,7 @@ window.COMBAT = (function () {
     if (by && by.isRemote) NET.event(by.pid, { kind: 'xp', n: a.xpValue || 25 });
     if (a.tpl === 'klyk') G.flags.klykDead = true;
     if (a.tpl === 'marauder') G.flags.marauderKilled = true;
+    if (a.tpl === 'mytar') G.openBridge();
     if (a.faction === 'town' && by && by.isPlayer) G.addRep(-40, `убит ${a.name}`);
     NET.syncEnt(a);
   }

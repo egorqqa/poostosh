@@ -26,6 +26,10 @@
     if (def && prev === 0 && st > 0 && st < 9) G.log(`Новое задание: «${def.title}».`, 'good');
     else if (def && st === 9) {
       G.log(`Задание выполнено: «${def.title}».`, 'good'); SND.play('quest');
+      if (id === 'zarya') setTimeout(() => {
+        G.log('В отчёте учёного была строчка: «вторая партия З-2 отгружена на станцию «Рассвет» за рекой». Нити тянутся на восток.', 'warn');
+        G.setQuest('thread', 1); WMAP.siteState(G, 'bridge').known = true; WMAP.siteState(G, 'rassvet').known = true;
+      }, 600);
       if (['semyon', 'boris', 'irina', 'gvozd', 'tihon'].includes(def.giver) && id !== 'zarya') G.addRep(10, 'помощь жителям');
     }
     else if (def && def.steps[st]) G.log(`Задание обновлено: «${def.title}».`, 'good');
@@ -124,6 +128,21 @@
     if (v <= -15) return '(смотрит с подозрением) ';
     return '';
   };
+  G.openBridge = function () {
+    if (G.flags.bridgeOpen) return;
+    G.flags.bridgeOpen = true;
+    if (G.loc && G.loc.id === 'bridge') WORLD_API.refreshGates(G);
+    G.log('Ржавый мост открыт — путь на восток свободен.', 'good');
+    G.giveXP(30);
+  };
+  G.onRadio = function () { WMAP.siteState(G, 'bridge').known = true; WMAP.siteState(G, 'rassvet').known = true; };
+  G.siteQuestMark = function (id) {
+    const q = G.q, f = G.flags;
+    if (id === 'bridge') return !f.bridgeOpen && q('thread') >= 1 ? '!' : f.bridgeOpen ? '✔' : null;
+    if (id === 'rassvet') { if (q('thread') === 4 || q('mast') === 2) return '?'; if (q('thread') === 1 || q('mast') === 0) return '!'; return q('thread') === 9 ? '✔' : null; }
+    if (id === 'object9') { if (q('thread') === 2 || q('thread') === 3) return '!'; return f.z2Done ? '✔' : null; }
+    return null;
+  };
   G.revealSite = id => { WMAP.siteState(G, id).known = true; G.log('Новая локация отмечена на карте мира.', 'good'); };
   G.marauderDead = () => { const m = G.anyNpc('marauder'); return !!(m && m.dead) || !!G.flags.marauderKilled; };
   G.angerMarauder = function () {
@@ -142,6 +161,11 @@
     switch (a.tpl) {
       case 'mihalych': return G.quests.meds === 0 ? '!' : G.hasItem('meds') && G.quests.meds < 3 ? '?' : null;
       case 'semyon': return G.hasItem('samples') && q('zarya') < 9 ? '?' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
+      case 'vera': return q('thread') === 1 ? '!' : q('thread') === 4 && (G.flags.z2Destroyed || G.hasItem('z2_crate')) ? '?' : null;
+      case 'kuzma': return q('mast') === 2 ? '?' : q('mast') === 0 ? '!' : null;
+      case 'palych': return q('thread') >= 2 && q('thread') < 9 && !G.hasItem('explosive') && !G.flags.z2Done && !G.flags.palychExplosive ? '!' : null;
+      case 'mitya': return G.hasItem('samples') && !G.flags.mityaCured ? '?' : null;
+      case 'mytar': return !G.flags.bridgeOpen && q('thread') >= 1 ? '!' : null;
       case 'boris': return q('tools') === 0 ? '!' : G.hasItem('toolbox') || G.hasItem('battery') ? '?' : q('tools') === 9 && q('battery') === 0 ? '!' : null;
       case 'irina': return q('wounded') === 2 || (G.hasItem('samples') && q('zarya') < 9) ? '?' : q('wounded') === 0 ? '!' : q('zarya') === 0 && (q('wounded') === 9 || p.level >= 3) ? '!' : null;
       case 'lyoha': return q('wounded') === 1 ? '!' : null;

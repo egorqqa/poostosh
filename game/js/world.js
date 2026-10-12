@@ -10,7 +10,7 @@ window.WORLD_API = (function () {
       const auto = Math.max(1, Math.round((im ? im.width : 64) / 64 * 0.7));
       return {
         uid: i, sprite, x, y, fw: o.fw || auto, fh: o.fh || auto, oy: o.oy != null ? o.oy : 4,
-        block: o.block !== false, desc: o.desc || null, interact: o.container ? null : DATA.INTERACT[o.interact || sprite] || null,
+        block: o.block !== false, desc: o.desc || null, gate: o.gate || null, interact: o.container ? null : DATA.INTERACT[o.interact || sprite] || null,
         name: o.name || (o.container ? 'Ящик' : DATA.INTERACT[o.interact || sprite] ? DATA.INTERACT[o.interact || sprite].name : null),
         container: !!o.container, lock: o.lock || 0, owner: o.owner || null, caps: o.caps || 0,
         inv: (o.items || []).map(([id, n]) => ({ id, n })), jammed: false,
@@ -21,8 +21,11 @@ window.WORLD_API = (function () {
   function buildGrids(L) {
     L.blocked = new Uint8Array(L.w * L.h);
     L.sight = new Uint8Array(L.w * L.h);
+    const rv = L.def.river;
+    if (rv) for (let y = rv.y0; y <= rv.y1; y++) for (let x = 0; x < L.w; x++) if (x < rv.bx0 || x > rv.bx1) L.blocked[y * L.w + x] = 1;
     for (const o of L.objects) {
-      if (!o.block) continue;
+      if (o.gate) o.hidden = !!(window.G && G.flags && G.flags[o.gate]);
+      if (!o.block || o.hidden) continue;
       for (let y = o.y; y < o.y + o.fh; y++) for (let x = o.x; x < o.x + o.fw; x++) {
         if (x < 0 || y < 0 || x >= L.w || y >= L.h) continue;
         L.blocked[y * L.w + x] = 1;
@@ -31,6 +34,11 @@ window.WORLD_API = (function () {
     }
   }
 
+  W.refreshGates = function (G) {
+    if (!G.loc) return;
+    buildGrids(G.loc);
+    if (window.MINI) MINI.cache = null;
+  };
   W.exitRect = (L, x, y) => L && L.def.exits ? L.def.exits.find(r => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) || null : null;
   // уйти через выход: на карту мира или в соседнюю локацию (интерьеры)
   W.useExit = function (G, rect) {
@@ -43,7 +51,7 @@ window.WORLD_API = (function () {
       W.goLocation(G, rect.to, { at: rect.at });
       return;
     }
-    W.leaveToWorld(G);
+    W.leaveToWorld(G, rect && rect.world);
   };
   function leaveCurrent(G) {
     if (NET.active) NET.leave(G.loc.id, NET.isAuth && !G.loc.def.temp ? W.serializeLocation(G) : null);
@@ -97,7 +105,7 @@ window.WORLD_API = (function () {
       L.actors = def.npcs.map(([tpl, x, y, o], i) => { const a = R.makeNpc(tpl, x, y, o || {}); a.id = `${id}_${i}`; return a; });
     }
     const p = G.player;
-    const e = opts.at || def.entry;
+    const e = opts.at || (def.entryEast && G.world && G.world.prevC > 18 ? def.entryEast : def.entry);
     p.x = e.x; p.y = e.y;
     L.actors = L.actors.filter(a => !a.isPlayer && !a.isRemote && !a.isCompanion);
     L.actors.unshift(p);
@@ -165,6 +173,7 @@ window.WORLD_API = (function () {
   W.goLocation = async function (G, id, opts = {}) {
     if (G.world) { G.world.visited = G.world.visited || {}; G.world.visited[id] = true; }
     if (id === 'zarya_lab' && G.q('zarya') >= 1 && G.q('zarya') < 3) G.setQuest('zarya', 3);
+    if (id === 'object9' && G.q('thread') === 2) G.setQuest('thread', 3);
     if (!NET.active) { W.loadLocation(G, id, opts); setTimeout(() => G.autosave(), 300); return; }
     const res = await NET.enter(id);
     if (res.state) G.locStates[id] = res.state; else delete G.locStates[id];
@@ -184,7 +193,7 @@ window.WORLD_API = (function () {
     setTimeout(() => G.autosave(), 300);
   };
 
-  W.leaveToWorld = function (G) {
+  W.leaveToWorld = function (G, worldAt) {
     if (G.loc && G.loc.def.interior) {
       const r = W.exitRect(G.loc, G.player.x, G.player.y);
       if (r) { W.useExit(G, r); return; }
@@ -200,6 +209,7 @@ window.WORLD_API = (function () {
       NET.leave(G.loc.id, st);
     } else W.saveLocationState(G);
     G.loc = null;
+    if (worldAt && G.world) { G.world.c = worldAt.c; G.world.r = worldAt.r; }
     WMAP.enter(G);
     if (G.saveMP) G.saveMP(true);
   };
@@ -632,7 +642,7 @@ window.WORLD_API = (function () {
     };
     if (G.combat) return 'Сейчас не до того — идёт бой.';
     if (G.flags[k]) return go();
-    if (e.code && G.flags[e.code]) { SND.play('lock_open'); return go('Вы набираете код 4-1-7. Замок щёлкает.'); }
+    if (e.code && G.flags[e.code]) { SND.play('lock_open'); return go(e.codeMsg || 'Вы набираете код 4-1-7. Замок щёлкает.'); }
     if (e.key && G.hasItem(e.key)) { SND.play('lock_open'); return go(`Вы открываете дверь: ${DATA.ITEMS[e.key].name}.`); }
     if (e.lock) {
       const v = R.skill(p, 'lockpick') + (R.count(p, 'lockpicks') ? 20 : 0);
@@ -656,6 +666,7 @@ window.WORLD_API = (function () {
         const nm = c.stat ? DATA.SPECIAL.find(s => s.id === c.stat).name : DATA.SKILLS.find(s => s.id === c.skill).name;
         opts.push({ t: G.flags[objKey(G, o, 'check')] ? `<span class="muted">${c.label} (сделано)</span>` : `<span class="chk">[${nm} ${c.diff}]</span> ${c.label}`, act: () => node(W.checkObject(G, o)) });
       }
+      for (const ac of it.actions || []) if (!ac.if || ac.if(G, o)) opts.push({ t: ac.label, act: () => node(ac.act(G, o)) });
       opts.push({ t: 'Отойти', end: true });
       return { text, opts };
     };
@@ -829,7 +840,7 @@ window.WORLD_API = (function () {
     fight(G, npc) {
       W.endDialog(G);
       if (!npc.hostile) { npc.hostile = true; NET.syncEnt(npc); }
-      for (const a of G.loc.actors) if (a.faction === npc.faction && !a.dead) a.alerted = true;
+      for (const a of G.loc.actors) if (a.faction === npc.faction && !a.dead) { a.alerted = true; if (npc.guard || a.guard) { a.hostile = true; NET.syncEnt(a); } }
       COMBAT.start(G, npc, true);
     },
     klykBuy(G, npc) {

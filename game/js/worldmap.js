@@ -24,6 +24,37 @@ window.WMAP = (function () {
     }
     return res;
   }
+  function neighbors(c, r) {
+    const d = r & 1 ? [[1, 0], [-1, 0], [1, -1], [0, -1], [1, 1], [0, 1]] : [[1, 0], [-1, 0], [0, -1], [-1, -1], [0, 1], [-1, 1]];
+    return d.map(([dc, dr]) => ({ c: c + dc, r: r + dr })).filter(h => h.c >= 0 && h.r >= 0 && h.c < cols && h.r < rows);
+  }
+  // поиск пути: река непроходима, закрытый мост — только как цель
+  function findHexPath(G, from, to) {
+    const bridge = WORLD.sites.find(s => s.id === 'bridge');
+    const ok = (h, isDest) => {
+      if (terrainAt(h.c, h.r) === 'v') return false;
+      if (bridge && h.c === bridge.x && h.r === bridge.y && !G.flags.bridgeOpen && !isDest) return false;
+      return true;
+    };
+    if (!ok(to, true)) return null;
+    const k = h => h.c + ',' + h.r;
+    const prev = { [k(from)]: null }, queue = [from];
+    while (queue.length) {
+      const cur = queue.shift();
+      if (cur.c === to.c && cur.r === to.r) {
+        const path = []; let x = cur;
+        while (x && !(x.c === from.c && x.r === from.r)) { path.unshift(x); x = prev[k(x)]; }
+        return path;
+      }
+      for (const n of neighbors(cur.c, cur.r)) {
+        if (k(n) in prev) continue;
+        const dest = n.c === to.c && n.r === to.r;
+        if (!ok(n, dest)) continue;
+        prev[k(n)] = cur; queue.push(n);
+      }
+    }
+    return null;
+  }
   function hexAt(x, y) {
     let best = null, bd = 1e9;
     const r0 = Math.round((y - HH / 2) / RH);
@@ -112,7 +143,13 @@ window.WMAP = (function () {
     if (!h) return;
     const W = G.world;
     if (h.c === W.c && h.r === W.r) { const s = siteHere(G); if (s) M.enterSite(G, s.id); return; }
-    W.path = line({ c: W.c, r: W.r }, h);
+    const path = findHexPath(G, { c: W.c, r: W.r }, h);
+    if (!path) {
+      G.hint(terrainAt(h.c, h.r) === 'v' ? 'Это река' : 'Туда не пройти');
+      G.log(G.flags.bridgeOpen ? 'Туда не пройти.' : 'Через реку не перейти. Переправа — Ржавый мост (его держат сборщики пошлины).', 'warn');
+      return;
+    }
+    W.path = path;
     W.dest = h;
   };
 
@@ -123,7 +160,7 @@ window.WMAP = (function () {
     const dx = t.x - W.px, dy = t.y - W.py, d = Math.hypot(dx, dy);
     const speed = 110 * (1 + R.skill(G.player, 'survival') / 200);
     if (d < speed * dt) {
-      W.px = t.x; W.py = t.y; W.c = n.c; W.r = n.r; W.path.shift();
+      W.prevC = W.c; W.px = t.x; W.py = t.y; W.c = n.c; W.r = n.r; W.path.shift();
       onHex(G);
     } else { W.px += dx / d * speed * dt; W.py += dy / d * speed * dt; }
     ENG.cam.x += (W.px - ENG.cam.x) * Math.min(1, dt * 3);
@@ -162,7 +199,7 @@ window.WMAP = (function () {
     { id: 'caravan', title: 'Караван браминов', text: 'По дороге неспешно бредут двухголовые брамины, навьюченные тюками. Караванщик машет рукой: «Торговать будешь, путник?»',
       opts: [
         { t: 'Поторговать', act: G => { const trader = { name: 'Караванщик Яков', tpl: 'caravan', faction: 'caravan', caps: 400, inv: [['ammo9', 40], ['shells', 12], ['ammo762', 20], ['medkit', 2], ['bandage', 4], ['water', 5], ['food', 4], ['lockpicks', 1], ['leather', 1], ['rifle', 1]].filter((x, i) => i < 4 || Math.random() < 0.5).map(([id, n]) => ({ id, n })) }; setTimeout(() => UI.openTrade(trader), 0); return null; } },
-        { t: 'Расспросить о дорогах', check: { skill: 'speech', diff: 35 }, act: G => { G.giveXP(20); G.flags.radioHeard = true; return 'Яков рассказывает: на востоке, за рекой, кто-то крутит по радио позывной «Рассвет». Говорят, там укрепление и чистая вода. И ещё — что люди из «Зари» шли туда с какими-то ящиками.'; }, fail: 'Караванщик пожимает плечами: «Дороги как дороги. Смотри под ноги».' },
+        { t: 'Расспросить о дорогах', check: { skill: 'speech', diff: 35 }, act: G => { G.giveXP(20); G.flags.radioHeard = true; G.onRadio(); return 'Яков рассказывает: на востоке, за рекой, кто-то крутит по радио позывной «Рассвет». Говорят, там укрепление и чистая вода. И ещё — что люди из «Зари» шли туда с какими-то ящиками.'; }, fail: 'Караванщик пожимает плечами: «Дороги как дороги. Смотри под ноги».' },
         { t: 'Пройти мимо', act: () => 'Караван медленно скрывается в пыли.' },
       ] },
     { id: 'wounded', title: 'Раненый путник', text: 'У обочины сидит человек, зажимая рану на боку. «Помогите... рейдеры...»',
@@ -289,6 +326,12 @@ window.WMAP = (function () {
         continue;
       }
       if (im) ctx.drawImage(im, p.x - HW * 0.54, p.y - HH * 0.54, HW * 1.08, HH * 1.08);
+      if (terrainAt(c, r) === 'v') {
+        hexPath(ctx, p.x, p.y, 1.04);
+        ctx.fillStyle = 'rgba(30,70,90,0.72)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(170,220,230,0.25)'; ctx.lineWidth = 1.5;
+        for (let i = -1; i <= 1; i++) { const yy = p.y + i * 22 + Math.sin(t * 2 + c + i) * 3; ctx.beginPath(); ctx.moveTo(p.x - 30, yy); ctx.quadraticCurveTo(p.x, yy - 6, p.x + 30, yy); ctx.stroke(); }
+      }
     }
     // сетка
     ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;

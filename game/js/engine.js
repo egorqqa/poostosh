@@ -117,9 +117,44 @@ window.ENG = (function () {
     g.fillStyle = 'rgba(8,6,4,0.82)';
     g.fill('evenodd');
     g.restore();
+    if (L.def.river) drawRiver(g, L, ox, oy, r);
     if (L.def.interior) drawInterior(g, L, ox, oy, r);
     L.ground = { canvas: c, ox, oy };
   };
+
+  // река с мостом поперёк карты
+  function drawRiver(g, L, ox, oy, r) {
+    const rv = L.def.river;
+    const P = (x, y) => { const p = iso(x, y); return { x: ox + p.x, y: oy + p.y }; };
+    const poly = (pts, fill) => { g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.closePath(); g.fillStyle = fill; g.fill(); };
+    const band = [P(0, rv.y0), P(L.w, rv.y0), P(L.w, rv.y1 + 1), P(0, rv.y1 + 1)];
+    // берега
+    poly([P(0, rv.y0 - 0.6), P(L.w, rv.y0 - 0.6), P(L.w, rv.y1 + 1.6), P(0, rv.y1 + 1.6)], 'rgba(40,34,22,0.65)');
+    const a = band[0], c = band[2];
+    const gr = g.createLinearGradient(a.x, a.y, c.x, c.y);
+    gr.addColorStop(0, '#2a4a52'); gr.addColorStop(0.5, '#1e3c46'); gr.addColorStop(1, '#2a4a52');
+    poly(band, gr);
+    // рябь
+    g.save(); g.beginPath(); band.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.closePath(); g.clip();
+    g.strokeStyle = 'rgba(160,210,220,0.18)'; g.lineWidth = 1.5;
+    for (let i = 0; i < 160; i++) {
+      const p = P(r() * L.w, rv.y0 + r() * (rv.y1 - rv.y0 + 1));
+      g.beginPath(); g.moveTo(p.x - 10, p.y); g.quadraticCurveTo(p.x, p.y - 3, p.x + 10, p.y); g.stroke();
+    }
+    g.restore();
+    // настил моста
+    const deck = [P(rv.bx0, rv.y0 - 0.4), P(rv.bx1 + 1, rv.y0 - 0.4), P(rv.bx1 + 1, rv.y1 + 1.4), P(rv.bx0, rv.y1 + 1.4)];
+    poly(deck, '#5b574e');
+    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1;
+    for (let y = rv.y0; y <= rv.y1 + 1; y += 0.5) { const p1 = P(rv.bx0, y), p2 = P(rv.bx1 + 1, y); g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.stroke(); }
+    // перила
+    g.strokeStyle = '#7a3f22'; g.lineWidth = 4;
+    for (const x of [rv.bx0, rv.bx1 + 1]) {
+      const p1 = P(x, rv.y0 - 0.4), p2 = P(x, rv.y1 + 1.4);
+      g.beginPath(); g.moveTo(p1.x, p1.y - 14); g.lineTo(p2.x, p2.y - 14); g.stroke();
+      for (let y = rv.y0; y <= rv.y1 + 1; y += 1) { const q = P(x, y); g.beginPath(); g.moveTo(q.x, q.y); g.lineTo(q.x, q.y - 14); g.stroke(); }
+    }
+  }
 
   // стены и освещение помещений: задние стены «в разрезе» и полумрак
   function drawInterior(g, L, ox, oy, r) {
