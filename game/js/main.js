@@ -103,8 +103,9 @@
     G.useItem(id);
   };
 
-  G.giveXP = function (n) {
+  G.giveXP = function (n, noShare) {
     const p = G.player;
+    if (!noShare && window.SOC) SOC.shareXP(n);
     p.xp += n;
     G.log(`+${n} опыта.`, 'good');
     while (p.xp >= R.xpForLevel(p.level)) {
@@ -328,7 +329,7 @@
     const chat = document.getElementById('chat-input');
     chat.addEventListener('keydown', e => {
       e.stopPropagation();
-      if (e.key === 'Enter') { const t = chat.value.trim(); if (t) NET.chat(t); chat.value = ''; chat.classList.add('hidden'); chat.blur(); }
+      if (e.key === 'Enter') { const t = chat.value.trim(); if (/^\/[оo]\s/i.test(t)) SOC.partyChat(t.slice(3)); else if (t) NET.chat(t); chat.value = ''; chat.classList.add('hidden'); chat.blur(); }
       if (e.key === 'Escape') { chat.classList.add('hidden'); chat.blur(); }
     });
     addEventListener('keydown', e => {

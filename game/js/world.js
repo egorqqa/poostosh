@@ -484,7 +484,8 @@ window.WORLD_API = (function () {
     // обычный режим
     if (a && a.isRemote) {
       if (a.dead) G.log(`${a.name} тяжело ранен.`, 'warn');
-      else G.log(`Игрок ${a.name}, уровень ${a.level || 1}. Чат — клавиша Enter.`, 'sys');
+      else if (G.combat) G.log(`Игрок ${a.name}, уровень ${a.level || 1}.`, 'sys');
+      else SOC.playerMenu(G, a);
       return;
     }
     if (a) {

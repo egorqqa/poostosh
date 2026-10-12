@@ -261,6 +261,14 @@ window.WMAP = (function () {
       ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - tw / 2, p.y - 66, tw, 16);
       ctx.fillStyle = '#9dff8a'; ctx.fillText(txt, p.x, p.y - 54);
     }
+    // участники отряда
+    if (window.SOC) for (const st of Object.values(SOC.partyState)) {
+      if (st.c == null || Date.now() - st.at > 8000) continue;
+      const pp = center(st.c, st.r);
+      ctx.fillStyle = '#8fd0ff'; ctx.strokeStyle = '#08263a'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(pp.x + 10, pp.y - 8, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.font = 'bold 11px Consolas, monospace'; ctx.fillText(st.name, pp.x + 10, pp.y - 18);
+    }
     // игрок
     const pulse = 1 + Math.sin(t * 5) * 0.15;
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.ellipse(W.px, W.py + 4, 14, 6, 0, 0, Math.PI * 2); ctx.fill();

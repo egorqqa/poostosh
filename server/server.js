@@ -153,7 +153,7 @@ function createServer(opts = {}) {
           break;
         }
         case 'ev':
-          if (m.to) { const t = players.get(m.to); if (t && t.loc === p.loc) send(t, { ...m, from: p.id }); }
+          if (m.to) { const t = players.get(m.to); if (t && (t.loc === p.loc || /^(trade|party)/.test(String(m.kind)))) send(t, { ...m, from: p.id, fromName: p.name }); }
           else if (p.loc) toRoom(p.loc, { ...m, from: p.id }, p.id);
           break;
         case 'chat': {

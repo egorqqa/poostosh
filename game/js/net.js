@@ -270,6 +270,7 @@ window.NET = (function () {
       }
       case 'dialog': { const npc = N.resolve(m.npc); if (npc && G.mode !== 'dialog') { npc.bubble = { text: 'Стоять!', t: 2.5, color: '#ff5a3c' }; WORLD_API.startDialog(G, npc); } break; }
       case 'log': G.log(m.text, m.cls); break;
+      default: if (window.SOC) SOC.onEv(m);
     }
   }
 
