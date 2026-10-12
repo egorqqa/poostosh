@@ -1,3 +1,3 @@
 // Версия сборки: vДДММГГ.НОМЕР (обновляется tools/bump_version.js)
-window.GAME_VERSION = 'v121026.013';
+window.GAME_VERSION = 'v121026.014';
 window.GAME_REPO = 'egorqqa/poostosh';

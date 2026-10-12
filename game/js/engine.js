@@ -490,8 +490,16 @@ window.ENG = (function () {
     }
     const f = frameFor(a, t);
     if (a.isPlayer && G.sneaking) ctx.globalAlpha = 0.82;
-    if (a.hitFlash > 0) ctx.filter = 'brightness(2) saturate(2)';
-    ctx.drawImage(sheet, f.col * FR.w, f.row * FR.h, FR.w, FR.h, sx - FR.ax, sy - FR.ay + (a.isPlayer && G.sneaking ? 4 : 0), FR.w, FR.h);
+    if (a.hitFlash > 0) ctx.filter = 'brightness(1.7) sepia(1) hue-rotate(-40deg) saturate(4)';
+    // отдача и встряска от попадания
+    let ox = 0, oy = 0;
+    if (a.recoilT > 0) { const k = a.recoilT / 0.14; ox += (a.recoilX || 0) * 5 * k; oy += (a.recoilY || 0) * 3 * k; }
+    if (a.shakeT > 0) { ox += (Math.random() - 0.5) * 6 * a.shakeT / 0.25; oy += (Math.random() - 0.5) * 3 * a.shakeT / 0.25; }
+    ctx.drawImage(sheet, f.col * FR.w, f.row * FR.h, FR.w, FR.h, sx - FR.ax + ox, sy - FR.ay + oy + (a.isPlayer && G.sneaking ? 4 : 0), FR.w, FR.h);
+    if (a.isCompanion) {
+      ctx.strokeStyle = 'rgba(143,208,255,0.7)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(sx, sy - 2, 18, 8, 0, 0, Math.PI * 2); ctx.stroke();
+    }
     ctx.filter = 'none';
     ctx.globalAlpha = 1;
   }
@@ -499,13 +507,18 @@ window.ENG = (function () {
   function drawCorpse(ctx, a) {
     const sheet = E.sheets[a.tint || 'player'];
     const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
+    // анимация падения: тело заваливается, лужа крови растекается
+    if (a.deathAt == null) a.deathAt = performance.now();
+    const k = Math.min(1, (performance.now() - a.deathAt) / 450);
+    const ease = 1 - Math.pow(1 - k, 3);
+    const pool = Math.min(1, (performance.now() - a.deathAt) / 1600);
     ctx.fillStyle = 'rgba(90,10,6,0.65)';
-    ctx.beginPath(); ctx.ellipse(sx + 4, sy - 6, 26, 10, 0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx + 4, sy - 6, 8 + 18 * pool, 3 + 7 * pool, 0.1, 0, Math.PI * 2); ctx.fill();
     ctx.save();
-    ctx.translate(sx, sy - 10);
-    ctx.rotate(-Math.PI / 2 + 0.25);
+    ctx.translate(sx, sy - 10 * ease);
+    ctx.rotate((-Math.PI / 2 + 0.25) * ease);
     ctx.filter = 'brightness(0.6) saturate(0.6)';
-    ctx.drawImage(sheet, 0, a.dir === 1 ? FR.h : 0, FR.w, FR.h, -FR.ax + 4, -FR.ay + 22, FR.w, FR.h);
+    ctx.drawImage(sheet, 0, a.dir === 1 ? FR.h : 0, FR.w, FR.h, -FR.ax + 4 * ease, -FR.ay + 22 * ease, FR.w, FR.h);
     ctx.restore();
     ctx.filter = 'none';
   }
@@ -524,6 +537,28 @@ window.ENG = (function () {
       ctx.beginPath(); ctx.moveTo(a.x, a.y - 52); ctx.lineTo(b.x + ox, b.y - 44 + oy); ctx.stroke();
       ctx.fillStyle = `rgba(255,200,80,${1 - k})`;
       ctx.beginPath(); ctx.arc(a.x + (b.x > a.x ? 20 : -20), a.y - 54, 6 * (1 - k) + 2, 0, Math.PI * 2); ctx.fill();
+    } });
+  };
+  // вспышка выстрела
+  E.muzzle = function (from, to) {
+    const a = tileCenter(from.x, from.y), b = tileCenter(to.x, to.y);
+    const dx = b.x > a.x ? 1 : -1;
+    E.effects.push({ t: 0, life: 0.09, draw(ctx) {
+      const k = 1 - this.t / this.life;
+      const x = a.x + dx * 24, y = a.y - 54;
+      const gr = ctx.createRadialGradient(x, y, 0, x, y, 26 * k + 6);
+      gr.addColorStop(0, `rgba(255,255,220,${0.95 * k})`); gr.addColorStop(0.4, `rgba(255,190,60,${0.7 * k})`); gr.addColorStop(1, 'rgba(255,120,0,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, 26 * k + 6, 0, Math.PI * 2); ctx.fill();
+    } });
+  };
+  // брызги крови
+  E.blood = function (to, n = 8) {
+    const b = tileCenter(to.x, to.y);
+    const ps = Array.from({ length: n }, () => ({ x: b.x + (Math.random() - 0.5) * 10, y: b.y - 45 - Math.random() * 15, vx: (Math.random() - 0.5) * 120, vy: -40 - Math.random() * 80, r: 1.5 + Math.random() * 2 }));
+    E.effects.push({ t: 0, life: 0.55, draw(ctx) {
+      const k = this.t;
+      ctx.fillStyle = `rgba(150,14,8,${1 - this.t / this.life})`;
+      for (const p of ps) { ctx.beginPath(); ctx.arc(p.x + p.vx * k, p.y + p.vy * k + 260 * k * k, p.r, 0, Math.PI * 2); ctx.fill(); }
     } });
   };
   E.swing = function (from, to) {

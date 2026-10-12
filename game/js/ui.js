@@ -303,7 +303,7 @@ window.UI = (function () {
 
   // ---------- лут / контейнеры ----------
   U.openLoot = function (src) {
-    const title = src.fw != null ? (src.name || 'Контейнер') : `Тело: ${src.name}`;
+    const title = src.fw != null ? (src.name || 'Контейнер') : src.isCompanion ? `Вещи напарника: ${src.name}` : `Тело: ${src.name}`;
     U.openModal('loot', `<div class="modal" style="width:760px;height:min(520px,100%)">
       <h2>${title} <button class="close" data-close>✕</button></h2>
       <div class="cols" style="flex:1;min-height:0">
@@ -370,8 +370,9 @@ window.UI = (function () {
   // ---------- торговля ----------
   U.openTrade = function (npc) {
     const disc = npc.tpl === 'semyon' ? (G.flags.semDiscount || 0) : 0;
-    const buyP = id => Math.max(1, Math.ceil(ITEMS[id].value * R.buyMult(G.player, disc)));
-    const sellP = id => Math.max(ITEMS[id].value > 0 ? 1 : 0, Math.floor(ITEMS[id].value * R.sellMult(G.player)));
+    const rm = npc.faction === 'town' ? G.repLevel().mult : 1;
+    const buyP = id => Math.max(1, Math.ceil(ITEMS[id].value * R.buyMult(G.player, disc) * rm));
+    const sellP = id => Math.max(ITEMS[id].value > 0 ? 1 : 0, Math.floor(ITEMS[id].value * R.sellMult(G.player) / rm));
     const pack = (id, have) => (ITEMS[id].type === 'ammo' ? Math.min(10, have) : 1);
     U.openModal('trade', `<div class="modal" style="width:820px;height:min(560px,100%)">
       <h2>Торговля: ${npc.name} <button class="close" data-close>✕</button></h2>
@@ -437,6 +438,7 @@ window.UI = (function () {
              ['Урон в ближнем', '+' + R.meleeBonus(p), 'mb'], ['Шанс крита', R.critChance(p) + '%', 'crit'], ['Порядок хода', R.sequence(p), 'seq'], ['Лечение/час', R.healRate(p), 'heal'],
              ['Очков навыков/ур.', R.skillPerLevel(p), 'spl']]
             .map(([n, v, k]) => `<div class="stat-row" data-desc="d_${k}"><span>${n}</span><b>${v}</b><span></span></div>`).join('')}
+          ${create ? '' : `<div class="stat-row" data-desc="d_rep"><span>Репутация в Ручье</span><b class="${G.repLevel().cls}">${G.rep() > 0 ? '+' : ''}${G.rep()}</b><span class="${G.repLevel().cls}" style="font-size:11px">${G.repLevel().name}</span></div>`}
           ${create ? '' : `<div style="margin-top:8px" class="warn">Перки</div><div class="muted" style="font-size:12px">${(p.perks || []).map(id => (DATA.PERKS.find(k => k.id === id) || {}).name).join(', ') || 'нет'}</div>
           ${p.perkPts > 0 ? `<button class="primary" id="c-perk" style="margin-top:4px">Выбрать перк (${p.perkPts})</button>` : '<div class="muted" style="font-size:11px">Новый перк — на каждом чётном уровне.</div>'}
           <div style="margin-top:8px" class="warn">Задания</div><div class="muted" style="font-size:12px">${questText()}</div>`}`;
@@ -447,7 +449,7 @@ window.UI = (function () {
         const go = root.querySelector('#c-go');
         if (go) go.disabled = pool !== 0 || p.tags.length !== 3;
       };
-      const DERIVED = { hp: 'Очки здоровья: 20 + СИЛ + 2×ВЫН (+ за уровни).', ap: 'Очки действия в бою: 5 + ЛОВ/2. Шаг — 1 ОД, выстрел/удар — по оружию, аптечка — 2 ОД.', ac: 'Класс брони: ЛОВ + броня. Снижает шанс попадания по вам.', carry: 'Грузоподъёмность: 15 + 8×СИЛ кг. При перегрузе двигаться нельзя.', mb: 'Бонус урона в ближнем бою: СИЛ − 5 (минимум 1).', crit: 'Шанс критического попадания (×1.5 урона, частично игнорирует броню): Удача + бонус оружия. Атака из скрытности: +30% к шансу и ×2.5 урона.', seq: 'Порядок хода: 2×ВСП. Кто выше — ходит раньше.', heal: 'Сколько ОЗ восстанавливается за час отдыха: ВЫН/3.', spl: 'Очки навыков за уровень: 5 + 2×ИНТ.' };
+      const DERIVED = { hp: 'Очки здоровья: 20 + СИЛ + 2×ВЫН (+ за уровни).', ap: 'Очки действия в бою: 5 + ЛОВ/2. Шаг — 1 ОД, выстрел/удар — по оружию, аптечка — 2 ОД.', ac: 'Класс брони: ЛОВ + броня. Снижает шанс попадания по вам.', carry: 'Грузоподъёмность: 15 + 8×СИЛ кг. При перегрузе двигаться нельзя.', mb: 'Бонус урона в ближнем бою: СИЛ − 5 (минимум 1).', crit: 'Шанс критического попадания (×1.5 урона, частично игнорирует броню): Удача + бонус оружия. Атака из скрытности: +30% к шансу и ×2.5 урона.', seq: 'Порядок хода: 2×ВСП. Кто выше — ходит раньше.', heal: 'Сколько ОЗ восстанавливается за час отдыха: ВЫН/3.', spl: 'Очки навыков за уровень: 5 + 2×ИНТ.', rep: 'Как к вам относятся в Ржавом Ручье. Растёт за помощь жителям, падает за кражи и убийства. Влияет на цены (−20%…+30%), реплики и лечение у Ирины. Враг Ручья — с вами не торгуют, а охрана стреляет.' };
       root.addEventListener('mouseover', e => {
         const r = e.target.closest('[data-desc]');
         if (!r) return;

@@ -7,15 +7,16 @@ window.COMBAT = (function () {
   const net = () => window.NET && NET.active;
   const isAuth = () => !net() || NET.isAuth;
   const isPC = a => !!(a && (a.isPlayer || a.isRemote));
+  const isAlly = a => !!(a && (a.isPlayer || a.isRemote || a.isCompanion));
 
-  function players(G) { return G.loc.actors.filter(a => isPC(a) && !a.dead && !a.gone); }
+  function players(G) { return G.loc.actors.filter(a => isAlly(a) && !a.dead && !a.gone); }
   function nearestPC(G, a) {
     let best = null, bd = 1e9;
     for (const p of players(G)) { const d = ENG.dist(a, p); if (d < bd) { bd = d; best = p; } }
     return { p: best, d: bd };
   }
   function involved(G, a, initiator) {
-    if (a.dead || a.gone || isPC(a) || !a.hostile) return false;
+    if (a.dead || a.gone || isAlly(a) || !a.hostile) return false;
     const d = nearestPC(G, a).d;
     return a.alerted || d <= 16 || (initiator && a.faction === initiator.faction && d <= 24);
   }
@@ -32,6 +33,7 @@ window.COMBAT = (function () {
     list.sort((a, b) => b.seq - a.seq);
     if (first && list.includes(first)) { list.splice(list.indexOf(first), 1); list.unshift(first); }
     for (const a of list) if (!isPC(a)) a.alerted = true;
+    if (G.companion) G.companionEquip(false);
     G.combat = {
       list, idx: -1, round: 1, current: null, busy: false,
       isPlayerTurn() { return this.current === G.player; },
@@ -54,12 +56,12 @@ window.COMBAT = (function () {
     if (!cb || cb.mirror) return;
     for (const a of G.loc.actors) {
       if (cb.list.includes(a)) continue;
-      if (involved(G, a) || (isPC(a) && !a.dead && !a.gone)) { if (!isPC(a)) a.alerted = true; cb.list.push(a); }
+      if (involved(G, a) || (isAlly(a) && !a.dead && !a.gone)) { if (!isPC(a)) a.alerted = true; cb.list.push(a); }
     }
   };
 
   function hostilesLeft(G) {
-    return G.combat.list.filter(a => !isPC(a) && !a.dead && !a.gone && a.hostile);
+    return G.combat.list.filter(a => !isAlly(a) && !a.dead && !a.gone && a.hostile);
   }
 
   C.end = function (G, msg) {
@@ -86,7 +88,7 @@ window.COMBAT = (function () {
     cb.idx++;
     if (cb.idx >= cb.list.length) { cb.idx = 0; cb.round++; }
     const a = cb.list[cb.idx];
-    if (a.dead || a.gone || (!isPC(a) && !a.hostile) || !G.loc.actors.includes(a) && a !== G.player) return C.nextTurn(G);
+    if (a.dead || a.gone || (!isAlly(a) && !a.hostile) || !G.loc.actors.includes(a) && a !== G.player) return C.nextTurn(G);
     cb.current = a;
     a.ap = R.maxAP(a);
     if (a.stunned) { a.stunned = false; a.ap = Math.ceil(a.ap / 2); G.log(`${a.name} оглушён и теряет половину ОД.`, 'good'); }
@@ -176,7 +178,9 @@ window.COMBAT = (function () {
     const me = G.player;
     att.dir = ENG.dirFromDelta(def.x - att.x, def.y - att.y);
     att.aimT = 0.45;
-    if (ev.melee) ENG.swing(att, def); else ENG.tracer(att, def, ev.hit);
+    if (ev.melee) ENG.swing(att, def); else { ENG.tracer(att, def, ev.hit); ENG.muzzle(att, def); }
+    { const s = ENG.iso(att.x - def.x, att.y - def.y), l = Math.hypot(s.x, s.y) || 1; att.recoilX = s.x / l; att.recoilY = s.y / l; att.recoilT = 0.14; }
+    if (ev.hit) { def.shakeT = 0.25; ENG.blood(def, ev.crit ? 14 : 7); }
     const w = DATA.ITEMS[att.weapon || 'fists'];
     if (ev.melee) SND.at('swing', att.x, att.y); else SND.at('shot', att.x, att.y, { weapon: w.icon === 'ak' ? 'ak' : w.icon });
     setTimeout(() => ev.hit ? SND.at('hit', def.x, def.y) : (!ev.melee && SND.at('miss', def.x, def.y)), ev.melee ? 120 : 160);
@@ -258,6 +262,7 @@ window.COMBAT = (function () {
     a.path = [];
     if (a.isPlayer) { G.gameOver(); return; }
     if (a.isRemote) { NET.event(a.pid, { kind: 'died' }); return; }
+    if (a.isCompanion) { a.isCompanion = false; G.companion = null; G.log(`Ваш напарник ${a.name} погиб.`, 'bad'); SND.play('death'); }
     // оружие и броня падают в лут
     if (a.weapon && ITEMS[a.weapon].hidden) a.weapon = null;
     if (a.weapon) {
@@ -271,6 +276,7 @@ window.COMBAT = (function () {
     if (by && by.isRemote) NET.event(by.pid, { kind: 'xp', n: a.xpValue || 25 });
     if (a.tpl === 'klyk') G.flags.klykDead = true;
     if (a.tpl === 'marauder') G.flags.marauderKilled = true;
+    if (a.faction === 'town' && by && by.isPlayer) G.addRep(-40, `убит ${a.name}`);
     NET.syncEnt(a);
   }
   C.kill = kill;
@@ -401,7 +407,11 @@ window.COMBAT = (function () {
   async function ai(G, a) {
     let guard = 30;
     while (a.ap > 0 && guard-- > 0 && !a.dead && G.combat) {
-      const { p } = nearestPC(G, a);
+      let p;
+      if (a.isCompanion) {
+        let bd = 1e9;
+        for (const f of G.combat.list) if (!isAlly(f) && f.hostile && !f.dead && !f.gone) { const d = ENG.dist(a, f); if (d < bd) { bd = d; p = f; } }
+      } else p = nearestPC(G, a).p;
       if (!p) break;
       const w = R.weaponOf(a);
       if (a.hp < R.maxHP(a) * 0.35 && R.count(a, 'medkit') && a.ap >= 2) {

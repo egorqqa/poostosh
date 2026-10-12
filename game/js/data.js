@@ -199,7 +199,7 @@ window.DATA = (function () {
           opts: [{ t: 'Бывай.', end: true }] },
         samples: { text: 'Хо-хо... Армейский антидот? Покупатели найдутся. Триста пятьдесят крышек — и мы с тобой не знакомы.',
           opts: [
-            { t: 'По рукам.', act: g => { g.takeFrom(g.player, 'samples', 1); g.flags.samplesSold = true; g.setQuest('zarya', 9); g.reward(150, 350, []); }, end: true },
+            { t: 'По рукам.', act: g => { g.takeFrom(g.player, 'samples', 1); g.flags.samplesSold = true; g.setQuest('zarya', 9); g.reward(150, 350, []); g.addRep(-20, 'антидот продан на сторону'); }, end: true },
             { t: 'Нет, отдам Ирине.', end: true },
           ] },
         rumor: { text: 'Говорят, у Тихона-бродяги отмычки водятся. А рейдеры Клыка держат склад на блокпосту — шкаф с замком такой, что без отмычек и не суйся.',
@@ -214,7 +214,7 @@ window.DATA = (function () {
       nodes: {
         hello: { text: 'Док Ирина. Ранен — лечу. Бесплатно не лечу. Тут не богадельня.',
           opts: [
-            { t: 'Подлатай меня. [30 крышек]', if: g => g.player.hp < g.maxHP(g.player), act: 'healPaid', go: 'healed' },
+            { t: g => g.rep() >= 50 ? 'Подлатай меня. [бесплатно для героя]' : 'Подлатай меня. [30 крышек]', if: g => g.player.hp < g.maxHP(g.player), act: 'healPaid', go: 'healed' },
             { t: 'Хочу купить лекарства.', act: 'trade', end: true },
             { t: 'Тебе нужна помощь?', if: g => g.q('wounded') === 0, go: 'wounded' },
             { t: 'Лёха в порядке, я его перевязал.', if: g => g.q('wounded') === 2, go: 'wounded_done' },
@@ -231,7 +231,7 @@ window.DATA = (function () {
           opts: [{ t: 'Узнаю.', act: g => { g.setQuest('zarya', 1); g.revealSite('zarya'); }, end: true }, { t: 'Мне хватает своих бед.', end: true }] },
         samples: { text: 'Покажи... «З-2». Значит, правда. Антидот к тому, во что превращались подопытные. Отдай мне — я смогу сделать из этого лекарство. Для всего Ручья.',
           opts: [
-            { t: 'Забирай. Ручью нужнее.', act: g => { g.takeFrom(g.player, 'samples', 1); g.flags.cureGiven = true; g.setQuest('zarya', 9); g.reward(300, 0, [['medkit', 3]]); }, go: 'samples_done' },
+            { t: 'Забирай. Ручью нужнее.', act: g => { g.takeFrom(g.player, 'samples', 1); g.flags.cureGiven = true; g.setQuest('zarya', 9); g.reward(300, 0, [['medkit', 3]]); g.addRep(30, 'лекарство для Ручья'); }, go: 'samples_done' },
             { t: 'Сначала подумаю. Сёма за такое хорошо заплатит.', end: true },
           ] },
         samples_done: { text: 'Спасибо. Правда, спасибо. Если в Ручье кто-то заболеет этой дрянью — теперь мы сможем помочь. И тебе здесь всегда рады.', opts: [{ t: 'Береги себя, док.', end: true }] },
@@ -254,7 +254,12 @@ window.DATA = (function () {
         healed: { text: 'Ух... отпустило. Спасибо, друг. Скажи доку, что я жив — она волнуется, хоть и не показывает.', onEnter: g => { if (g.q('wounded') < 2) { g.setQuest('wounded', 2); g.giveXP(30); } },
           opts: [{ t: 'Поправляйся.', end: true }] },
         hurt: { text: 'А-а-ай! Ты что делаешь?! Не так туго! ...Может, лучше аптечку найдёшь, а? Или подучишься у дока.', opts: [{ t: 'Извини.', end: true }] },
-        fine: { text: 'Нога как новая. Ну, почти. Спасибо тебе ещё раз.', opts: [{ t: 'Береги себя.', end: true }] },
+        fine: { text: 'Нога как новая. Ну, почти. Спасибо тебе ещё раз. Если нужен напарник в пустоши — я с тобой, долг платежом красен.',
+          opts: [
+            { t: 'Пойдём со мной. Мне нужен стрелок.', if: g => g.canRecruit(), act: g => g.recruit('lyoha', { weapon: 'pistol', loaded: 8, skills: { guns: 55, melee: 45 } }), go: 'joined' },
+            { t: 'Береги себя.', end: true },
+          ] },
+        joined: { text: 'Наконец-то! Засиделся я в лагере. Пистолет при мне, патроны тоже. Веди.', opts: [{ t: 'Идём.', end: true }] },
       },
     },
     boris: {
@@ -303,6 +308,20 @@ window.DATA = (function () {
         path_fail: { text: 'Кто говорит? Пусть сам и идёт.', opts: [{ t: 'Ладно.', go: 'hello' }] },
       },
     },
+    companion: {
+      start: () => 'hello',
+      nodes: {
+        hello: { text: g => { const c = g.companion; return `${c.name}: ${c.waiting ? '«Жду здесь, как договаривались.»' : '«Я с тобой. Куда дальше?»'} (ОЗ ${c.hp}/${R.maxHP(c)}, в руках: ${c.weapon ? DATA.ITEMS[c.weapon].name : 'ничего'})`; },
+          opts: [
+            { t: g => g.companion.waiting ? 'Идём со мной.' : 'Жди здесь.', act: g => { g.companion.waiting = !g.companion.waiting; g.companion.homeX = g.companion.x; g.companion.homeY = g.companion.y; }, end: true },
+            { t: 'Давай обменяемся вещами.', act: g => { setTimeout(() => UI.openLoot(g.companion), 0); }, end: true },
+            { t: 'Возьми оружие и броню получше из того, что у тебя есть.', act: g => g.companionEquip(true), end: true },
+            { t: 'Мы расстаёмся. Возвращайся в Ручей.', go: 'bye' },
+            { t: 'Ничего, идём.', end: true },
+          ] },
+        bye: { text: 'Понял. Если что — ищи меня в Ручье. Удачи тебе.', opts: [{ t: '[Расстаться]', act: g => g.dismissCompanion(), end: true }, { t: 'Нет, постой. Идём дальше.', end: true }] },
+      },
+    },
     guard2: {
       start: () => 'hello',
       nodes: { hello: { text: 'Проходи, не задерживайся. В лагере тихо — и пусть так и остаётся.', opts: [{ t: 'Ага.', end: true }] } },
@@ -320,8 +339,11 @@ window.DATA = (function () {
             { t: 'Сёма говорит, ты ему 15 крышек должен.', if: g => g.q('debt') === 1 && !g.flags.tihonDebtPaid, go: 'debt' },
             { t: 'Держи 5 крышек.', if: g => g.player.caps >= 5 && !g.flags.tihonPaid, act: g => { g.player.caps -= 5; g.flags.tihonPaid = true; }, go: 'thanks' },
             { t: 'Говорят, у тебя отмычки есть. Поделись.', check: { skill: 'speech', diff: 25 }, ok: 'picks_ok', fail: 'picks_fail', once: 'tih_picks' },
+            { t: 'Пойдёшь со мной в пустошь? Будешь сыт.', if: g => g.q('ration') === 9 && g.canRecruit(), go: 'recruit' },
             { t: 'Отвали.', end: true },
           ] },
+        recruit: { text: 'С тобой? В пустошь?.. А кормить будешь? ...Ладно! Я тихий, незаметный, и ножик у меня есть. Пригожусь!',
+          opts: [{ t: 'Идём.', act: g => g.recruit('tihon', { weapon: 'knife', skills: { melee: 50, sneak: 60 } }), end: true }, { t: 'Я передумал.', end: true }] },
         fed: { text: 'Ох... тушёнка... Спасибо, век не забуду! Слушай, секрет за секрет: в гараже ящик Бориса — замок там простой, если отмычкой вверх поддеть.', onEnter: g => { g.setQuest('ration', 9); g.reward(30, 0, []); g.flags.toolsHint = true; },
           opts: [{ t: 'Учту.', end: true }] },
         debt: { text: 'Сёма?! Да я ему... я отдам, честно! Потом! Нету у меня сейчас!',

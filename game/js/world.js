@@ -99,11 +99,17 @@ window.WORLD_API = (function () {
     const p = G.player;
     const e = opts.at || def.entry;
     p.x = e.x; p.y = e.y;
-    L.actors = L.actors.filter(a => !a.isPlayer && !a.isRemote);
+    L.actors = L.actors.filter(a => !a.isPlayer && !a.isRemote && !a.isCompanion);
     L.actors.unshift(p);
-    for (const a of L.actors) { a.rx = a.x; a.ry = a.y; a.path = []; a.moving = false; a.walkPhase = 0; a.aimT = 0; a.hitFlash = 0; a.bubble = null; a.alerted = false; }
+    if (G.companion && !G.companion.dead) {
+      const c = G.companion;
+      c.x = e.x; c.y = e.y;
+      L.actors.push(c);
+    }
+    for (const a of L.actors) { a.rx = a.x; a.ry = a.y; a.path = []; a.moving = false; a.walkPhase = 0; a.aimT = 0; a.hitFlash = 0; a.bubble = null; a.alerted = !!a.isCompanion; a.deathAt = a.dead ? -1e9 : null; }
     buildGrids(L);
     for (const a of L.actors) {
+      if (a.isCompanion) { const f = W.freeTile(L, p.x, p.y, a); if (f) { a.x = a.rx = f.x; a.y = a.ry = f.y; } a.waiting = false; continue; }
       if (a.dead || a.gone || !L.blocked[a.y * L.w + a.x]) continue;
       const f = W.freeTile(L, a.x, a.y, a);
       if (f) { a.x = a.rx = f.x; a.y = a.ry = f.y; if (!a.isPlayer) { a.homeX = f.x; a.homeY = f.y; } }
@@ -118,6 +124,10 @@ window.WORLD_API = (function () {
     ENG.cam.x = c.x; ENG.cam.y = c.y - 40;
     G.log(`— ${def.name} —`, 'sys');
     SND.setScene(LOCATIONS[id] ? id : 'wild');
+    if (id === 'camp' && !NET.active && G.rep() <= -50) {
+      for (const a of L.actors) if (a.guard && !a.dead) { a.hostile = true; a.alerted = false; }
+      G.log('Охрана Ручья узнаёт вас. Здесь вам не рады.', 'bad');
+    }
     TUT.mark('location');
     if (def.desc) G.log(def.desc, 'sys');
     UI.refresh();
@@ -127,7 +137,7 @@ window.WORLD_API = (function () {
     const L = G.loc;
     return {
       objects: L.objects.filter(o => o.container).map(o => ({ uid: o.uid, inv: o.inv, lock: o.lock, caps: o.caps, jammed: o.jammed })),
-      actors: L.actors.filter(a => !a.isPlayer && !a.isRemote && !a.gone).map(a => {
+      actors: L.actors.filter(a => !a.isPlayer && !a.isRemote && !a.isCompanion && !a.gone).map(a => {
         const c = { ...a };
         delete c.path; delete c.onArrive; delete c.stepCb; delete c.bubble;
         return c;
@@ -215,6 +225,7 @@ window.WORLD_API = (function () {
     if (G.combat) return 5;
     if (a.isPlayer) return G.sneaking ? 2.4 : 4.4;
     if (a.isRemote) return a.sneaking ? 2.6 : 4.8;
+    if (a.isCompanion) return G.sneaking ? 2.6 : 4.6;
     return a.hurry ? 4 : 2.2;
   }
 
@@ -223,6 +234,8 @@ window.WORLD_API = (function () {
     for (const a of L.actors) {
       if (a.dead || a.gone) continue;
       if (a.aimT > 0) a.aimT -= dt;
+      if (a.recoilT > 0) a.recoilT -= dt;
+      if (a.shakeT > 0) a.shakeT -= dt;
       if (a.hitFlash > 0) a.hitFlash -= dt;
       if (a.bubble) { a.bubble.t -= dt; if (a.bubble.t <= 0) a.bubble = null; }
       if (a.moving) {
@@ -256,6 +269,8 @@ window.WORLD_API = (function () {
       }
     }
     if (G.loc !== L) return; // игрок вышел из локации в этом кадре
+    if (G.loc !== L) return;
+    if (!G.combat) updateCompanion(G);
     if (!G.combat && NET.sim()) {
       updateWander(G, dt);
       updateDetection(G, dt);
@@ -281,6 +296,17 @@ window.WORLD_API = (function () {
     if (!G.combat && W.isExit(L, p.x, p.y) && (!p.path || !p.path.length)) {
       W.useExit(G, W.exitRect(L, p.x, p.y));
     }
+  }
+
+  // напарник идёт следом
+  function updateCompanion(G) {
+    const c = G.companion, p = G.player, L = G.loc;
+    if (!c || c.dead || c.waiting || c.moving || (c.path && c.path.length) || !L.actors.includes(c)) return;
+    const d = ENG.dist(c, p);
+    if (d <= 2) return;
+    const path = ENG.findPath(L, c.x, c.y, p.x, p.y, { adjacent: true, ignore: c, maxLen: 60 });
+    if (path && path.length) W.moveTo(G, c, path.slice(0, Math.max(1, path.length - 1)));
+    else if (d > 14) { const f = W.freeTile(L, p.x, p.y, c); if (f) { c.x = c.rx = f.x; c.y = c.ry = f.y; } }
   }
 
   function updateWander(G, dt) {
@@ -384,6 +410,7 @@ window.WORLD_API = (function () {
     for (const a of angry) { a.hostile = true; a.alerted = true; NET.syncEnt(a); }
     victim.bubble = { text: text || 'Вор!', t: 2.5, color: '#ff5a3c' };
     G.log(`${victim.name}: «${text || 'Держи вора!'}»`, 'bad');
+    if (victim.faction === 'town') G.addRep(-25, 'пойман на воровстве');
     COMBAT.start(G, victim, false);
   };
 
@@ -491,6 +518,7 @@ window.WORLD_API = (function () {
     if (a) {
       if (a.dead) { goThen(G, a, () => UI.openLoot(a)); return; }
       if (a.hostile) { COMBAT.playerAttack(G, a); return; }
+      if (a.isCompanion && G.combat) { G.log(`${a.name}: «Прикрываю!»`, 'sys'); return; }
       if (G.combat) { G.log('Сейчас не время для разговоров.', 'warn'); return; }
       goThen(G, a, () => W.startDialog(G, a));
       return;
@@ -724,8 +752,10 @@ window.WORLD_API = (function () {
     if (node.onEnter) node.onEnter(G);
     const opts = node.opts.filter(o => (!o.if || o.if(G)) && !(o.once && G.flags['once_' + o.once]));
     D.opts = opts;
-    UI.showDialog(D.npc, node.text, opts.map(o => {
-      let t = o.t;
+    let text = typeof node.text === 'function' ? node.text(G) : node.text;
+    if (!D.greeted) { D.greeted = true; text = G.repGreeting(D.npc) + text; }
+    UI.showDialog(D.npc, text, opts.map(o => {
+      let t = typeof o.t === 'function' ? o.t(G) : o.t;
       if (o.check) {
         const sk = o.check.stat ? DATA.SPECIAL.find(s => s.id === o.check.stat) : DATA.SKILLS.find(s => s.id === o.check.skill);
         t = `<span class="chk">[${sk.name} ${o.check.diff}]</span> ` + t;
@@ -767,7 +797,10 @@ window.WORLD_API = (function () {
   };
 
   const ACTIONS = {
-    trade(G, npc) { setTimeout(() => UI.openTrade(npc), 0); },
+    trade(G, npc) {
+      if (npc.faction === 'town' && G.rep() <= -50) { G.log(`${npc.name}: «С тобой я дел не веду. Проваливай.»`, 'bad'); return; }
+      setTimeout(() => UI.openTrade(npc), 0);
+    },
     craft(G, npc) { setTimeout(() => UI.openCraft(npc), 0); },
     takeQuest(G) {
       if (G.quests.meds === 0) {
@@ -783,11 +816,14 @@ window.WORLD_API = (function () {
       G.quests.meds = 3;
       G.log(`Задание выполнено! +${reward} крышек.`, 'good');
       G.giveXP(250);
+      G.addRep(25, 'медикаменты для Ручья');
     },
     healPaid(G) {
       const p = G.player;
-      if (p.caps < 30) { G.log('Не хватает крышек.', 'bad'); return; }
-      p.caps -= 30; p.hp = R.maxHP(p);
+      const price = G.rep() >= 50 ? 0 : 30;
+      if (p.caps < price) { G.log('Не хватает крышек.', 'bad'); return; }
+      p.caps -= price; p.hp = R.maxHP(p);
+      if (!price) G.log('Ирина: «Для тебя — бесплатно.»', 'good');
       G.log('Ирина обработала раны. Здоровье восстановлено.', 'good');
     },
     fight(G, npc) {

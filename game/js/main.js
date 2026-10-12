@@ -24,7 +24,10 @@
     G.quests[id] = st;
     const def = DATA.QUESTS[id];
     if (def && prev === 0 && st > 0 && st < 9) G.log(`Новое задание: «${def.title}».`, 'good');
-    else if (def && st === 9) { G.log(`Задание выполнено: «${def.title}».`, 'good'); SND.play('quest'); }
+    else if (def && st === 9) {
+      G.log(`Задание выполнено: «${def.title}».`, 'good'); SND.play('quest');
+      if (['semyon', 'boris', 'irina', 'gvozd', 'tihon'].includes(def.giver) && id !== 'zarya') G.addRep(10, 'помощь жителям');
+    }
     else if (def && def.steps[st]) G.log(`Задание обновлено: «${def.title}».`, 'good');
     UI.refresh();
   };
@@ -47,6 +50,80 @@
     if (G.hasItem('director_log') && !G.flags.zaryaCode) G.zaryaFound();
     if (G.hasItem('samples') && G.q('zarya') >= 1 && G.q('zarya') < 4) G.setQuest('zarya', 4);
   }, 700);
+  // ---------- напарник ----------
+  G.canRecruit = () => !G.companion && !NET.active;
+  G.recruit = function (tpl, opts) {
+    const src = G.loc.actors.find(a => a.tpl === tpl && !a.dead);
+    if (!src) return;
+    src.gone = true;
+    const c = R.makeNpc(tpl, src.x, src.y, {});
+    Object.assign(c, { id: 'comp_' + tpl, isCompanion: true, faction: 'player', hostile: false, alerted: true, dialog: 'companion', originId: src.id,
+      inv: src.inv.map(s => ({ ...s })), caps: 0, weapon: opts.weapon || null, loaded: opts.loaded || 0, waiting: false, wander: 0,
+      rx: src.x, ry: src.y, path: [], moving: false, walkPhase: 0, aimT: 0, hitFlash: 0 });
+    Object.assign(c.skillOverride, opts.skills || {});
+    c.name = c.name.replace(/^(Раненый|Бродяга) /, '');
+    c.baseHP += 10; c.hp = c.baseHP;
+    G.companion = c;
+    G.loc.actors.push(c);
+    G.log(`${c.name} присоединяется к вам. Клик по напарнику — команды и обмен вещами.`, 'good');
+    SND.play('quest');
+  };
+  G.companionEquip = function (verbose) {
+    const c = G.companion;
+    if (!c) return;
+    const score = id => { const w = DATA.ITEMS[id]; return (w.dmg[0] + w.dmg[1]) / 2 / w.ap * (w.melee ? 0.8 : 1); };
+    let best = c.weapon;
+    for (const s of c.inv) { const it = DATA.ITEMS[s.id]; if (it.type === 'weapon' && !it.hidden && (!best || score(s.id) > score(best))) best = s.id; }
+    if (best !== c.weapon) {
+      if (c.weapon) R.addItem(c, c.weapon, 1);
+      R.removeItem(c, best, 1); c.weapon = best; c.loaded = 0;
+      const w = DATA.ITEMS[best];
+      if (w.mag) { const n = Math.min(w.mag, R.count(c, w.ammo)); R.removeItem(c, w.ammo, n); c.loaded = n; }
+    }
+    let arm = c.armor;
+    for (const s of c.inv) { const it = DATA.ITEMS[s.id]; if (it.type === 'armor' && (!arm || it.ac > DATA.ITEMS[arm].ac)) arm = s.id; }
+    if (arm !== c.armor) { if (c.armor) R.addItem(c, c.armor, 1); R.removeItem(c, arm, 1); c.armor = arm; }
+    if (verbose) G.log(`${c.name}: оружие — ${c.weapon ? DATA.ITEMS[c.weapon].name : 'кулаки'}, броня — ${c.armor ? DATA.ITEMS[c.armor].name : 'нет'}.`, 'sys');
+  };
+  G.dismissCompanion = function () {
+    const c = G.companion;
+    if (!c) return;
+    G.companion = null;
+    if (G.loc) { const i = G.loc.actors.indexOf(c); if (i >= 0) G.loc.actors.splice(i, 1); }
+    // вернуть жителя в лагерь
+    const restore = list => { const o = list && list.find(a => a.id === c.originId); if (o) { o.gone = false; o.hp = Math.max(1, c.hp); o.inv = c.inv; o.weapon = c.weapon; o.armor = c.armor; } };
+    if (G.loc && G.loc.id === 'camp') restore(G.loc.actors); else if (G.locStates.camp) restore(G.locStates.camp.actors);
+    G.log(`${c.name} возвращается в Ржавый Ручей.`, 'sys');
+  };
+
+  // ---------- репутация Ручья ----------
+  const REP_LEVELS = [
+    { min: 50, name: 'Герой Ручья', mult: 0.8, cls: 'good' },
+    { min: 15, name: 'Свой', mult: 0.9, cls: 'good' },
+    { min: -15, name: 'Чужак', mult: 1, cls: 'sys' },
+    { min: -50, name: 'Под подозрением', mult: 1.15, cls: 'warn' },
+    { min: -999, name: 'Враг Ручья', mult: 1.3, cls: 'bad' },
+  ];
+  G.rep = () => (G.flags && G.flags.rep) || 0;
+  G.repLevel = (v = G.rep()) => REP_LEVELS.find(l => v >= l.min);
+  G.addRep = function (n, why) {
+    const before = G.repLevel();
+    G.flags.rep = Math.max(-100, Math.min(100, G.rep() + n));
+    const after = G.repLevel();
+    G.log(`Репутация в Ручье ${n > 0 ? '+' : ''}${n}${why ? ' (' + why + ')' : ''}: ${after.name}.`, n > 0 ? 'good' : 'bad');
+    if (after !== before) { G.hint('Репутация: ' + after.name); SND.play(n > 0 ? 'quest' : 'alert'); }
+    UI.refresh();
+  };
+  // приветствие жителей в зависимости от репутации
+  G.repGreeting = function (npc) {
+    if (!npc || npc.faction !== 'town') return '';
+    const v = G.rep();
+    if (v >= 50) return '(смотрит с уважением) Рад видеть, герой. ';
+    if (v >= 15) return '(кивает как своему) ';
+    if (v <= -50) return '(хватается за оружие) Ты?! После всего, что ты натворил... ';
+    if (v <= -15) return '(смотрит с подозрением) ';
+    return '';
+  };
   G.revealSite = id => { WMAP.siteState(G, id).known = true; G.log('Новая локация отмечена на карте мира.', 'good'); };
   G.marauderDead = () => { const m = G.anyNpc('marauder'); return !!(m && m.dead) || !!G.flags.marauderKilled; };
   G.angerMarauder = function () {
@@ -268,7 +345,8 @@
     if (G.scene === 'local') WORLD_API.saveLocationState(G);
     const p = { ...G.player };
     delete p.path; delete p.onArrive; delete p.stepCb;
-    const data = { player: p, locStates: G.locStates, quests: G.quests, flags: G.flags, time: G.time, world: G.world,
+    const comp = G.companion ? { ...G.companion, path: [], onArrive: null, stepCb: null } : null;
+    const data = { player: p, companion: comp, locStates: G.locStates, quests: G.quests, flags: G.flags, time: G.time, world: G.world,
       scene: G.scene, locId: G.loc && !G.loc.def.temp ? G.loc.id : null };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); G.log(auto ? 'Автосохранение.' : 'Игра сохранена.', auto ? 'sys' : 'good'); }
     catch (e) { G.log('Не удалось сохранить: ' + e.message, 'bad'); }
@@ -280,7 +358,7 @@
     try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { data = null; }
     if (!data) { G.hint('Сохранений нет'); return; }
     UI.closeModal();
-    Object.assign(G, { player: data.player, locStates: data.locStates, quests: data.quests, flags: data.flags, time: data.time, world: data.world, combat: null, dialog: null, mode: 'play' });
+    Object.assign(G, { player: data.player, companion: data.companion || null, locStates: data.locStates, quests: data.quests, flags: data.flags, time: data.time, world: data.world, combat: null, dialog: null, mode: 'play' });
     G.player.dead = false;
     if (G.flags.tutStep == null && G.player.xp > 0) G.flags.tutStep = 99;
     UI.hideDialog();
@@ -295,7 +373,7 @@
   function newGame() {
     UI.openCharacter(true, p => {
       G.player = p;
-      G.locStates = {}; G.quests = { meds: 0 }; G.flags = {}; G.time = 8 * 60;
+      G.locStates = {}; G.quests = { meds: 0 }; G.flags = {}; G.time = 8 * 60; G.companion = null;
       G.world = WMAP.initState();
       document.getElementById('log-box').innerHTML = '';
       G.log(`${p.name}, вы выходите из пустоши к поселению у старой заправки.`, 'sys');

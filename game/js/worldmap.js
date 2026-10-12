@@ -150,8 +150,83 @@ window.WMAP = (function () {
     if (Math.random() < chance) {
       W.path = [];
       encounter(G, tr);
+    } else if (Math.random() < 0.12) {
+      W.path = [];
+      worldEvent(G);
     }
   }
+
+  // ---------- мирные события в пути ----------
+  const rndItems = list => list.filter(() => Math.random() < 0.6);
+  const EVENTS = [
+    { id: 'caravan', title: 'Караван браминов', text: 'По дороге неспешно бредут двухголовые брамины, навьюченные тюками. Караванщик машет рукой: «Торговать будешь, путник?»',
+      opts: [
+        { t: 'Поторговать', act: G => { const trader = { name: 'Караванщик Яков', tpl: 'caravan', faction: 'caravan', caps: 400, inv: [['ammo9', 40], ['shells', 12], ['ammo762', 20], ['medkit', 2], ['bandage', 4], ['water', 5], ['food', 4], ['lockpicks', 1], ['leather', 1], ['rifle', 1]].filter((x, i) => i < 4 || Math.random() < 0.5).map(([id, n]) => ({ id, n })) }; setTimeout(() => UI.openTrade(trader), 0); return null; } },
+        { t: 'Расспросить о дорогах', check: { skill: 'speech', diff: 35 }, act: G => { G.giveXP(20); G.flags.radioHeard = true; return 'Яков рассказывает: на востоке, за рекой, кто-то крутит по радио позывной «Рассвет». Говорят, там укрепление и чистая вода. И ещё — что люди из «Зари» шли туда с какими-то ящиками.'; }, fail: 'Караванщик пожимает плечами: «Дороги как дороги. Смотри под ноги».' },
+        { t: 'Пройти мимо', act: () => 'Караван медленно скрывается в пыли.' },
+      ] },
+    { id: 'wounded', title: 'Раненый путник', text: 'У обочины сидит человек, зажимая рану на боку. «Помогите... рейдеры...»',
+      opts: [
+        { t: 'Перевязать рану', check: { skill: 'medic', diff: 30 }, act: G => { G.giveXP(40); const r = ['ammo9', 'bandage', 'water'][R.rnd(0, 2)]; R.addItem(G.player, r, r === 'ammo9' ? 10 : 1); return `Вы останавливаете кровь. Путник благодарит и суёт вам «${DATA.ITEMS[r].name}». (+40 опыта)`; }, fail: 'Вы пытаетесь помочь, но рана слишком сложная. Путник лишь машет рукой: «Иди...»' },
+        { t: 'Отдать аптечку', if: G => G.hasItem('medkit'), act: G => { R.removeItem(G.player, 'medkit', 1); G.player.caps += 25; G.giveXP(30); return 'Путник жадно хватает аптечку и отдаёт вам последние 25 крышек. (+30 опыта)'; } },
+        { t: 'Обшарить его карманы', act: G => { R.addItem(G.player, 'ammo9', 6); G.player.caps += 12; G.flags.karmaLow = (G.flags.karmaLow || 0) + 1; return 'Он слишком слаб, чтобы сопротивляться. 12 крышек и 6 патронов. На душе мерзко.'; } },
+        { t: 'Пройти мимо', act: () => 'Вы идёте дальше. Стоны за спиной постепенно стихают.' },
+      ] },
+    { id: 'stash', title: 'Странная груда камней', text: 'Камни сложены слишком ровно для случайности. Может, тайник?',
+      opts: [
+        { t: 'Присмотреться', check: { skill: 'survival', diff: 35 }, act: G => { G.giveXP(20); const got = rndItems([['ammo762', 8], ['medkit', 1], ['water', 2], ['lockpicks', 1]]); got.forEach(([id, n]) => R.addItem(G.player, id, n)); const caps = R.rnd(15, 45); G.player.caps += caps; SND.play('pickup'); return `Тайник! Внутри: ${got.map(([id, n]) => DATA.ITEMS[id].name + (n > 1 ? ' ×' + n : '')).join(', ') || 'пусто'}, и ${caps} крышек. (+20 опыта)`; }, fail: 'Вы разбираете камни, но под ними только песок и скорпион.' },
+        { t: 'Идти дальше', act: () => 'Камни как камни.' },
+      ] },
+    { id: 'car', title: 'Брошенная машина', text: 'Посреди дороги стоит легковушка с распахнутыми дверями. Под днищем поблёскивает проволока.',
+      opts: [
+        { t: 'Аккуратно снять растяжку и обыскать', check: { skill: 'lockpick', diff: 30 }, act: G => { G.giveXP(25); R.addItem(G.player, 'junk', 2); R.addItem(G.player, 'shells', 6); G.player.caps += 20; SND.play('pickup'); return 'Вы обезвреживаете растяжку. В багажнике: хлам, дробь и 20 крышек. (+25 опыта)'; }, fail: 'Проволока дрожит под пальцами — лучше не рисковать.' },
+        { t: 'Обыскать как есть', act: G => { if (Math.random() * 10 < G.player.stats.luck) { R.addItem(G.player, 'junk', 2); SND.play('pickup'); return 'Повезло: растяжка проржавела. Вы находите немного хлама.'; } G.player.hp = Math.max(1, G.player.hp - 8); SND.play('shot', { weapon: 'shotgun' }); return 'Хлопок! Растяжка срабатывает. −8 ОЗ.'; } },
+        { t: 'Объехать... то есть обойти', act: () => 'Целее будете.' },
+      ] },
+    { id: 'water', title: 'Водонос', text: 'Сгорбленный старик с канистрами за спиной: «Вода! Чистая вода! Три бутылки — десять крышек!»',
+      opts: [
+        { t: 'Купить (10 крышек)', if: G => G.player.caps >= 10, act: G => { G.player.caps -= 10; R.addItem(G.player, 'water', 3); SND.play('cash'); return 'Старик отсчитывает три бутылки. Вода и правда чистая.'; } },
+        { t: 'Отказаться', act: () => 'Старик бредёт дальше, позвякивая канистрами.' },
+      ] },
+    { id: 'radio', title: 'Радиосигнал', text: 'В старом приёмнике на обочине сквозь треск пробивается голос: «...говорит станция «Рассвет»... всем выжившим... вода, защита... мост на востоке...»',
+      opts: [{ t: 'Запомнить', act: G => { G.flags.radioHeard = true; G.giveXP(15); if (G.onRadio) G.onRadio(); return 'Вы запоминаете позывной. Похоже, где-то на востоке есть поселение. (+15 опыта)'; } }] },
+  ];
+
+  function worldEvent(G) {
+    const ev = EVENTS[R.rnd(0, EVENTS.length - 1)];
+    const show = (text, result) => {
+      UI.openModal('wevent', `<div class="modal" style="width:min(520px,94vw)"><h2>${ev.title}</h2>
+        <div class="screen" style="margin-bottom:10px;line-height:1.45">${result || text}</div>
+        <div class="cols" style="flex-direction:column;gap:6px" id="we-opts"></div></div>`, root => {
+        const box = root.querySelector('#we-opts');
+        const opts = result ? [{ t: 'Продолжить путь', done: true }] : ev.opts.filter(o => !o.if || o.if(G));
+        box.innerHTML = opts.map((o, i) => {
+          let lbl = o.t;
+          if (o.check) { const s = DATA.SKILLS.find(x => x.id === o.check.skill); lbl = `<span class="warn">[${s.name} ${o.check.diff}]</span> ` + lbl; }
+          return `<button data-i="${i}" style="text-align:left">${lbl}</button>`;
+        }).join('');
+        box.onclick = e => {
+          const b = e.target.closest('[data-i]'); if (!b) return;
+          const o = opts[+b.dataset.i];
+          SND.play('ui');
+          if (o.done) { UI.closeModal(); UI.refresh(); return; }
+          let res;
+          if (o.check) {
+            const v = R.skill(G.player, o.check.skill), ok = v >= o.check.diff;
+            G.log(`Проверка: ${DATA.SKILLS.find(x => x.id === o.check.skill).name} ${v} против ${o.check.diff} — ${ok ? 'успех' : 'провал'}.`, ok ? 'good' : 'warn');
+            res = ok ? o.act(G) : o.fail;
+          } else res = o.act(G);
+          if (res == null) return;
+          G.log(res, 'sys');
+          UI.refresh();
+          show(text, res);
+        };
+      });
+    };
+    SND.play('dialog');
+    show(ev.text);
+  }
+  M.worldEvent = worldEvent;
 
   function encounter(G, tr) {
     const p = G.player;
