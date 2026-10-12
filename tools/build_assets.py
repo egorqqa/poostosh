@@ -250,6 +250,58 @@ def build_soldier(manifest):
                                 "fw": FW, "fh": FH, "ax": AX, "ay": AY}
 
 
+def build_rat(manifest):
+    """Лист радкрысы: 8 рядов-направлений (S, SE, E, NE, N, NW, W, SW), слева подписи."""
+    src = Image.open(os.path.join(ROOT, "радиоактивная_крыса.png")).convert("RGBA")
+    a = np.array(src)
+    # центры рядов — по плашкам-подписям в левой колонке
+    lbl, n = ndimage.label(a[:, :80, 3] > 100)
+    centers = sorted(ndimage.center_of_mass(a[:, :80, 3] > 100, lbl, range(1, n + 1)), key=lambda c: c[0])
+    centers = [c[0] for c in centers if True][:8]
+    a[:, :80, 3] = 0
+    mask = a[:, :, 3] > 100
+    lab, _ = ndimage.label(mask)
+    CW, CH, AX, AY, SC = 100, 72, 50, 66, 0.34
+    # склеенные хвостами кадры соседних рядов разрезаем по середине между рядами
+    nxt = lab.max() + 1
+    for i, sl in enumerate(ndimage.find_objects(lab), start=1):
+        if sl is None:
+            continue
+        for k in range(7):
+            cut = int((centers[k] + centers[k + 1]) / 2)
+            if sl[0].start < centers[k] and sl[0].stop > centers[k + 1]:
+                part = (lab == i)
+                part[:cut] = False
+                lab[part] = nxt
+                nxt += 1
+    rows = [[] for _ in range(8)]
+    for i, sl in enumerate(ndimage.find_objects(lab), start=1):
+        if sl is None:
+            continue
+        ys, xs = sl
+        if (lab[sl] == i).sum() < 800:
+            continue
+        mid = (ys.start + ys.stop) / 2
+        r = min(range(8), key=lambda k: abs(centers[k] - mid))
+        rows[r].append((xs.start, xs.stop, ys.start, ys.stop, i))
+    for f in rows:
+        f.sort()
+    ncol = max(len(f) for f in rows)
+    sheet = Image.new("RGBA", (CW * ncol, CH * 8), (0, 0, 0, 0))
+    counts = []
+    for r, frames in enumerate(rows):
+        counts.append(len(frames))
+        for c, (x0, x1, y0, y1, i) in enumerate(frames):
+            fr = a.copy()
+            fr[lab != i, 3] = 0
+            piece = Image.fromarray(fr[y0:y1, x0:x1])
+            piece = piece.resize((max(1, round(piece.width * SC)), max(1, round(piece.height * SC))), Image.LANCZOS)
+            sheet.alpha_composite(piece, (c * CW + AX - piece.width // 2, r * CH + AY - piece.height))
+    sheet.save(os.path.join(OUT, "chars", "rat.png"))
+    manifest["char_rat"] = {"src": "assets/chars/rat.png", "w": sheet.width, "h": sheet.height,
+                            "fw": CW, "fh": CH, "ax": AX, "ay": AY, "frames": counts}
+
+
 def build_portrait(manifest):
     src = Image.open(os.path.join(ROOT, "Пиксельный лист солдата в противогазе.png")).convert("RGBA")
     face = src.crop((40, 0, 160, 120)).resize((120, 120), Image.LANCZOS)
@@ -300,6 +352,7 @@ def main():
         manifest[name] = {"src": f"assets/sprites/{name}.png", "w": im.width, "h": im.height}
         print(name, im.size)
     build_soldier(manifest)
+    build_rat(manifest)
     build_portrait(manifest)
     build_ground(manifest)
     with open(os.path.join(ROOT, "game", "js", "manifest.js"), "w", encoding="utf-8") as f:

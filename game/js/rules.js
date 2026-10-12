@@ -22,7 +22,7 @@ window.R = (function () {
       inv: (t.inv || []).map(([id, n]) => ({ id, n })), caps: t.caps || 0,
       weapon: t.weapon || null, armor: t.armor || null, faction: t.faction, hostile: !!t.hostile,
       x, y, homeX: x, homeY: y, dir: opts.dir || 0, wander: opts.wander || 0, sentry: !!opts.sentry, boss: !!opts.boss,
-      tint: t.tint, dialog: t.dialog || null, trader: !!t.trader, guard: !!t.guard, xpValue: t.xp || 25,
+      tint: t.tint, model: t.model || null, scale: t.scale || 1, dialog: t.dialog || null, trader: !!t.trader, guard: !!t.guard, xpValue: t.xp || 25,
       stealTries: 0,
     };
     a.baseHP = t.hp;

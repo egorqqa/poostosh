@@ -669,6 +669,25 @@ window.ASSET_MANIFEST = {
 "ax": 60,
 "ay": 104
 },
+"char_rat": {
+"src": "assets/chars/rat.png",
+"w": 1100,
+"h": 576,
+"fw": 100,
+"fh": 72,
+"ax": 50,
+"ay": 66,
+"frames": [
+11,
+8,
+6,
+8,
+10,
+8,
+6,
+8
+]
+},
 "ui_portrait": {
 "src": "assets/ui/portrait.png",
 "w": 120,

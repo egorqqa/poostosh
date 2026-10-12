@@ -267,8 +267,9 @@ window.WMAP = (function () {
 
   function encounter(G, tr) {
     const p = G.player;
-    const kind = tr === 'r' || tr === 'x' || tr === 'c' || Math.random() < 0.4 ? 'raiders' : 'wild';
-    const who = kind === 'raiders' ? 'группу рейдеров' : 'стаю одичалых';
+    const roll = Math.random();
+    const kind = roll < 0.25 ? 'rats' : tr === 'r' || tr === 'x' || tr === 'c' || roll < 0.55 ? 'raiders' : 'wild';
+    const who = kind === 'rats' ? 'стаю радкрыс' : kind === 'raiders' ? 'группу рейдеров' : 'стаю одичалых';
     const spotChance = R.clamp(Math.round(R.skill(p, 'survival') * 0.6 + p.stats.per * 4), 5, 95);
     const spotted = Math.random() * 100 < spotChance;
     const seed = 'wild_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
@@ -295,8 +296,8 @@ window.WMAP = (function () {
   M.siteMark = function (G, id) {
     const q = k => G.q(k), has = it => G.hasItem(it), f = G.flags;
     if (id === 'camp') {
-      if ((has('samples') && q('zarya') < 9) || (has('meds') && G.quests.meds < 3) || (q('debt') === 1 && f.tihonDebtPaid) || has('toolbox') || has('battery') || q('wounded') === 2 || (q('marauder') < 9 && f.marauderKilled)) return '?';
-      if (!G.quests.meds || !q('debt') || !q('tools') || !q('wounded') || !q('marauder') || !q('ration') || (q('tools') === 9 && !q('battery'))) return '!';
+      if ((q('rats') === 1 && R.count(G.player, 'rat_tail') >= 5) || (has('samples') && q('zarya') < 9) || (has('meds') && G.quests.meds < 3) || (q('debt') === 1 && f.tihonDebtPaid) || has('toolbox') || has('battery') || q('wounded') === 2 || (q('marauder') < 9 && f.marauderKilled)) return '?';
+      if (!G.quests.meds || !q('rats') || q('rats') === 1 || !q('debt') || !q('tools') || !q('wounded') || !q('marauder') || !q('ration') || (q('tools') === 9 && !q('battery'))) return '!';
       return null;
     }
     if (id === 'post') { if (G.quests.meds >= 1 && G.quests.meds < 3 && !has('meds')) return '!'; if (G.quests.meds >= 3 || has('meds')) return '✔'; return null; }
@@ -378,6 +379,17 @@ window.WMAP = (function () {
       const tw = ctx.measureText(txt).width + 10;
       ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - tw / 2, p.y - 66, tw, 16);
       ctx.fillStyle = '#9dff8a'; ctx.fillText(txt, p.x, p.y - 54);
+    }
+    // цель из журнала заданий
+    if (W.target) {
+      const s = WORLD.sites.find(x => x.id === W.target);
+      if (s) {
+        const p = center(s.x, s.y), k = 1 + Math.sin(t * 4) * 0.12;
+        ctx.strokeStyle = 'rgba(255,208,64,0.9)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 46 * k, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([4, 6]); ctx.strokeStyle = 'rgba(255,208,64,0.45)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(W.px, W.py); ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.setLineDash([]);
+      }
     }
     // участники отряда
     if (window.SOC) for (const st of Object.values(SOC.partyState)) {

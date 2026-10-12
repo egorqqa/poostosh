@@ -71,6 +71,7 @@ window.UI = (function () {
         if (G.scene === 'world') { G.hint('Вы уже на карте мира'); return; }
         WORLD_API.leaveToWorld(G); break;
       case 'save': G.save(); break;
+      case 'journal': U.toggle('journal', () => U.openJournal()); break;
     }
     U.refresh();
   };
@@ -441,7 +442,7 @@ window.UI = (function () {
           ${create ? '' : `<div class="stat-row" data-desc="d_rep"><span>Репутация в Ручье</span><b class="${G.repLevel().cls}">${G.rep() > 0 ? '+' : ''}${G.rep()}</b><span class="${G.repLevel().cls}" style="font-size:11px">${G.repLevel().name}</span></div>`}
           ${create ? '' : `<div style="margin-top:8px" class="warn">Перки</div><div class="muted" style="font-size:12px">${(p.perks || []).map(id => (DATA.PERKS.find(k => k.id === id) || {}).name).join(', ') || 'нет'}</div>
           ${p.perkPts > 0 ? `<button class="primary" id="c-perk" style="margin-top:4px">Выбрать перк (${p.perkPts})</button>` : '<div class="muted" style="font-size:11px">Новый перк — на каждом чётном уровне.</div>'}
-          <div style="margin-top:8px" class="warn">Задания</div><div class="muted" style="font-size:12px">${questText()}</div>`}`;
+          <div style="margin-top:8px" class="warn">Задания <button id="c-journal" style="font-size:11px;padding:0 6px">Журнал [J]</button></div><div class="muted" style="font-size:12px">${questText()}</div>`}`;
         root.querySelector('#c-skills').innerHTML = `<div class="warn" style="margin-bottom:4px">Навыки${create ? ` · профильных: ${p.tags.length}/3` : p.freePts ? ` · свободных очков: <b>${p.freePts}</b>` : ''}</div>` + SKILLS.map(s => `
           <div class="stat-row skill-row" data-desc="${s.id}">${create ? `<span class="tagbox ${p.tags.includes(s.id) ? 'on' : ''}" data-tag="${s.id}"></span>` : `<span>${p.tags.includes(s.id) ? '<span class="warn">★</span>' : ''}</span>`}
           <span>${s.name}</span><b>${R.skill(p, s.id)}%</b><span class="pm">${!create && p.freePts > 0 ? `<button data-sk="${s.id}">+</button>` : ''}</span></div>`).join('');
@@ -480,6 +481,7 @@ window.UI = (function () {
           draw(); U.refresh(); return;
         }
         if (e.target.id === 'c-perk') { U.openPerks(); return; }
+        if (e.target.id === 'c-journal') { U.openJournal(); return; }
         if (e.target.id === 'c-go') {
           p.name = root.querySelector('#c-name').value.trim() || 'Странник';
           p.hp = R.maxHP(p);
@@ -683,8 +685,8 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
     }, { full: true });
   };
 
-  U.openSettings = function () {
-    const back = () => U.openTitle(G.hasSave(), U._onNew, U._onLoad);
+  U.openSettings = function (fromPause) {
+    const back = fromPause ? () => U.openPause() : () => U.openTitle(G.hasSave(), U._onNew, U._onLoad);
     const pct = v => Math.round(v * 100);
     U.openModal('settings', `<div class="modal" style="width:min(520px,94vw)">
       <h2>Настройки <button class="close" id="s-back">✕</button></h2>
@@ -772,6 +774,100 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
         G.log(`Борис сделал: ${ITEMS[r.id].name}${r.n > 1 ? ' ×' + r.n : ''}.`, 'good');
         SND.play('reload');
         U.refresh();
+      });
+      modalRefresh = draw;
+      draw();
+    });
+  };
+
+  // ---------- меню паузы (Esc) ----------
+  U.openPause = function () {
+    const mp = NET.active;
+    U.openModal('pause', `<div class="title-screen">
+      <h1 style="font-size:34px">ПАУЗА</h1><div class="sub">${G.loc ? G.loc.def.name : 'Карта мира'} · ${G.clockText()}</div>
+      <button class="primary" data-p="go">Продолжить</button>
+      <button data-p="save" ${G.combat && !mp ? 'disabled data-tip="Нельзя сохраняться в бою"' : ''}>${mp ? 'Сохранить персонажа' : 'Сохранить игру'}</button>
+      <button data-p="load" ${mp || !G.hasSave() ? 'disabled' : ''}>Загрузить</button>
+      <button data-p="journal">Журнал заданий</button>
+      <button data-p="char">Персонаж</button>
+      <button data-p="set">Настройки</button>
+      <button data-p="menu">${mp ? 'Отключиться и выйти в меню' : 'Главное меню'}</button>
+      ${window.desktop ? '<button data-p="quit">Выйти из игры</button>' : ''}
+      <div class="muted" style="margin-top:14px;font-size:12px">Esc — закрыть меню</div></div>`, root => {
+      root.addEventListener('click', e => {
+        const b = e.target.closest('[data-p]'); if (!b || b.disabled) return;
+        SND.play('ui');
+        switch (b.dataset.p) {
+          case 'go': U.closeModal(); break;
+          case 'save': G.save(); U.closeModal(); break;
+          case 'load': G.load(); break;
+          case 'journal': U.openJournal(); break;
+          case 'char': U.openCharacter(false); break;
+          case 'set': U.openSettings(true); break;
+          case 'menu': U.confirm(mp ? 'Отключиться от сервера? Персонаж сохранится.' : 'Выйти в главное меню? Несохранённый прогресс будет потерян (автосохранение — при входе в локацию).',
+            () => { if (mp) { G.saveMP(true); NET.disconnect(); } location.reload(); }, () => U.openPause()); break;
+          case 'quit': U.confirm('Выйти из игры?', () => { if (!mp) G.save(true); else G.saveMP(true); window.desktop.quit(); }, () => U.openPause()); break;
+        }
+      });
+    }, { full: true });
+  };
+  U.confirm = function (text, yes, no) {
+    U.openModal('confirm', `<div class="modal" style="width:min(460px,94vw)"><h2>Подтверждение</h2>
+      <div class="screen" style="margin-bottom:10px">${text}</div>
+      <div class="cols" style="justify-content:flex-end"><button id="cf-no">Отмена</button><button class="primary" id="cf-yes">Да</button></div></div>`, root => {
+      root.querySelector('#cf-yes').onclick = () => { U.closeModal(); yes(); };
+      root.querySelector('#cf-no').onclick = () => { U.closeModal(); no && no(); };
+    }, { full: true });
+  };
+
+  // ---------- журнал заданий ----------
+  const SITE_OF = {
+    meds: g => g.hasItem('meds') ? 'camp' : 'post', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', rats: 'camp',
+    battery: g => g.hasItem('battery') ? 'camp' : 'zarya', zarya: g => ({ 1: 'zarya', 2: 'zarya', 3: 'zarya', 4: 'camp' })[g.q('zarya')],
+    thread: g => ({ 1: g.flags.bridgeOpen ? 'rassvet' : 'bridge', 2: 'object9', 3: 'object9', 4: 'rassvet' })[g.q('thread')], mast: 'rassvet',
+  };
+  const WHERE_HINT = { camp_cellar: 'подвал водокачки в Ржавом Ручье' };
+  function npcHome(tpl) {
+    for (const [id, L] of Object.entries(DATA.LOCATIONS)) if ((L.npcs || []).some(n => n[0] === tpl)) return L.name;
+    return '';
+  }
+  function questList() {
+    const list = [];
+    const m = G.quests.meds;
+    if (m) list.push({ id: 'meds', title: 'Лекарства для Ручья', giver: 'mihalych', done: m >= 3,
+      text: G.hasItem('meds') ? 'Верните ящик медикаментов старосте Михалычу.' : 'Найдите ящик медикаментов на Блокпосту 17 (северо-восток). Его держит банда Клыка.' });
+    for (const [id, d] of Object.entries(DATA.QUESTS)) {
+      const st = G.q(id);
+      if (st) list.push({ id, title: d.title, giver: d.giver, done: st >= 9, text: d.steps[st] || d.steps[1] });
+    }
+    return list;
+  }
+  U.openJournal = function (tab = 'active') {
+    U.openModal('journal', `<div class="modal" style="width:min(760px,96vw);height:min(560px,100%)">
+      <h2>Журнал заданий <button class="close" data-close>✕ [J]</button></h2>
+      <div class="cols" style="margin-bottom:8px"><button data-tab="active">Активные</button><button data-tab="done">Завершённые</button></div>
+      <div class="screen" style="flex:1" id="jr-list"></div></div>`, root => {
+      const draw = () => {
+        root.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('primary', b.dataset.tab === tab));
+        const items = questList().filter(q => (tab === 'done') === q.done);
+        root.querySelector('#jr-list').innerHTML = items.map(q => {
+          const giver = DATA.NPCS[q.giver];
+          const f = SITE_OF[q.id], site = q.done ? null : typeof f === 'function' ? f(G) : f;
+          const s = site && DATA.WORLD.sites.find(x => x.id === site);
+          const targeted = G.world && G.world.target === site;
+          return `<div style="padding:8px 4px;border-bottom:1px dashed #1f3a1a">
+            <div class="${q.done ? 'muted' : 'warn'}" style="font-weight:bold">${q.done ? '✔ ' : '► '}${q.title}</div>
+            <div class="muted" style="font-size:12px">Выдал: ${giver ? giver.name : '—'}${giver ? ' (' + npcHome(q.giver) + ')' : ''}</div>
+            ${q.done ? '' : `<div style="margin:4px 0;line-height:1.4">${q.text}</div>`}
+            ${s ? `<div class="cols" style="align-items:center;gap:8px"><span class="good" style="font-size:12px">Где цель: ${s.name}</span>
+              <button data-tgt="${site}" style="font-size:11px;padding:1px 8px">${targeted ? '✔ Отмечено на карте' : 'Отметить на карте мира'}</button></div>` : ''}
+          </div>`;
+        }).join('') || `<div class="muted">${tab === 'done' ? 'Пока ничего не выполнено.' : 'Активных заданий нет. Ищите жителей со значком «!» над головой.'}</div>`;
+      };
+      root.addEventListener('click', e => {
+        const t = e.target.closest('[data-tab]'); if (t) { tab = t.dataset.tab; draw(); return; }
+        const g = e.target.closest('[data-tgt]');
+        if (g) { G.world.target = G.world.target === g.dataset.tgt ? null : g.dataset.tgt; WMAP.siteState(G, g.dataset.tgt).known = true; G.hint(G.world.target ? 'Цель отмечена на карте мира' : 'Отметка снята'); draw(); }
       });
       modalRefresh = draw;
       draw();

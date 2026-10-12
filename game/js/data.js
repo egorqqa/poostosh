@@ -27,6 +27,9 @@ window.DATA = (function () {
   // ---- предметы ----
   // type: weapon | armor | aid | ammo | misc | quest
   const ITEMS = {
+    bite: { name: 'Укус', type: 'weapon', icon: 'fists', weight: 0, value: 0, melee: true, dmg: [2, 5], ap: 3, range: 1, crit: 5, hidden: true },
+    bite_big: { name: 'Укус', type: 'weapon', icon: 'fists', weight: 0, value: 0, melee: true, dmg: [4, 9], ap: 3, range: 1, crit: 5, hidden: true },
+    rat_tail: { name: 'Крысиный хвост', type: 'misc', icon: 'junk', weight: 0.05, value: 3, desc: 'Голый светящийся хвост радкрысы. Михалыч платит за них.' },
     claws: { name: 'Когти', type: 'weapon', icon: 'fists', weight: 0, value: 0, melee: true, dmg: [4, 9], ap: 3, range: 1, crit: 5, hidden: true },
     fists: { name: 'Кулаки', type: 'weapon', icon: 'fists', weight: 0, value: 0, melee: true, dmg: [1, 3], ap: 3, range: 1, crit: 0, hidden: true },
     knife: { name: 'Нож', type: 'weapon', icon: 'knife', weight: 1, value: 25, melee: true, dmg: [2, 7], ap: 3, range: 1, crit: 10, desc: 'Старый армейский нож. Быстрый и тихий.' },
@@ -156,6 +159,12 @@ window.DATA = (function () {
     zorin: { name: 'Полковник Зорин', tint: 'infected', faction: 'infected', hostile: true,
       stats: { str: 9, per: 6, end: 9, cha: 2, int: 4, agi: 6, luck: 5 }, hp: 110,
       inv: [['ammo762', 30], ['medkit', 1]], caps: 150, weapon: 'ak', armor: 'vest', skills: { guns: 60, melee: 70 }, xp: 350 },
+    rat: { name: 'Радкрыса', model: 'rat', faction: 'rats', hostile: true,
+      stats: { str: 3, per: 6, end: 3, cha: 1, int: 1, agi: 8, luck: 4 }, hp: 9,
+      inv: [['rat_tail', 1]], caps: 0, weapon: 'bite', skills: { melee: 50 }, xp: 15 },
+    rat_big: { name: 'Крыса-матка', model: 'rat', scale: 1.45, faction: 'rats', hostile: true,
+      stats: { str: 6, per: 5, end: 7, cha: 1, int: 1, agi: 6, luck: 4 }, hp: 32,
+      inv: [['rat_tail', 2], ['junk', 1]], caps: 0, weapon: 'bite_big', skills: { melee: 60 }, xp: 60 },
     infected: { name: 'Заражённый', tint: 'infected', faction: 'infected', hostile: true,
       stats: { str: 7, per: 4, end: 7, cha: 1, int: 1, agi: 6, luck: 3 }, hp: 30,
       inv: [['junk', 1]], caps: 0, weapon: 'claws', skills: { melee: 60 }, xp: 60 },
@@ -187,10 +196,16 @@ window.DATA = (function () {
       nodes: {
         hello: { text: 'А, новое лицо. Нечасто к нам из пустоши живыми доходят. Я Михалыч, тут вроде как за старшего.',
           opts: [
+            { t: 'Слышал, у вас крысы завелись?', if: g => g.q('rats') === 0, go: 'rats' },
+            { t: 'Вот пять крысиных хвостов.', if: g => g.q('rats') === 1 && R.count(g.player, 'rat_tail') >= 5, go: 'rats_done' },
             { t: 'Что это за место?', go: 'about' },
             { t: 'Нужна помощь?', go: 'job' },
             { t: 'Бывай.', end: true },
           ] },
+        rats: { text: 'Крысы, будь они неладны! Радкрысы завелись в подвале водокачки — воду портят, людей кусают. Мелкие, да злые, а матка у них — с собаку. Перебей их, а в доказательство принеси пять хвостов. Заплачу 60 крышек.',
+          opts: [{ t: 'Займусь.', act: g => g.setQuest('rats', 1), end: true }, { t: 'Не сейчас.', end: true }] },
+        rats_done: { text: 'Пять хвостов! Ну, теперь вода снова чистая будет. Держи крышки — и пару бутылок, первая чистая вода за неделю.',
+          onEnter: g => { R.removeItem(g.player, 'rat_tail', 5); g.setQuest('rats', 9); g.reward(120, 60, [['water', 3]]); }, opts: [{ t: 'Обращайся.', end: true }] },
         about: { text: 'Ржавый Ручей. Заправка, гараж да базар. Живём с караванов. Жили... пока банда Клыка не обнаглела.',
           opts: [{ t: 'Что за банда?', go: 'job' }, { t: 'Понятно.', go: 'hello' }] },
         job: { text: 'Рейдеры Клыка засели на старом Блокпосту 17, к северо-востоку отсюда. Неделю назад они перехватили наш караван — весь ящик медикаментов у них. Без лекарств мы зиму не протянем. Вернёшь ящик — заплачу 150 крышек.',
@@ -206,13 +221,17 @@ window.DATA = (function () {
         taken: { text: 'Блокпост на северо-востоке, я отметил его на твоей карте. Выйди за ограду — и ищи. Будь осторожен: у Клыка с десяток стволов.',
           opts: [{ t: 'Расскажи про блокпост.', go: 'info' }, { t: 'Скоро вернусь.', end: true }] },
         progress: { text: 'Ну что, есть новости про медикаменты?',
-          opts: [{ t: 'Расскажи ещё раз про блокпост.', go: 'info' }, { t: 'Работаю над этим.', end: true }] },
+          opts: [
+            { t: 'Слышал, у вас крысы завелись?', if: g => g.q('rats') === 0, go: 'rats' },
+            { t: 'Вот пять крысиных хвостов.', if: g => g.q('rats') === 1 && R.count(g.player, 'rat_tail') >= 5, go: 'rats_done' },{ t: 'Расскажи ещё раз про блокпост.', go: 'info' }, { t: 'Работаю над этим.', end: true }] },
         info: { text: 'Бывшая военная часть. Вышка, ангар, штаб. Клык держит добро в железном шкафу у штаба — замок там серьёзный. Говорят, сам Клык не дурак поговорить, если подойти без стрельбы. А Гвоздь, наш охранник, ходил туда в разведку — спроси его.',
           opts: [{ t: 'Понял.', end: true }] },
         return: { text: 'Неужели... Это наш ящик! Живой и при медикаментах!',
           opts: [{ t: '[Отдать медикаменты]', act: 'finishQuest', go: 'thanks' }, { t: 'Пока придержу.', end: true }] },
         thanks: { text: 'Держи, заслужил. Ручей этого не забудет. Заходи — для тебя тут всегда найдётся место у огня.', opts: [{ t: 'Бывай, Михалыч.', end: true }] },
-        done: { text: 'А, наш герой! Дети уже не кашляют, слышишь? Всё благодаря тебе.', opts: [{ t: 'Рад помочь.', end: true }] },
+        done: { text: 'А, наш герой! Дети уже не кашляют, слышишь? Всё благодаря тебе.', opts: [
+            { t: 'Слышал, у вас крысы завелись?', if: g => g.q('rats') === 0, go: 'rats' },
+            { t: 'Вот пять крысиных хвостов.', if: g => g.q('rats') === 1 && R.count(g.player, 'rat_tail') >= 5, go: 'rats_done' },{ t: 'Рад помочь.', end: true }] },
       },
     },
     semyon: {
@@ -527,6 +546,19 @@ window.DATA = (function () {
   // ---- локации ----
   // объекты: [спрайт, x, y, {fw, fh, oy, block, name, container, lock, items, owner, desc}]
   const LOCATIONS = {
+    camp_cellar: {
+      name: 'Подвал водокачки', w: 20, h: 16, interior: true, ground: ['ruined_concrete_yard', 'rubble_ground'], groundW: [2, 2], base: '#26231d',
+      wallColor: [96, 92, 84], entry: { x: 10, y: 13 },
+      exits: [{ x0: 8, y0: 15, x1: 12, y1: 15, to: 'camp', at: { x: 39, y: 24 }, label: 'НАРУЖУ' }],
+      desc: 'Сырой подвал под водокачкой. Капает вода, из углов доносится писк и шорох.',
+      objects: [
+        ['pipes', 3, 3, {}], ['barrels', 7, 2, {}], ['cable_spool', 14, 3, {}], ['crate_pile', 16, 7, {}],
+        ['pallet', 3, 9, {}], ['concrete_blocks', 11, 8, {}], ['barrels', 2, 13, {}],
+        ['crate_small', 17, 12, { name: 'Старый ящик', container: true, items: [['ammo9', 10], ['water', 2], ['bandage', 1]], caps: 12 }],
+      ],
+      npcs: [['rat', 5, 5, { wander: 2 }], ['rat', 9, 4, { wander: 2 }], ['rat', 13, 6, { wander: 2 }], ['rat', 6, 10, { wander: 2 }],
+        ['rat', 15, 11, { wander: 2 }], ['rat', 12, 12, { wander: 2 }], ['rat_big', 15, 4, { wander: 1 }]],
+    },
     bridge: {
       name: 'Ржавый мост', w: 36, h: 30, ground: ['cracked_road', 'dirt_tracks', 'rubble_ground', 'overgrown_grassland'], groundW: [2, 3, 2, 2], base: '#4f4634',
       river: { y0: 12, y1: 17, bx0: 15, bx1: 20 },
@@ -635,7 +667,7 @@ window.DATA = (function () {
         ['crate_pile', 12, 11, {}], ['barrels_crates', 25, 17, {}], ['concrete_blocks', 3, 17, {}], ['pallet_boxes', 17, 11, {}],
         ['mil_locker', 24, 3, { name: 'Шкаф мастера', container: true, lock: 30, items: [['ammo762', 12], ['medkit', 1], ['lockpicks', 1]], caps: 25 }],
       ],
-      npcs: [['infected', 9, 8, { wander: 3 }], ['infected', 19, 18, { wander: 3 }]],
+      npcs: [['infected', 9, 8, { wander: 3 }], ['infected', 19, 18, { wander: 3 }], ['rat', 4, 14, { wander: 2 }], ['rat', 24, 15, { wander: 2 }]],
     },
     zarya_lab: {
       name: 'Лаборатория «Заря-2»', w: 26, h: 20, interior: true, lab: true, ground: ['ruined_concrete_yard', 'broken_pavement'], groundW: [3, 1], base: '#1e2420',
@@ -697,7 +729,7 @@ window.DATA = (function () {
       ],
       npcs: [
         ['scav', 19, 21, { wander: 3 }], ['scav', 28, 25, { wander: 3 }], ['scav_gun', 10, 24, { wander: 2 }],
-        ['scav_boss', 36, 22, { wander: 1 }],
+        ['scav_boss', 36, 22, { wander: 1 }], ['rat', 31, 36, { wander: 3 }], ['rat', 12, 33, { wander: 3 }],
       ],
     },
     camp: {
@@ -828,6 +860,7 @@ window.DATA = (function () {
       3: 'Объект 9: проникните в хранилище (код — у радиста Кузьмы, ключ-карта — у охраны, или Взлом 60) и разберитесь со складом «З-2».',
       4: 'Вернитесь к коменданту Вере на станцию «Рассвет».' } },
     mast: { title: 'Молчащая антенна', giver: 'kuzma', steps: { 1: 'Почините радиомачту «Рассвета»: нужно 3 хлама и Интеллект 6 или Взлом 35.', 2: 'Антенна работает — сообщите радисту Кузьме.' } },
+    rats: { title: 'Крысиная напасть', giver: 'mihalych', steps: { 1: 'Перебейте радкрыс в подвале водокачки Ручья (вход — у водонапорной башни) и принесите Михалычу 5 крысиных хвостов.' } },
     battery: { title: 'Аккумулятор для Бориса', giver: 'boris', steps: { 1: 'Снимите аккумулятор с погрузчика в промзоне «Заря» (юго-восток) и принесите Борису. Погрузчик нужно обыскать.' } },
     ration: { title: 'Сухпаёк для Тихона', giver: 'tihon', steps: { 1: 'Принесите бродяге Тихону консервы (у Сёмы или в мешках у навеса).' } },
   };
@@ -909,7 +942,8 @@ window.DATA = (function () {
     lab_terminal: { name: 'Лабораторный терминал', look: 'Терминал с треснувшим экраном. Рядом — разбитые колбы.', lookXp: 10,
       check: { stat: 'int', diff: 6, label: 'Прочитать отчёт', xp: 50,
         text: '«Отчёт №41. Препарат З-2 должен был делать солдат выносливее. Побочный эффект — необратимая агрессия. Антидот получен в малом количестве и хранится в холодильнике. Командование приказало объявить карантин и уничтожить данные. Я не смог.»' } },
-    water_tower: { name: 'Водонапорная башня', look: 'Ржавая водонапорная башня. В баке ещё плещется вода.', lookXp: 5,
+    water_tower: { name: 'Водонапорная башня', look: 'Ржавая водонапорная башня. В баке ещё плещется вода. Снизу — люк в подвал, оттуда слышен писк.', lookXp: 5,
+      enter: { to: 'camp_cellar', at: { x: 10, y: 13 }, label: 'Спуститься в подвал водокачки', open: true },
       check: { skill: 'survival', diff: 30, label: 'Набрать и прокипятить воды', text: 'Вы набираете воды и очищаете её через ткань и золу.', loot: [['water', 1, 2, 100]], xp: 10 } },
     water_tower2: { name: 'Водонапорная башня', look: 'Высокая водонапорная башня. Лестница обломана на середине.', lookXp: 5,
       check: { skill: 'survival', diff: 30, label: 'Набрать и прокипятить воды', text: 'Вы набираете воды из протекающей трубы и очищаете её.', loot: [['water', 1, 2, 100]], xp: 10 } },

@@ -21,6 +21,15 @@ window.ENG = (function () {
       im.onerror = () => { console.warn('Не загружен ассет', n); done++; res(); };
       im.src = man[n].src;
     }))).then(() => {
+      // существа со своими листами (8 направлений)
+      E.models = {};
+      for (const [key, man] of Object.entries(window.ASSET_MANIFEST)) {
+        if (!key.startsWith('char_') || key === 'char_soldier' || !E.img[key]) continue;
+        const im = E.img[key];
+        const o = document.createElement('canvas'); o.width = im.width; o.height = im.height;
+        const ox = o.getContext('2d'); ox.shadowColor = 'rgba(0,0,0,0.8)'; ox.shadowBlur = 2; ox.drawImage(im, 0, 0);
+        E.models[key.slice(5)] = { canvas: o, fw: man.fw, fh: man.fh, ax: man.ax, ay: man.ay, frames: man.frames };
+      }
       // перекрашенные копии модели персонажа
       const base = E.img.char_soldier;
       for (const [k, f] of Object.entries(DATA.TINTS)) {
@@ -446,7 +455,7 @@ window.ENG = (function () {
       const show = (hov && hov.actor === a) || (G.combat && a.hostile) || a.isRemote;
       if (!show && !a.bubble) continue;
       const c = { x: a.rx * HW - a.ry * HW, y: (a.rx + a.ry) * HH };
-      const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
+      const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH + (a.model ? 50 - 25 * ((a.scale || 1) - 1) : 0);
       let label = a.name;
       if (G.combat && (a.hostile || a.isRemote)) label += `  ${Math.max(0, a.hp)}/${R.maxHP(a)}`;
       if (show) {
@@ -506,7 +515,36 @@ window.ENG = (function () {
     ctx.globalAlpha = 1;
   }
 
+  // 8 направлений по экранному вектору: ряды листа S, SE, E, NE, N, NW, W, SW
+  E.dir8FromDelta = function (dx, dy) {
+    const s = iso(dx, dy);
+    const idx = ((Math.round(Math.atan2(s.y, s.x) / (Math.PI / 4)) % 8) + 8) % 8; // 0=E,1=SE,2=S,3=SW,4=W,5=NW,6=N,7=NE
+    return [2, 1, 0, 7, 6, 5, 4, 3][idx];
+  };
+  const DIR4_TO_8 = [0, 2, 4, 6];
+  function drawModel(ctx, G, a, t, hovered, M) {
+    const k = a.scale || 1;
+    const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(sx, sy - 2, 12 * k, 5 * k, 0, 0, Math.PI * 2); ctx.fill();
+    if (hovered || (G.combat && G.combat.current === a)) {
+      ctx.strokeStyle = a.hostile ? '#ff5a3c' : '#9dff8a'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(sx, sy - 2, 15 * k, 7 * k, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    const row = a.dir8 != null ? a.dir8 : DIR4_TO_8[a.dir || 0];
+    const n = M.frames[row] || 1;
+    let col = 0;
+    if (a.aimT > 0) col = n - 1;                                  // укус — последний кадр (пасть открыта)
+    else if (a.moving) col = Math.floor(a.walkPhase * 1.6 * Math.max(1, n - 2)) % Math.max(1, n - 2);
+    let ox = 0, oy = 0;
+    if (a.shakeT > 0) { ox += (Math.random() - 0.5) * 5; oy += (Math.random() - 0.5) * 2; }
+    if (a.hitFlash > 0) ctx.filter = 'brightness(1.7) sepia(1) hue-rotate(-40deg) saturate(4)';
+    ctx.drawImage(M.canvas, col * M.fw, row * M.fh, M.fw, M.fh, sx - M.ax * k + ox, sy - M.ay * k + oy, M.fw * k, M.fh * k);
+    ctx.filter = 'none';
+  }
+
   function drawActor(ctx, G, a, t, hovered) {
+    if (a.model && E.models[a.model]) { drawModel(ctx, G, a, t, hovered, E.models[a.model]); return; }
     const sheet = E.sheets[a.tint || 'player'];
     const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
     // тень
@@ -540,6 +578,21 @@ window.ENG = (function () {
   }
 
   function drawCorpse(ctx, a) {
+    if (a.model && E.models[a.model]) {
+      const M = E.models[a.model], k = a.scale || 1;
+      const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
+      if (a.deathAt == null) a.deathAt = performance.now();
+      const p = Math.min(1, (performance.now() - a.deathAt) / 350);
+      ctx.fillStyle = 'rgba(70,90,10,0.55)';
+      ctx.beginPath(); ctx.ellipse(sx, sy - 4, 14 * k * p + 2, 5 * k * p + 1, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save();
+      ctx.translate(sx, sy - 6);
+      ctx.scale(1, 1 - 2 * p);  // переворачивается кверху лапами
+      ctx.filter = 'brightness(0.6) saturate(0.6)';
+      ctx.drawImage(M.canvas, 0, 2 * M.fh, M.fw, M.fh, -M.ax * k, -M.ay * k + 8, M.fw * k, M.fh * k);
+      ctx.restore(); ctx.filter = 'none';
+      return;
+    }
     const sheet = E.sheets[a.tint || 'player'];
     const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
     // анимация падения: тело заваливается, лужа крови растекается

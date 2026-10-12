@@ -81,9 +81,10 @@ window.WORLD_API = (function () {
     const npcs = [];
     const n = 2 + Math.floor(r() * 3);
     for (let i = 0; i < n; i++) {
-      const tpl = kind === 'raiders' ? (r() < 0.5 ? 'raider' : 'raider_melee') : (r() < 0.4 ? 'wild_gun' : 'wild');
+      const tpl = kind === 'rats' ? 'rat' : kind === 'raiders' ? (r() < 0.5 ? 'raider' : 'raider_melee') : (r() < 0.4 ? 'wild_gun' : 'wild');
       npcs.push([tpl, 12 + Math.floor(r() * 10), 6 + Math.floor(r() * 8), { wander: 3 }]);
     }
+    if (kind === 'rats') { npcs.push(['rat', 14, 9, { wander: 3 }], ['rat', 18, 11, { wander: 3 }]); if (r() < 0.35) npcs.push(['rat_big', 16, 7, { wander: 2 }]); }
     return { name: 'Пустошь', w: 34, h: 34, exits: [{ x0: 12, y0: 32, x1: 22, y1: 33 }], ground: ['dirt_tracks', 'overgrown_grassland', 'rubble_ground', 'cracked_road'], groundW: [3, 3, 1, 1], base: '#5b4c35', entry: { x: 17, y: 30 }, objects, npcs, temp: true, desc: 'Безымянный клочок пустоши.' };
   }
 
@@ -116,6 +117,7 @@ window.WORLD_API = (function () {
     }
     for (const a of L.actors) { a.rx = a.x; a.ry = a.y; a.path = []; a.moving = false; a.walkPhase = 0; a.aimT = 0; a.hitFlash = 0; a.bubble = null; a.alerted = !!a.isCompanion; a.deathAt = a.dead ? -1e9 : null; }
     buildGrids(L);
+    if (L.blocked[p.y * L.w + p.x]) { const f = W.freeTile(L, p.x, p.y, p); if (f) { p.x = p.rx = f.x; p.y = p.ry = f.y; } }
     for (const a of L.actors) {
       if (a.isCompanion) { const f = W.freeTile(L, p.x, p.y, a); if (f) { a.x = a.rx = f.x; a.y = a.ry = f.y; } a.waiting = false; continue; }
       if (a.dead || a.gone || !L.blocked[a.y * L.w + a.x]) continue;
@@ -171,7 +173,7 @@ window.WORLD_API = (function () {
 
   // переход в локацию (в сетевой игре — с получением состояния от сервера)
   W.goLocation = async function (G, id, opts = {}) {
-    if (G.world) { G.world.visited = G.world.visited || {}; G.world.visited[id] = true; }
+    if (G.world) { G.world.visited = G.world.visited || {}; G.world.visited[id] = true; if (G.world.target === id) G.world.target = null; }
     if (id === 'zarya_lab' && G.q('zarya') >= 1 && G.q('zarya') < 3) G.setQuest('zarya', 3);
     if (id === 'object9' && G.q('thread') === 2) G.setQuest('thread', 3);
     if (!NET.active) { W.loadLocation(G, id, opts); setTimeout(() => G.autosave(), 300); return; }
@@ -274,6 +276,7 @@ window.WORLD_API = (function () {
         }
         a.path.shift();
         a.dir = ENG.dirFromDelta(n.x - a.x, n.y - a.y);
+        a.dir8 = ENG.dir8FromDelta(n.x - a.x, n.y - a.y);
         a.x = n.x; a.y = n.y; a.moving = true;
         if (!a.path.length) a.stepCb = () => finishPath(a);
       }
@@ -442,7 +445,9 @@ window.WORLD_API = (function () {
     for (const a of L.actors) {
       if (a.isPlayer || a.gone) continue;
       const sx = (a.rx - a.ry) * 32, sy = (a.rx + a.ry) * 16 + 16;
-      const inside = a.dead ? Math.abs(wx - sx) < 40 && wy > sy - 30 && wy < sy + 6 : Math.abs(wx - sx) < 20 && wy > sy - 84 && wy < sy + 4;
+      const k = a.scale || 1;
+      const inside = a.dead ? Math.abs(wx - sx) < (a.model ? 22 * k : 40) && wy > sy - 30 && wy < sy + 6
+        : a.model ? Math.abs(wx - sx) < 24 * k && wy > sy - 40 * k && wy < sy + 6 : Math.abs(wx - sx) < 20 && wy > sy - 84 && wy < sy + 4;
       if (inside) { const d = Math.abs(wy - (sy - 40)); if (d < best) { best = d; actor = a; } }
     }
     let obj = null;
@@ -641,7 +646,7 @@ window.WORLD_API = (function () {
       return null;
     };
     if (G.combat) return 'Сейчас не до того — идёт бой.';
-    if (G.flags[k]) return go();
+    if (G.flags[k] || e.open) return go();
     if (e.code && G.flags[e.code]) { SND.play('lock_open'); return go(e.codeMsg || 'Вы набираете код 4-1-7. Замок щёлкает.'); }
     if (e.key && G.hasItem(e.key)) { SND.play('lock_open'); return go(`Вы открываете дверь: ${DATA.ITEMS[e.key].name}.`); }
     if (e.lock) {

@@ -177,6 +177,7 @@ window.COMBAT = (function () {
     if (!att || !def) return;
     const me = G.player;
     att.dir = ENG.dirFromDelta(def.x - att.x, def.y - att.y);
+    att.dir8 = ENG.dir8FromDelta(def.x - att.x, def.y - att.y);
     att.aimT = 0.45;
     if (ev.melee) ENG.swing(att, def); else { ENG.tracer(att, def, ev.hit); ENG.muzzle(att, def); }
     { const s = ENG.iso(att.x - def.x, att.y - def.y), l = Math.hypot(s.x, s.y) || 1; att.recoilX = s.x / l; att.recoilY = s.y / l; att.recoilT = 0.14; }

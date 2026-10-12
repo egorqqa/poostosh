@@ -30,7 +30,7 @@
         G.log('В отчёте учёного была строчка: «вторая партия З-2 отгружена на станцию «Рассвет» за рекой». Нити тянутся на восток.', 'warn');
         G.setQuest('thread', 1); WMAP.siteState(G, 'bridge').known = true; WMAP.siteState(G, 'rassvet').known = true;
       }, 600);
-      if (['semyon', 'boris', 'irina', 'gvozd', 'tihon'].includes(def.giver) && id !== 'zarya') G.addRep(10, 'помощь жителям');
+      if (['semyon', 'boris', 'irina', 'gvozd', 'tihon', 'mihalych'].includes(def.giver) && id !== 'zarya') G.addRep(10, 'помощь жителям');
     }
     else if (def && def.steps[st]) G.log(`Задание обновлено: «${def.title}».`, 'good');
     UI.refresh();
@@ -159,7 +159,7 @@
     if (a.dead || a.hostile || a.isRemote) return null;
     const q = G.q, p = G.player;
     switch (a.tpl) {
-      case 'mihalych': return G.quests.meds === 0 ? '!' : G.hasItem('meds') && G.quests.meds < 3 ? '?' : null;
+      case 'mihalych': return (G.hasItem('meds') && G.quests.meds < 3) || (q('rats') === 1 && R.count(p, 'rat_tail') >= 5) ? '?' : G.quests.meds === 0 || q('rats') === 0 ? '!' : null;
       case 'semyon': return G.hasItem('samples') && q('zarya') < 9 ? '?' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
       case 'vera': return q('thread') === 1 ? '!' : q('thread') === 4 && (G.flags.z2Destroyed || G.hasItem('z2_crate')) ? '?' : null;
       case 'kuzma': return q('mast') === 2 ? '?' : q('mast') === 0 ? '!' : null;
@@ -449,18 +449,27 @@
       if (e.key === 'F2') { e.preventDefault(); G.debug = !G.debug; return; }
       if (!G.player || G.scene === 'menu') return;
       if (G.mode === 'dialog' && G.dialog) {
+        if (e.key === 'Escape') { WORLD_API.endDialog(G); return; }
         const n = parseInt(e.key, 10);
         if (n >= 1 && n <= 9) WORLD_API.dialogChoose(G, n - 1);
         return;
       }
-      if (e.key === 'Escape') { if (UI.modalOpen()) { if (!['create', 'title', 'dead', 'enc', 'mp', 'update', 'settings'].includes(UI.current())) UI.closeModal(); } else UI.setMode('move'); return; }
+      if (e.key === 'Escape') {
+        if (UI.modalOpen()) {
+          const cur = UI.current();
+          if (cur === 'settings' && G.player && G.scene !== 'menu') UI.openPause();
+          else if (!['create', 'title', 'dead', 'enc', 'mp', 'update', 'settings', 'wevent', 'confirm', 'prompt'].includes(cur)) UI.closeModal();
+        } else if (G.ui.mode !== 'move') UI.setMode('move');
+        else if (G.scene !== 'menu') UI.openPause();
+        return;
+      }
       if (['1', '2', '3'].includes(e.key) && !UI.modalOpen() && G.scene === 'local') { G.useQuick(+e.key - 1); return; }
       if ((k === 'n' || k === 'т') && !UI.modalOpen()) { MINI.toggle(); return; }
       if ((k === 'z' || k === 'я') && !UI.modalOpen()) { UI.cycleAim(); return; }
-      const map = { q: 'move', й: 'move', a: 'attack', ф: 'attack', s: 'sneak', ы: 'sneak', k: 'steal', л: 'steal', l: 'lockpick', д: 'lockpick', x: 'look', ч: 'look', h: 'heal', р: 'heal', r: 'reload', к: 'reload', i: 'inventory', ш: 'inventory', c: 'character', с: 'character', m: 'map', ь: 'map' };
+      const map = { q: 'move', й: 'move', a: 'attack', ф: 'attack', s: 'sneak', ы: 'sneak', k: 'steal', л: 'steal', l: 'lockpick', д: 'lockpick', x: 'look', ч: 'look', h: 'heal', р: 'heal', r: 'reload', к: 'reload', j: 'journal', о: 'journal', i: 'inventory', ш: 'inventory', c: 'character', с: 'character', m: 'map', ь: 'map' };
       if (k === ' ') { e.preventDefault(); if (G.combat) COMBAT.endPlayerTurn(G); return; }
       if (map[k]) {
-        if (UI.modalOpen() && !['inventory', 'character'].includes(map[k])) return;
+        if (UI.modalOpen() && !['inventory', 'character', 'journal'].includes(map[k])) return;
         UI.action(map[k]);
       }
     });
