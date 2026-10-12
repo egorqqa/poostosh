@@ -183,7 +183,7 @@ window.WMAP = (function () {
   M.siteMark = function (G, id) {
     const q = k => G.q(k), has = it => G.hasItem(it), f = G.flags;
     if (id === 'camp') {
-      if ((has('meds') && G.quests.meds < 3) || (q('debt') === 1 && f.tihonDebtPaid) || has('toolbox') || has('battery') || q('wounded') === 2 || (q('marauder') < 9 && f.marauderKilled)) return '?';
+      if ((has('samples') && q('zarya') < 9) || (has('meds') && G.quests.meds < 3) || (q('debt') === 1 && f.tihonDebtPaid) || has('toolbox') || has('battery') || q('wounded') === 2 || (q('marauder') < 9 && f.marauderKilled)) return '?';
       if (!G.quests.meds || !q('debt') || !q('tools') || !q('wounded') || !q('marauder') || !q('ration') || (q('tools') === 9 && !q('battery'))) return '!';
       return null;
     }
@@ -191,7 +191,7 @@ window.WMAP = (function () {
     if (id === 'zarya') {
       if (q('battery') === 1 && !has('battery')) return '!';
       if (G.qZarya && G.qZarya()) return '!';
-      if (q('battery') === 9) return '✔';
+      if (q('battery') === 9 && q('zarya') === 9) return '✔';
       return null;
     }
     return G.siteQuestMark ? G.siteQuestMark(id) : null;

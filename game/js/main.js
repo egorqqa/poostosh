@@ -34,6 +34,19 @@
     for (const [id, n] of items || []) { R.addItem(p, id, n); G.log(`Получено: ${DATA.ITEMS[id].name}${n > 1 ? ' ×' + n : ''}.`, 'good'); }
     if (xp) G.giveXP(xp);
   };
+  G.zaryaFound = function () {
+    if (G.flags.zaryaCode) return;
+    G.flags.zaryaCode = true;
+    if (!G.hasItem('director_log')) R.addItem(G.player, 'director_log', 1);
+    if (G.q('zarya') < 2) G.setQuest('zarya', 2); else G.log('Вы узнали код подвала цеха №3: 4-1-7.', 'good');
+  };
+  G.qZarya = () => G.q('zarya') >= 1 && G.q('zarya') <= 3;
+  // сюжетные шаги по предметам в инвентаре
+  setInterval(() => {
+    if (!G.player || !G.quests) return;
+    if (G.hasItem('director_log') && !G.flags.zaryaCode) G.zaryaFound();
+    if (G.hasItem('samples') && G.q('zarya') >= 1 && G.q('zarya') < 4) G.setQuest('zarya', 4);
+  }, 700);
   G.revealSite = id => { WMAP.siteState(G, id).known = true; G.log('Новая локация отмечена на карте мира.', 'good'); };
   G.marauderDead = () => { const m = G.anyNpc('marauder'); return !!(m && m.dead) || !!G.flags.marauderKilled; };
   G.angerMarauder = function () {
@@ -51,9 +64,9 @@
     const q = G.q, p = G.player;
     switch (a.tpl) {
       case 'mihalych': return G.quests.meds === 0 ? '!' : G.hasItem('meds') && G.quests.meds < 3 ? '?' : null;
-      case 'semyon': return q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
+      case 'semyon': return G.hasItem('samples') && q('zarya') < 9 ? '?' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
       case 'boris': return q('tools') === 0 ? '!' : G.hasItem('toolbox') || G.hasItem('battery') ? '?' : q('tools') === 9 && q('battery') === 0 ? '!' : null;
-      case 'irina': return q('wounded') === 0 ? '!' : q('wounded') === 2 ? '?' : null;
+      case 'irina': return q('wounded') === 2 || (G.hasItem('samples') && q('zarya') < 9) ? '?' : q('wounded') === 0 ? '!' : q('zarya') === 0 && (q('wounded') === 9 || p.level >= 3) ? '!' : null;
       case 'lyoha': return q('wounded') === 1 ? '!' : null;
       case 'gvozd': return q('marauder') < 9 && G.marauderDead() ? '?' : q('marauder') === 0 ? '!' : null;
       case 'tihon': return q('ration') < 9 && G.hasItem('food') ? '?' : q('ration') === 0 ? '!' : q('debt') === 1 && !G.flags.tihonDebtPaid ? '!' : null;

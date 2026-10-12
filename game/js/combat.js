@@ -259,6 +259,7 @@ window.COMBAT = (function () {
     if (a.isPlayer) { G.gameOver(); return; }
     if (a.isRemote) { NET.event(a.pid, { kind: 'died' }); return; }
     // оружие и броня падают в лут
+    if (a.weapon && ITEMS[a.weapon].hidden) a.weapon = null;
     if (a.weapon) {
       R.addItem(a, a.weapon, 1);
       const w = ITEMS[a.weapon];

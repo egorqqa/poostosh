@@ -10,8 +10,8 @@ window.WORLD_API = (function () {
       const auto = Math.max(1, Math.round((im ? im.width : 64) / 64 * 0.7));
       return {
         uid: i, sprite, x, y, fw: o.fw || auto, fh: o.fh || auto, oy: o.oy != null ? o.oy : 4,
-        block: o.block !== false, desc: o.desc || null, interact: o.container ? null : DATA.INTERACT[sprite] || null,
-        name: o.name || (o.container ? 'Ящик' : DATA.INTERACT[sprite] ? DATA.INTERACT[sprite].name : null),
+        block: o.block !== false, desc: o.desc || null, interact: o.container ? null : DATA.INTERACT[o.interact || sprite] || null,
+        name: o.name || (o.container ? 'Ящик' : DATA.INTERACT[o.interact || sprite] ? DATA.INTERACT[o.interact || sprite].name : null),
         container: !!o.container, lock: o.lock || 0, owner: o.owner || null, caps: o.caps || 0,
         inv: (o.items || []).map(([id, n]) => ({ id, n })), jammed: false,
       };
@@ -31,6 +31,25 @@ window.WORLD_API = (function () {
     }
   }
 
+  W.exitRect = (L, x, y) => L && L.def.exits ? L.def.exits.find(r => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) || null : null;
+  // уйти через выход: на карту мира или в соседнюю локацию (интерьеры)
+  W.useExit = function (G, rect) {
+    if (rect && rect.to) {
+      if (G.combat) {
+        if (!(G.combat.canFlee && G.combat.isPlayerTurn())) { G.log('Нельзя уйти во время боя!', 'bad'); return; }
+        if (G.combat.mirror) G.combat = null; else COMBAT.end(G, 'Вы уходите с поля боя.');
+      }
+      leaveCurrent(G);
+      W.goLocation(G, rect.to, { at: rect.at });
+      return;
+    }
+    W.leaveToWorld(G);
+  };
+  function leaveCurrent(G) {
+    if (NET.active) NET.leave(G.loc.id, NET.isAuth && !G.loc.def.temp ? W.serializeLocation(G) : null);
+    else W.saveLocationState(G);
+    G.loc = null;
+  }
   W.isExit = (L, x, y) => {
     if (!L) return false;
     if (L.def.exits) return L.def.exits.some(r => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1);
@@ -135,6 +154,7 @@ window.WORLD_API = (function () {
   // переход в локацию (в сетевой игре — с получением состояния от сервера)
   W.goLocation = async function (G, id, opts = {}) {
     if (G.world) { G.world.visited = G.world.visited || {}; G.world.visited[id] = true; }
+    if (id === 'zarya_lab' && G.q('zarya') >= 1 && G.q('zarya') < 3) G.setQuest('zarya', 3);
     if (!NET.active) { W.loadLocation(G, id, opts); setTimeout(() => G.autosave(), 300); return; }
     const res = await NET.enter(id);
     if (res.state) G.locStates[id] = res.state; else delete G.locStates[id];
@@ -155,6 +175,12 @@ window.WORLD_API = (function () {
   };
 
   W.leaveToWorld = function (G) {
+    if (G.loc && G.loc.def.interior) {
+      const r = W.exitRect(G.loc, G.player.x, G.player.y);
+      if (r) { W.useExit(G, r); return; }
+      G.log('Вы в помещении — выйдите через зелёную зону выхода.', 'warn');
+      return;
+    }
     if (G.combat) {
       if (!(G.combat.canFlee && G.combat.isPlayerTurn())) { G.log('Нельзя уйти во время боя! Встаньте в зелёную зону выхода и переждите ход врагов без ранений.', 'bad'); return; }
       if (G.combat.mirror) G.combat = null; else COMBAT.end(G, 'Вы уходите с поля боя.');
@@ -253,7 +279,7 @@ window.WORLD_API = (function () {
   function onPlayerStep(G) {
     const p = G.player, L = G.loc;
     if (!G.combat && W.isExit(L, p.x, p.y) && (!p.path || !p.path.length)) {
-      W.leaveToWorld(G);
+      W.useExit(G, W.exitRect(L, p.x, p.y));
     }
   }
 
@@ -471,7 +497,7 @@ window.WORLD_API = (function () {
     if (o && o.container) { goThen(G, o, () => W.openContainer(G, o)); return; }
     if (o && o.interact && !G.combat) { goThen(G, o, () => W.startObjectDialog(G, o)); return; }
     if (tile) {
-      if (G.combat && G.combat.canFlee && W.isExit(G.loc, tile.x, tile.y)) { W.leaveToWorld(G); return; }
+      if (G.combat && G.combat.canFlee && W.isExit(G.loc, tile.x, tile.y)) { W.useExit(G, W.exitRect(G.loc, G.player.x, G.player.y) || W.exitRect(G.loc, tile.x, tile.y)); return; }
       if (G.combat) {
         const path = ENG.findPath(G.loc, p.x, p.y, tile.x, tile.y);
         if (path) COMBAT.playerWalk(G, path);
@@ -560,8 +586,32 @@ window.WORLD_API = (function () {
     const got = rollLoot(G, c);
     if (got.length) G.log(`Найдено: ${got.join(', ')}.`, 'good');
     if (c.xp) G.giveXP(c.xp);
+    if (c.effect === 'zaryaLog') G.zaryaFound();
     UI.refresh();
     return c.text + (got.length ? ' Найдено: ' + got.join(', ') + '.' : '');
+  };
+
+  W.tryEnter = function (G, o) {
+    const e = o.interact.enter, p = G.player, k = objKey(G, o, 'open');
+    const go = msg => {
+      if (msg) G.log(msg, 'good');
+      G.flags[k] = true;
+      W.endDialog(G);
+      leaveCurrent(G);
+      W.goLocation(G, e.to, { at: e.at });
+      return null;
+    };
+    if (G.combat) return 'Сейчас не до того — идёт бой.';
+    if (G.flags[k]) return go();
+    if (e.code && G.flags[e.code]) { SND.play('lock_open'); return go('Вы набираете код 4-1-7. Замок щёлкает.'); }
+    if (e.key && G.hasItem(e.key)) { SND.play('lock_open'); return go(`Вы открываете дверь: ${DATA.ITEMS[e.key].name}.`); }
+    if (e.lock) {
+      const v = R.skill(p, 'lockpick') + (R.count(p, 'lockpicks') ? 20 : 0);
+      if (v >= e.lock) { SND.play('lock_open'); G.giveXP(25); return go(`Взлом ${v} против ${e.lock}: дверь поддалась.`); }
+    }
+    if (e.stat && p.stats[e.stat[0]] >= e.stat[1]) { SND.play('hit'); G.giveXP(25); return go('Вы отгибаете лист железа и протискиваетесь внутрь.'); }
+    SND.play('lock_fail');
+    return e.text;
   };
 
   W.startObjectDialog = function (G, o) {
@@ -571,6 +621,7 @@ window.WORLD_API = (function () {
     const build = text => {
       const opts = [{ t: 'Осмотреть' + (G.flags[objKey(G, o, 'look')] ? '' : it.lookXp ? ` <span class="chk">(+${it.lookXp} опыта)</span>` : ''), act: () => node(W.lookObject(G, o)) }];
       if (it.search) opts.push({ t: G.flags[objKey(G, o, 'search')] ? '<span class="muted">Обыскать (уже обыскано)</span>' : 'Обыскать', act: () => node(W.searchObject(G, o)) });
+      if (it.enter) opts.unshift({ t: `<b>${it.enter.label}</b>`, act: () => { const r = W.tryEnter(G, o); if (r) node(r); } });
       if (it.check) {
         const c = it.check;
         const nm = c.stat ? DATA.SPECIAL.find(s => s.id === c.stat).name : DATA.SKILLS.find(s => s.id === c.skill).name;

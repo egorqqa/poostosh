@@ -117,9 +117,63 @@ window.ENG = (function () {
     g.fillStyle = 'rgba(8,6,4,0.82)';
     g.fill('evenodd');
     g.restore();
-    // лёгкая виньетка
+    if (L.def.interior) drawInterior(g, L, ox, oy, r);
     L.ground = { canvas: c, ox, oy };
   };
+
+  // стены и освещение помещений: задние стены «в разрезе» и полумрак
+  function drawInterior(g, L, ox, oy, r) {
+    const A = iso(0, 0), B = iso(L.w, 0), D = iso(0, L.h), Cc = iso(L.w, L.h);
+    const H = 150, [cr, cg, cb] = L.def.wallColor || [100, 90, 80];
+    const P = p => ({ x: ox + p.x, y: oy + p.y });
+    // затемнение пола
+    g.save();
+    g.beginPath(); const a = P(A), b = P(B), c2 = P(Cc), d = P(D);
+    g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(c2.x, c2.y); g.lineTo(d.x, d.y); g.closePath();
+    g.fillStyle = L.def.lab ? 'rgba(10,40,25,0.35)' : 'rgba(0,0,0,0.32)'; g.fill();
+    g.clip();
+    // пятна света от ламп
+    for (let i = 0; i < 5; i++) {
+      const lp = P(iso(r() * L.w, r() * L.h));
+      const gr = g.createRadialGradient(lp.x, lp.y, 10, lp.x, lp.y, 220);
+      gr.addColorStop(0, L.def.lab ? 'rgba(120,255,160,0.16)' : 'rgba(255,210,140,0.18)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(lp.x - 230, lp.y - 230, 460, 460);
+    }
+    g.restore();
+    const wall = (p1, p2, shade) => {
+      const q1 = P(p1), q2 = P(p2);
+      g.beginPath(); g.moveTo(q1.x, q1.y); g.lineTo(q2.x, q2.y); g.lineTo(q2.x, q2.y - H); g.lineTo(q1.x, q1.y - H); g.closePath();
+      const grd = g.createLinearGradient(0, q1.y - H, 0, q1.y);
+      grd.addColorStop(0, `rgb(${cr * shade * 0.55 | 0},${cg * shade * 0.55 | 0},${cb * shade * 0.55 | 0})`);
+      grd.addColorStop(1, `rgb(${cr * shade | 0},${cg * shade | 0},${cb * shade | 0})`);
+      g.fillStyle = grd; g.fill();
+      // кирпичная кладка
+      g.save(); g.clip();
+      g.strokeStyle = 'rgba(0,0,0,0.28)'; g.lineWidth = 1;
+      const len = Math.hypot(q2.x - q1.x, q2.y - q1.y), dx = (q2.x - q1.x) / len, dy = (q2.y - q1.y) / len;
+      for (let h = 0, row = 0; h < H; h += 10, row++) {
+        g.beginPath(); g.moveTo(q1.x, q1.y - h); g.lineTo(q2.x, q2.y - h); g.stroke();
+        for (let s = (row % 2) * 12; s < len; s += 24) {
+          g.beginPath(); g.moveTo(q1.x + dx * s, q1.y + dy * s - h); g.lineTo(q1.x + dx * s, q1.y + dy * s - h - 10); g.stroke();
+        }
+      }
+      // окна и трубы
+      for (let s = 80; s < len - 60; s += 170 + r() * 80) {
+        const wx = q1.x + dx * s, wy = q1.y + dy * s - 95;
+        g.fillStyle = L.def.lab ? 'rgba(40,90,60,0.85)' : 'rgba(30,40,45,0.9)';
+        g.beginPath(); g.moveTo(wx, wy); g.lineTo(wx + dx * 46, wy + dy * 46); g.lineTo(wx + dx * 46, wy + dy * 46 + 34); g.lineTo(wx, wy + 34); g.closePath(); g.fill();
+        g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 2; g.stroke();
+      }
+      g.strokeStyle = 'rgba(70,60,50,0.9)'; g.lineWidth = 5;
+      g.beginPath(); g.moveTo(q1.x, q1.y - H + 22); g.lineTo(q2.x, q2.y - H + 22); g.stroke();
+      g.restore();
+      // карниз
+      g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(q1.x, q1.y - H); g.lineTo(q2.x, q2.y - H); g.stroke();
+    };
+    wall(D, A, 0.75);
+    wall(A, B, 1.0);
+  }
 
   // ---------- геометрия объектов ----------
   E.objectAnchor = function (o) {
@@ -298,7 +352,7 @@ window.ENG = (function () {
       ctx.textAlign = 'center';
       for (const r of L.def.exits) {
         const c = iso((r.x0 + r.x1 + 1) / 2, (r.y0 + r.y1 + 1) / 2);
-        const label = '▼ ВЫХОД ▼';
+        const label = `▼ ${r.label || 'ВЫХОД'} ▼`;
         const w = ctx.measureText(label).width + 16;
         ctx.fillStyle = 'rgba(5,20,5,0.75)';
         ctx.fillRect(c.x - w / 2, c.y - 44, w, 26);

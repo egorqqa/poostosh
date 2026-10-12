@@ -110,6 +110,9 @@ window.SND = (function () {
     camp: { root: 55, fifth: 1.498, wind: 0.18, ping: 1, pingNotes: [440, 523, 659] },
     post: { root: 73.4, fifth: 1.335, wind: 0.22, ping: 1, pingNotes: [370, 440, 554] },
     zarya: { root: 43.65, fifth: 1.414, wind: 0.26, ping: 1, pingNotes: [311, 466, 622] },
+    zarya_office: { root: 43.65, fifth: 1.414, wind: 0.08, ping: 0.8, pingNotes: [311, 466] },
+    zarya_factory: { root: 41.2, fifth: 1.414, wind: 0.12, ping: 1, pingNotes: [277, 415, 554] },
+    zarya_lab: { root: 36.7, fifth: 1.06, wind: 0.05, ping: 1, pingNotes: [740, 784, 1109] },
     wild: { root: 65.4, fifth: 1.498, wind: 0.3, ping: 0.6, pingNotes: [392, 523] },
     world: { root: 82.4, fifth: 1.498, wind: 0.2, ping: 0.7, pingNotes: [494, 659, 740] },
   };
