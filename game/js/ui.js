@@ -1,0 +1,509 @@
+// Интерфейс: нижняя панель, диалоги, окна
+window.UI = (function () {
+  const { ITEMS, SPECIAL, SKILLS } = DATA;
+  const $ = s => document.querySelector(s);
+  const U = {};
+  let G;
+  let modalRefresh = null;
+
+  const ACTIONS = [
+    { id: 'move', name: 'Ходить', icon: 'walk', key: '1' },
+    { id: 'attack', name: 'Атака', icon: 'attack', key: 'A' },
+    { id: 'steal', name: 'Кража', icon: 'steal', key: 'K' },
+    { id: 'lockpick', name: 'Взлом', icon: 'lockpick', key: 'L' },
+    { id: 'sneak', name: 'Красться', icon: 'sneak', key: 'S' },
+    { id: 'look', name: 'Осмотр', icon: 'look', key: 'X' },
+    { id: 'heal', name: 'Лечить', icon: 'heal', key: 'H' },
+    { id: 'reload', name: 'Перезар.', icon: 'reload', key: 'R' },
+    { id: 'inventory', name: 'Инвентарь', icon: 'inventory', key: 'I' },
+    { id: 'character', name: 'Персонаж', icon: 'character', key: 'C' },
+    { id: 'map', name: 'Карта', icon: 'map', key: 'M' },
+    { id: 'save', name: 'Сохран.', icon: 'save', key: 'F5' },
+  ];
+  const CURSORS = { move: 'default', attack: 'crosshair', steal: 'grab', lockpick: 'cell', look: 'help' };
+
+  U.init = function (game) {
+    G = game;
+    const box = $('#actions');
+    box.innerHTML = ACTIONS.map(a => `<div class="act" data-act="${a.id}" data-tip="${a.name} [${a.key}]"><span class="key">${a.key}</span>${ICONS.ACTION[a.icon]}<span>${a.name}</span></div>`).join('');
+    box.addEventListener('click', e => { const el = e.target.closest('.act'); if (el) U.action(el.dataset.act); });
+    $('#weapon-box').addEventListener('click', () => U.action('attack'));
+    $('#weapon-box').addEventListener('contextmenu', e => { e.preventDefault(); U.action('reload'); });
+    $('#btn-endturn').addEventListener('click', () => COMBAT.endPlayerTurn(G));
+    $('#dlg-options').addEventListener('click', e => { const li = e.target.closest('li'); if (li && !li.classList.contains('disabled')) WORLD_API.dialogChoose(G, +li.dataset.i); });
+    // подсказки
+    const tip = $('#tooltip');
+    document.addEventListener('mousemove', e => {
+      const el = e.target.closest && e.target.closest('[data-tip]');
+      if (el) { tip.style.display = 'block'; tip.textContent = el.dataset.tip; tip.style.left = Math.min(innerWidth - 310, e.clientX + 14) + 'px'; tip.style.top = (e.clientY - 30) + 'px'; }
+      else tip.style.display = 'none';
+    });
+  };
+
+  U.action = function (id) {
+    if (G.scene === 'menu' || G.player.dead) return;
+    const inLocal = G.scene === 'local';
+    switch (id) {
+      case 'move': case 'attack': case 'steal': case 'lockpick': case 'look':
+        if (!inLocal) return;
+        U.setMode(G.ui.mode === id && id !== 'move' ? 'move' : id);
+        if (id === 'steal') G.hint('Кража: кликните по персонажу');
+        if (id === 'lockpick') G.hint('Взлом: кликните по запертому контейнеру');
+        if (id === 'look') G.hint('Осмотр: кликните по объекту');
+        break;
+      case 'sneak':
+        if (!inLocal) return;
+        if (G.combat) { G.log('В бою красться бессмысленно.', 'warn'); return; }
+        G.sneaking = !G.sneaking;
+        G.log(G.sneaking ? `Вы крадётесь. Скрытность: ${R.skill(G.player, 'sneak')}%.` : 'Вы перестали красться.', 'sys');
+        break;
+      case 'heal': G.firstAid(); break;
+      case 'reload': if (inLocal) COMBAT.reload(G); break;
+      case 'inventory': U.toggle('inventory', U.openInventory); break;
+      case 'character': U.toggle('character', () => U.openCharacter(false)); break;
+      case 'map':
+        if (G.scene === 'world') { G.hint('Вы уже на карте мира'); return; }
+        WORLD_API.leaveToWorld(G); break;
+      case 'save': G.save(); break;
+    }
+    U.refresh();
+  };
+
+  U.setMode = function (m) {
+    if (!G.ui) return;
+    G.ui.mode = m;
+    ENG.canvas.style.cursor = CURSORS[m] || 'default';
+    U.refresh();
+  };
+
+  // ---------- обновление HUD ----------
+  U.refresh = function () {
+    if (!G || !G.player) return;
+    const p = G.player;
+    const max = R.maxAP(p);
+    const ap = G.combat ? p.ap : max;
+    const cost = G.ui.apCost || 0;
+    $('#ap-bar').innerHTML = Array.from({ length: max }, (_, i) => `<i class="${i < ap ? (G.combat && cost && i >= ap - cost ? 'cost' : 'on') : ''}"></i>`).join('');
+    $('#hp-val').textContent = `${Math.max(0, p.hp)}/${R.maxHP(p)}`;
+    $('#ac-val').textContent = R.AC(p);
+    $('#ap-val').textContent = `${ap}/${max}`;
+    const w = R.weaponOf(p);
+    $('#wpn-name').textContent = w.name;
+    $('#wpn-icon').innerHTML = ICONS.WEAPON[w.icon] || '';
+    const chance = G.ui.hover && G.ui.hover.actor && !G.ui.hover.actor.dead && G.loc ? COMBAT.hitChance(G, p, G.ui.hover.actor) : null;
+    $('#wpn-info').innerHTML = `<span>ОД ${w.ap} · урон ${w.dmg[0]}–${w.dmg[1]}${w.melee ? '' : ' · дальн. ' + w.range}</span><span>${w.mag ? `${p.loaded}/${w.mag} · ${R.count(p, w.ammo)}` : ''}${chance != null && G.ui.mode === 'attack' ? ` · ${chance}%` : ''}</span>`;
+    $('#weapon-box').classList.toggle('active', G.ui.mode === 'attack');
+    $('#btn-endturn').classList.toggle('hidden', !(G.combat && G.combat.isPlayerTurn()));
+    document.querySelectorAll('.act').forEach(el => {
+      const id = el.dataset.act;
+      el.classList.toggle('on', id === G.ui.mode || (id === 'sneak' && G.sneaking));
+      const localOnly = ['move', 'attack', 'steal', 'lockpick', 'look', 'sneak', 'reload'].includes(id);
+      el.classList.toggle('disabled', (localOnly && G.scene !== 'local') || (id === 'map' && !!G.combat) || (id === 'sneak' && !!G.combat));
+    });
+    // верхняя строка
+    $('#loc-name').textContent = G.scene === 'world' ? 'Карта мира' : G.loc ? G.loc.def.name : '';
+    $('#clock').textContent = G.clockText();
+    const tags = [];
+    if (G.combat) tags.push(`<span class="tag combat">БОЙ · раунд ${G.combat.round}${G.combat.isPlayerTurn() ? ' · ваш ход' : ' · ход: ' + (G.combat.current ? G.combat.current.name : '…')}</span>`);
+    if (G.sneaking) tags.push(`<span class="tag sneak">СКРЫТНО${G.risk ? ' · риск ' + G.risk + '%/с' : ''}</span>`);
+    if (R.overloaded(p)) tags.push('<span class="tag danger">ПЕРЕГРУЗ</span>');
+    if (p.freePts > 0) tags.push(`<span class="tag sneak">Очки навыков: ${p.freePts}</span>`);
+    $('#status-tags').innerHTML = tags.join('');
+    if (modalRefresh) modalRefresh();
+  };
+
+  U.log = function (text, cls = '') {
+    const box = $('#log-box');
+    const d = document.createElement('div');
+    if (cls) d.className = 'l-' + cls;
+    d.textContent = '› ' + text;
+    box.appendChild(d);
+    while (box.children.length > 120) box.removeChild(box.firstChild);
+    box.scrollTop = box.scrollHeight;
+  };
+
+  let hintT = 0;
+  U.hint = function (text) {
+    const h = $('#float-hint');
+    h.textContent = text; h.style.display = 'block';
+    clearTimeout(hintT);
+    hintT = setTimeout(() => h.style.display = 'none', 1800);
+  };
+
+  // ---------- диалог ----------
+  U.showDialog = function (npc, text, opts) {
+    $('#log-box').classList.add('hidden');
+    $('#dialog-box').classList.remove('hidden');
+    const port = $('#dlg-portrait');
+    port.src = makePortrait(npc);
+    $('#dlg-name').textContent = npc.name;
+    $('#dlg-sub').textContent = npc.trader ? 'торговец' : npc.hostile ? 'враждебен' : npc.faction === 'town' ? 'житель Ручья' : '';
+    $('#dlg-text').textContent = text;
+    $('#dlg-options').innerHTML = opts.map((t, i) => `<li data-i="${i}">${t}</li>`).join('');
+  };
+  U.hideDialog = function () {
+    $('#dialog-box').classList.add('hidden');
+    $('#log-box').classList.remove('hidden');
+    $('#log-box').scrollTop = 1e9;
+  };
+  const portraitCache = {};
+  function makePortrait(a) {
+    const k = a.tint || 'player';
+    if (portraitCache[k]) return portraitCache[k];
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const x = c.getContext('2d');
+    x.fillStyle = '#0d150c'; x.fillRect(0, 0, 64, 64);
+    x.imageSmoothingEnabled = false;
+    x.drawImage(ENG.sheets[k], 30, 8, 60, 46, -8, 2, 80, 61);
+    try { return (portraitCache[k] = c.toDataURL()); }
+    catch (e) { return (portraitCache[k] = 'assets/ui/portrait.png'); } // file:// — холст «испорчен»
+  }
+  U.portrait = makePortrait;
+
+  // ---------- модальные окна ----------
+  let currentModal = null;
+  U.modalOpen = () => !!currentModal;
+  U.openModal = function (name, html, mount, opts = {}) {
+    const root = $('#modal-root');
+    root.className = opts.full ? 'full' : '';
+    root.innerHTML = html;
+    currentModal = name;
+    modalRefresh = null;
+    root.querySelectorAll('[data-close]').forEach(b => b.onclick = U.closeModal);
+    if (mount) mount(root);
+  };
+  U.closeModal = function () {
+    $('#modal-root').innerHTML = '';
+    $('#modal-root').className = '';
+    currentModal = null;
+    modalRefresh = null;
+    U.refresh();
+  };
+  U.toggle = function (name, open) {
+    if (currentModal === name) { U.closeModal(); return; }
+    if (currentModal === 'create' || currentModal === 'title' || currentModal === 'dead') return;
+    open();
+  };
+
+  function itemIcon(id) {
+    const it = ITEMS[id];
+    return (it.type === 'weapon' ? ICONS.WEAPON[it.icon] : ICONS.ITEM[it.icon]) || '';
+  }
+  function itemSub(id) {
+    const it = ITEMS[id];
+    if (it.type === 'weapon') return `урон ${it.dmg[0]}–${it.dmg[1]} · ОД ${it.ap}${it.range > 1 ? ' · дальн. ' + it.range : ''} · ${it.weight} кг`;
+    if (it.type === 'armor') return `КБ +${it.ac} · ПУ ${it.dt} · СУ ${it.dr}% · ${it.weight} кг`;
+    if (it.type === 'aid') return `лечит ${R.healAmount(G.player, id)} ОЗ · ${it.weight} кг`;
+    return `${it.weight} кг`;
+  }
+  function itemRow(id, n, extra = '', cls = '', data = '') {
+    return `<div class="item ${cls}" ${data}><div class="ico">${itemIcon(id)}</div><div><div class="nm">${ITEMS[id].name}</div><div class="sub">${itemSub(id)}</div></div><div class="qty">${n > 1 ? '×' + n : ''}${extra}</div></div>`;
+  }
+  U.itemIcon = itemIcon;
+
+  // ---------- инвентарь ----------
+  U.openInventory = function () {
+    let sel = null;
+    U.openModal('inventory', `<div class="modal" style="width:780px;height:min(560px,100%)">
+      <h2>Инвентарь <button class="close" data-close>✕ [I]</button></h2>
+      <div class="cols" style="flex:1;min-height:0">
+        <div class="screen" style="flex:1.3" id="inv-list"></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;min-height:0">
+          <div class="cols"><div class="slot" id="slot-w" data-tip="Клик — снять"></div><div class="slot" id="slot-a" data-tip="Клик — снять"></div></div>
+          <div class="screen" id="inv-stats"></div>
+          <div class="screen desc-box" id="inv-desc" style="flex:1"></div>
+          <div class="cols" id="inv-btns"></div>
+        </div>
+      </div></div>`, root => {
+      const draw = () => {
+        const p = G.player;
+        const list = p.inv.slice().sort((a, b) => order(a.id) - order(b.id));
+        root.querySelector('#inv-list').innerHTML = list.length ? `<div class="inv-list">${list.map(s => itemRow(s.id, s.n, '', s.id === sel ? 'sel' : '', `data-id="${s.id}"`)).join('')}</div>` : '<div class="muted">Пусто</div>';
+        const w = p.weapon, a = p.armor;
+        root.querySelector('#slot-w').innerHTML = `<div class="lbl">Оружие в руке</div>${w ? itemIcon(w) + `<div class="nm">${ITEMS[w].name}</div>` : '<div class="muted">Кулаки</div>'}`;
+        root.querySelector('#slot-a').innerHTML = `<div class="lbl">Броня</div>${a ? itemIcon(a) + `<div class="nm">${ITEMS[a].name}</div>` : '<div class="muted">Нет</div>'}`;
+        const wt = R.weight(p), cm = R.carryMax(p);
+        root.querySelector('#inv-stats').innerHTML = `<div>Вес: <b class="${wt > cm ? 'bad' : ''}">${wt}</b> / ${cm} кг</div><div class="bar ${wt > cm ? 'over' : ''}"><i style="width:${Math.min(100, wt / cm * 100)}%"></i></div>
+          <div style="margin-top:6px">Крышки: <b class="warn">${p.caps}</b> · ОЗ ${p.hp}/${R.maxHP(p)} · КБ ${R.AC(p)} · ПУ ${R.DT(p)} · СУ ${R.DR(p)}%</div>`;
+        const it = sel && ITEMS[sel];
+        root.querySelector('#inv-desc').innerHTML = it ? `<b class="warn">${it.name}</b><br>${it.desc || ''}<br><span class="muted">${itemSub(sel)} · цена ${it.value}</span>` : '<span class="muted">Выберите предмет. Двойной клик — использовать / надеть.</span>';
+        const btns = [];
+        if (it) {
+          if (it.type === 'weapon' || it.type === 'armor') btns.push('<button class="primary" data-b="equip">Надеть / взять в руку</button>');
+          if (it.type === 'aid') btns.push('<button class="primary" data-b="use">Использовать</button>');
+          if (it.type !== 'quest') btns.push('<button data-b="drop">Выбросить</button>');
+        }
+        root.querySelector('#inv-btns').innerHTML = btns.join('');
+      };
+      const act = b => {
+        if (!sel) return;
+        if (b === 'equip') G.equip(sel);
+        if (b === 'use') G.useItem(sel);
+        if (b === 'drop') { const s = G.player.inv.find(i => i.id === sel); if (s) { R.removeItem(G.player, sel, s.n); G.log(`Выброшено: ${ITEMS[sel].name}.`, 'sys'); } }
+        if (!G.player.inv.find(i => i.id === sel)) sel = null;
+        U.refresh();
+      };
+      root.addEventListener('click', e => {
+        const row = e.target.closest('.item');
+        if (row) { sel = row.dataset.id; draw(); return; }
+        const b = e.target.closest('[data-b]');
+        if (b) { act(b.dataset.b); return; }
+        if (e.target.closest('#slot-w')) { G.unequip('weapon'); U.refresh(); }
+        if (e.target.closest('#slot-a')) { G.unequip('armor'); U.refresh(); }
+      });
+      root.addEventListener('dblclick', e => {
+        const row = e.target.closest('.item');
+        if (!row) return;
+        sel = row.dataset.id;
+        const t = ITEMS[sel].type;
+        act(t === 'aid' ? 'use' : (t === 'weapon' || t === 'armor') ? 'equip' : '');
+      });
+      modalRefresh = draw;
+      draw();
+    });
+  };
+  const ORDER = { weapon: 0, armor: 1, aid: 2, ammo: 3, quest: 4, misc: 5 };
+  const order = id => ORDER[ITEMS[id].type] * 100 + (ITEMS[id].value > 0 ? 0 : 1);
+
+  // ---------- лут / контейнеры ----------
+  U.openLoot = function (src) {
+    const title = src.fw != null ? (src.name || 'Контейнер') : `Тело: ${src.name}`;
+    U.openModal('loot', `<div class="modal" style="width:760px;height:min(520px,100%)">
+      <h2>${title} <button class="close" data-close>✕</button></h2>
+      <div class="cols" style="flex:1;min-height:0">
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-height:0"><div class="warn">Содержимое</div><div class="screen" id="l-src" style="flex:1"></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-height:0"><div class="warn">Ваш инвентарь</div><div class="screen" id="l-me" style="flex:1"></div></div>
+      </div>
+      <div class="cols" style="margin-top:8px;justify-content:space-between"><span class="muted" id="l-w"></span><span><button class="primary" id="l-all">Взять всё</button> <button data-close>Закрыть</button></span></div>
+    </div>`, root => {
+      const draw = () => {
+        const p = G.player;
+        const caps = src.caps ? `<div class="item" data-caps="1"><div class="ico">${ICONS.ITEM.caps}</div><div><div class="nm">Крышки</div><div class="sub">валюта</div></div><div class="qty">${src.caps}</div></div>` : '';
+        root.querySelector('#l-src').innerHTML = (caps + src.inv.map(s => itemRow(s.id, s.n, '', '', `data-id="${s.id}"`)).join('')) || '<div class="muted">Пусто</div>';
+        root.querySelector('#l-me').innerHTML = p.inv.map(s => itemRow(s.id, s.n, '', '', `data-mine="${s.id}"`)).join('') || '<div class="muted">Пусто</div>';
+        root.querySelector('#l-w').textContent = `Вес: ${R.weight(p)} / ${R.carryMax(p)} кг · Крышки: ${p.caps}`;
+      };
+      root.addEventListener('click', e => {
+        const r = e.target.closest('.item');
+        if (!r) return;
+        const p = G.player;
+        if (r.dataset.caps) { p.caps += src.caps; src.caps = 0; }
+        else if (r.dataset.id) { const s = src.inv.find(i => i.id === r.dataset.id); R.removeItem(src, s.id, s.n); R.addItem(p, s.id, s.n); }
+        else if (r.dataset.mine) { const s = p.inv.find(i => i.id === r.dataset.mine); if (ITEMS[s.id].type === 'quest') return; R.removeItem(p, s.id, s.n); R.addItem(src, s.id, s.n); }
+        U.refresh();
+      });
+      root.querySelector('#l-all').onclick = () => {
+        const p = G.player;
+        p.caps += src.caps || 0; src.caps = 0;
+        for (const s of src.inv.slice()) { R.removeItem(src, s.id, s.n); R.addItem(p, s.id, s.n); }
+        U.closeModal();
+      };
+      modalRefresh = draw;
+      draw();
+    });
+  };
+
+  // ---------- кража ----------
+  U.openSteal = function (npc) {
+    U.openModal('steal', `<div class="modal" style="width:560px;height:min(500px,100%)">
+      <h2>Кража: ${npc.name} <button class="close" data-close>✕</button></h2>
+      <div class="muted" style="margin-bottom:6px">Ваш навык Кражи: ${R.skill(G.player, 'steal')}%. ${G.sneaking ? 'Вы крадётесь (+20%).' : 'Режим скрытности дал бы +20%.'} Каждая попытка повышает подозрительность.</div>
+      <div class="screen" id="s-list" style="flex:1"></div>
+      <div style="margin-top:8px;text-align:right"><button data-close>Уйти</button></div></div>`, root => {
+      const draw = () => {
+        const rows = [];
+        if (npc.caps) rows.push(`<div class="item" data-id="caps"><div class="ico">${ICONS.ITEM.caps}</div><div><div class="nm">Крышки</div><div class="sub">${npc.caps} шт.</div></div><div class="qty">${WORLD_API.stealChance(G, npc, 'caps', npc.caps)}%</div></div>`);
+        for (const s of npc.inv) rows.push(itemRow(s.id, s.n, ` · <b>${WORLD_API.stealChance(G, npc, s.id, s.id.startsWith('ammo') || s.id === 'shells' ? s.n : 1)}%</b>`, '', `data-id="${s.id}"`));
+        if (npc.weapon) rows.push(`<div class="item" style="opacity:.5;cursor:default"><div class="ico">${itemIcon(npc.weapon)}</div><div><div class="nm">${ITEMS[npc.weapon].name}</div><div class="sub">в руках — не украсть</div></div><div></div></div>`);
+        root.querySelector('#s-list').innerHTML = rows.join('') || '<div class="muted">Карманы пусты.</div>';
+      };
+      root.addEventListener('click', e => {
+        const r = e.target.closest('.item[data-id]');
+        if (!r) return;
+        WORLD_API.steal(G, npc, r.dataset.id);
+        U.refresh();
+      });
+      modalRefresh = draw;
+      draw();
+    });
+  };
+
+  // ---------- торговля ----------
+  U.openTrade = function (npc) {
+    const disc = npc.tpl === 'semyon' ? (G.flags.semDiscount || 0) : 0;
+    const buyP = id => Math.max(1, Math.ceil(ITEMS[id].value * R.buyMult(G.player, disc)));
+    const sellP = id => Math.max(ITEMS[id].value > 0 ? 1 : 0, Math.floor(ITEMS[id].value * R.sellMult(G.player)));
+    const pack = (id, have) => (ITEMS[id].type === 'ammo' ? Math.min(10, have) : 1);
+    U.openModal('trade', `<div class="modal" style="width:820px;height:min(560px,100%)">
+      <h2>Торговля: ${npc.name} <button class="close" data-close>✕</button></h2>
+      <div class="muted" style="margin-bottom:6px">Торговля ${R.skill(G.player, 'barter')}% · Харизма ${G.player.stats.cha}${disc ? ' · скидка ' + Math.round(disc * 100) + '%' : ''}. Клик — купить/продать (патроны по 10).</div>
+      <div class="cols" style="flex:1;min-height:0">
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-height:0"><div class="warn" id="t-hc"></div><div class="screen" id="t-his" style="flex:1"></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-height:0"><div class="warn" id="t-mc"></div><div class="screen" id="t-mine" style="flex:1"></div></div>
+      </div>
+      <div style="margin-top:8px;text-align:right"><button data-close>Готово</button></div></div>`, root => {
+      const draw = () => {
+        const p = G.player;
+        root.querySelector('#t-hc').textContent = `Товар (${npc.caps} крышек у торговца)`;
+        root.querySelector('#t-mc').textContent = `Ваше (${p.caps} крышек)`;
+        root.querySelector('#t-his').innerHTML = npc.inv.map(s => itemRow(s.id, s.n, ` · <b>${buyP(s.id) * pack(s.id, s.n)}¢</b>`, buyP(s.id) * pack(s.id, s.n) > p.caps ? 'dim' : '', `data-buy="${s.id}"`)).join('') || '<div class="muted">Пусто</div>';
+        root.querySelector('#t-mine').innerHTML = p.inv.filter(s => ITEMS[s.id].type !== 'quest').map(s => itemRow(s.id, s.n, ` · <b>${sellP(s.id) * pack(s.id, s.n)}¢</b>`, '', `data-sell="${s.id}"`)).join('') || '<div class="muted">Нечего продать</div>';
+      };
+      root.addEventListener('click', e => {
+        const r = e.target.closest('.item');
+        if (!r) return;
+        const p = G.player;
+        if (r.dataset.buy) {
+          const id = r.dataset.buy, n = pack(id, R.count(npc, id)), price = buyP(id) * n;
+          if (p.caps < price) { G.hint('Не хватает крышек'); return; }
+          p.caps -= price; npc.caps += price; R.removeItem(npc, id, n); R.addItem(p, id, n);
+          G.log(`Куплено: ${ITEMS[id].name}${n > 1 ? ' ×' + n : ''} за ${price}¢.`, 'sys');
+        } else if (r.dataset.sell) {
+          const id = r.dataset.sell, n = pack(id, R.count(p, id)), price = sellP(id) * n;
+          if (npc.caps < price) { G.hint('У торговца нет столько крышек'); return; }
+          p.caps += price; npc.caps -= price; R.removeItem(p, id, n); R.addItem(npc, id, n);
+          G.log(`Продано: ${ITEMS[id].name}${n > 1 ? ' ×' + n : ''} за ${price}¢.`, 'sys');
+        }
+        U.refresh();
+      });
+      modalRefresh = draw;
+      draw();
+    });
+  };
+
+  // ---------- персонаж / создание ----------
+  U.openCharacter = function (create, onDone) {
+    const p = create ? R.newPlayer('Странник', { str: 5, per: 5, end: 5, cha: 5, int: 5, agi: 5, luck: 5 }, []) : G.player;
+    let pool = create ? 5 : 0;
+    let desc = create ? 'Распределите 5 очков между характеристиками и отметьте 3 профильных навыка (+20%, и каждое очко навыка даёт +2%).' : '';
+    U.openModal(create ? 'create' : 'character', `<div class="modal" style="width:min(980px,96vw);height:min(600px,100%)">
+      <h2>${create ? 'Создание персонажа' : 'Персонаж'} ${create ? '' : '<button class="close" data-close>✕ [C]</button>'}</h2>
+      <div class="cols" style="flex:1;min-height:0">
+        <div class="screen" style="flex:1" id="c-special"></div>
+        <div class="screen" style="flex:0.9" id="c-derived"></div>
+        <div class="screen" style="flex:1.2" id="c-skills"></div>
+      </div>
+      <div class="screen desc-box" id="c-desc" style="margin-top:8px"></div>
+      ${create ? `<div class="cols" style="margin-top:8px;justify-content:space-between;align-items:center"><label>Имя: <input id="c-name" value="Странник" maxlength="18" style="font-family:var(--font);background:#0d150c;color:var(--green);border:1px solid var(--green-dim);padding:4px"></label><button class="primary" id="c-go">Начать игру ▶</button></div>` : ''}
+    </div>`, root => {
+      const draw = () => {
+        root.querySelector('#c-special').innerHTML = `<div class="warn" style="margin-bottom:4px">Характеристики${create ? ` · осталось очков: <b>${pool}</b>` : ''}</div>` + SPECIAL.map(s => `
+          <div class="stat-row" data-desc="${s.id}"><span>${s.name}</span><b>${p.stats[s.id]}</b><span class="pm">${create ? `<button data-st="${s.id}" data-d="-1">−</button><button data-st="${s.id}" data-d="1">+</button>` : ''}</span></div>`).join('');
+        const lvlNext = R.xpForLevel(p.level);
+        root.querySelector('#c-derived').innerHTML = `<div class="warn" style="margin-bottom:4px">${create ? 'Производные' : `${p.name} · уровень ${p.level}`}</div>
+          ${create ? '' : `<div class="stat-row"><span>Опыт</span><b>${p.xp}</b><span class="muted">/${lvlNext}</span></div>`}
+          ${[['Очки здоровья', R.maxHP(p), 'hp'], ['Очки действия', R.maxAP(p), 'ap'], ['Класс брони', R.AC(p), 'ac'], ['Грузоподъёмность', R.carryMax(p) + ' кг', 'carry'],
+             ['Урон в ближнем', '+' + R.meleeBonus(p), 'mb'], ['Шанс крита', R.critChance(p) + '%', 'crit'], ['Порядок хода', R.sequence(p), 'seq'], ['Лечение/час', R.healRate(p), 'heal'],
+             ['Очков навыков/ур.', R.skillPerLevel(p), 'spl']]
+            .map(([n, v, k]) => `<div class="stat-row" data-desc="d_${k}"><span>${n}</span><b>${v}</b><span></span></div>`).join('')}
+          ${create ? '' : `<div style="margin-top:8px" class="warn">Задания</div><div class="muted" style="font-size:12px">${questText()}</div>`}`;
+        root.querySelector('#c-skills').innerHTML = `<div class="warn" style="margin-bottom:4px">Навыки${create ? ` · профильных: ${p.tags.length}/3` : p.freePts ? ` · свободных очков: <b>${p.freePts}</b>` : ''}</div>` + SKILLS.map(s => `
+          <div class="stat-row skill-row" data-desc="${s.id}">${create ? `<span class="tagbox ${p.tags.includes(s.id) ? 'on' : ''}" data-tag="${s.id}"></span>` : `<span>${p.tags.includes(s.id) ? '<span class="warn">★</span>' : ''}</span>`}
+          <span>${s.name}</span><b>${R.skill(p, s.id)}%</b><span class="pm">${!create && p.freePts > 0 ? `<button data-sk="${s.id}">+</button>` : ''}</span></div>`).join('');
+        root.querySelector('#c-desc').innerHTML = desc;
+        const go = root.querySelector('#c-go');
+        if (go) go.disabled = pool !== 0 || p.tags.length !== 3;
+      };
+      const DERIVED = { hp: 'Очки здоровья: 20 + СИЛ + 2×ВЫН (+ за уровни).', ap: 'Очки действия в бою: 5 + ЛОВ/2. Шаг — 1 ОД, выстрел/удар — по оружию, аптечка — 2 ОД.', ac: 'Класс брони: ЛОВ + броня. Снижает шанс попадания по вам.', carry: 'Грузоподъёмность: 15 + 8×СИЛ кг. При перегрузе двигаться нельзя.', mb: 'Бонус урона в ближнем бою: СИЛ − 5 (минимум 1).', crit: 'Шанс критического попадания (×1.5 урона, частично игнорирует броню): Удача + бонус оружия. Атака из скрытности: +30% к шансу и ×2.5 урона.', seq: 'Порядок хода: 2×ВСП. Кто выше — ходит раньше.', heal: 'Сколько ОЗ восстанавливается за час отдыха: ВЫН/3.', spl: 'Очки навыков за уровень: 5 + 2×ИНТ.' };
+      root.addEventListener('mouseover', e => {
+        const r = e.target.closest('[data-desc]');
+        if (!r) return;
+        const k = r.dataset.desc;
+        const s = SPECIAL.find(x => x.id === k) || SKILLS.find(x => x.id === k);
+        desc = s ? `<b class="warn">${s.name}</b> — ${s.desc}` : DERIVED[k.slice(2)] || '';
+        root.querySelector('#c-desc').innerHTML = desc;
+      });
+      root.addEventListener('click', e => {
+        const st = e.target.closest('[data-st]');
+        if (st) {
+          const k = st.dataset.st, d = +st.dataset.d;
+          if (d > 0 && pool > 0 && p.stats[k] < 10) { p.stats[k]++; pool--; }
+          if (d < 0 && p.stats[k] > 1) { p.stats[k]--; pool++; }
+          draw(); return;
+        }
+        const tg = e.target.closest('[data-tag]');
+        if (tg) {
+          const k = tg.dataset.tag;
+          if (p.tags.includes(k)) p.tags.splice(p.tags.indexOf(k), 1);
+          else if (p.tags.length < 3) p.tags.push(k);
+          draw(); return;
+        }
+        const sk = e.target.closest('[data-sk]');
+        if (sk && p.freePts > 0) {
+          const k = sk.dataset.sk;
+          p.skillPts[k] = (p.skillPts[k] || 0) + 1; p.freePts--;
+          draw(); U.refresh(); return;
+        }
+        if (e.target.id === 'c-go') {
+          p.name = root.querySelector('#c-name').value.trim() || 'Странник';
+          p.hp = R.maxHP(p);
+          U.closeModal();
+          onDone && onDone(p);
+        }
+      });
+      draw();
+      if (!create) modalRefresh = draw;
+    }, { full: create });
+  };
+
+  function questText() {
+    const q = G.quests.meds;
+    if (!q) return 'Нет активных заданий. Поговорите с жителями Ржавого Ручья.';
+    if (q >= 3) return '✔ Лекарства для Ручья — выполнено.';
+    if (G.hasItem('meds')) return '► Лекарства для Ручья: верните ящик медикаментов Михалычу.';
+    return '► Лекарства для Ручья: найдите ящик медикаментов на Блокпосту 17 (северо-восток).';
+  }
+
+  // ---------- заставка / смерть ----------
+  U.openTitle = function (hasSave, onNew, onLoad) {
+    U._onNew = onNew; U._onLoad = onLoad;
+    U.openModal('title', `<div class="title-screen">
+      <h1>ПУСТОШЬ</h1><div class="sub">РЖАВЫЙ РУЧЕЙ · ДЕМО</div>
+      <button class="primary" id="t-new">Новая игра</button>
+      <button id="t-load" ${hasSave ? '' : 'disabled'}>Загрузить</button>
+      ${window.desktop ? '<button id="t-quit">Выход</button>' : ''}
+      <div class="muted" style="margin-top:22px;font-size:12px;line-height:1.6">ЛКМ — идти / действие · ПКМ — отменить режим · колесо — масштаб<br>
+      A атака · S красться · K кража · L взлом · X осмотр · H лечить · R перезарядка<br>I инвентарь · C персонаж · M карта · Пробел — конец хода · F5/F9 — сохранить/загрузить</div>
+    </div>
+    <div class="version-box"><button id="t-upd" class="upd hidden" data-tip="Доступно обновление">!</button><span>${window.GAME_VERSION}</span></div>`, root => {
+      root.querySelector('#t-new').onclick = onNew;
+      root.querySelector('#t-load').onclick = onLoad;
+      const q = root.querySelector('#t-quit');
+      if (q) q.onclick = () => window.desktop.quit();
+      const upd = root.querySelector('#t-upd');
+      const show = info => {
+        if (!info || !info.newer || !upd.isConnected) return;
+        upd.classList.remove('hidden');
+        upd.dataset.tip = `Доступно обновление ${info.tag}`;
+        upd.onclick = () => U.openUpdate(info);
+      };
+      if (UPD.latest) show(UPD.latest); else UPD.check().then(show);
+    }, { full: true });
+  };
+  U.openUpdate = function (info) {
+    const back = () => U.openTitle(G.hasSave(), U._onNew, U._onLoad);
+    U.openModal('update', `<div class="modal" style="width:540px">
+      <h2>Обновление ${info.tag}</h2>
+      <div class="screen" style="max-height:260px;white-space:pre-line;margin-bottom:10px">Текущая версия: ${window.GAME_VERSION}
+Новая версия: ${info.tag}
+
+${(info.notes || '').replace(/</g, '&lt;')}</div>
+      <div class="muted" style="font-size:12px;margin-bottom:10px">Скачайте архив, распакуйте его поверх старой папки (или в новую) и запустите Poostosh.exe. Сохранения не пострадают.</div>
+      <div class="cols" style="justify-content:flex-end"><button id="u-back">Назад</button><button id="u-page">Страница релиза</button><button class="primary" id="u-dl">Скачать</button></div></div>`, root => {
+      root.querySelector('#u-back').onclick = back;
+      root.querySelector('#u-page').onclick = () => UPD.open(info.page);
+      root.querySelector('#u-dl').onclick = () => UPD.open(info.url);
+    }, { full: true });
+  };
+
+  U.openDead = function (onLoad, onNew) {
+    U.openModal('dead', `<div class="title-screen"><h1 style="color:#ff5a3c">ВЫ ПОГИБЛИ</h1><div class="sub">Пустошь забирает своё.</div>
+      <button class="primary" id="d-load">Загрузить сохранение</button><button id="d-new">Новая игра</button></div>`, root => {
+      root.querySelector('#d-load').onclick = onLoad;
+      root.querySelector('#d-new').onclick = onNew;
+    }, { full: true });
+  };
+
+  return U;
+})();

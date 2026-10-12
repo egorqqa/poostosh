@@ -1,0 +1,273 @@
+// Состояние игры, главный цикл, ввод, сохранение
+(function () {
+  const { ITEMS } = DATA;
+  const SAVE_KEY = 'wasteland_demo_save_v1';
+
+  const G = window.G = {
+    scene: 'menu', mode: 'play', player: null, loc: null, locStates: {}, quests: { meds: 0 }, flags: {},
+    time: 8 * 60, world: null, combat: null, sneaking: false, dialog: null, risk: 0, grace: 0,
+    ui: { mode: 'move', hover: null, previewPath: null, apCost: 0 },
+  };
+
+  // ---------- API для диалогов и систем ----------
+  G.log = (t, c) => UI.log(t, c);
+  G.hint = t => UI.hint(t);
+  G.maxHP = a => R.maxHP(a);
+  G.hasItem = id => R.count(G.player, id) > 0;
+  G.addItem = (a, id, n) => R.addItem(a, id, n);
+  G.takeFrom = (a, id, n) => R.removeItem(a, id, n);
+  G.findNpc = tpl => G.loc && G.loc.actors.find(a => a.tpl === tpl && !a.dead);
+
+  G.passTime = function (min) {
+    const before = Math.floor(G.time / 60);
+    G.time += min;
+    const hours = Math.floor(G.time / 60) - before;
+    if (hours > 0 && G.scene === 'local' && !G.combat) {
+      const p = G.player;
+      p.hp = Math.min(R.maxHP(p), p.hp + hours * R.healRate(p));
+    }
+  };
+  G.clockText = function () {
+    const d = Math.floor(G.time / 1440) + 1, h = Math.floor(G.time / 60) % 24, m = Math.floor(G.time % 60);
+    return `День ${d} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  G.giveXP = function (n) {
+    const p = G.player;
+    p.xp += n;
+    G.log(`+${n} опыта.`, 'good');
+    while (p.xp >= R.xpForLevel(p.level)) {
+      p.level++;
+      const pts = R.skillPerLevel(p);
+      p.freePts += pts;
+      p.hp = R.maxHP(p);
+      G.log(`НОВЫЙ УРОВЕНЬ ${p.level}! +${pts} очков навыков (окно «Персонаж»).`, 'good');
+      if (G.loc) ENG.floater(p.x, p.y, 'Новый уровень!', '#f0b43c');
+    }
+    UI.refresh();
+  };
+
+  G.equip = function (id) {
+    const p = G.player, it = ITEMS[id];
+    if (G.combat && !G.combat.spend(2)) { G.log('Нужно 2 ОД, чтобы сменить снаряжение.', 'warn'); return; }
+    if (it.type === 'weapon') {
+      G.unequip('weapon', true);
+      R.removeItem(p, id, 1); p.weapon = id; p.loaded = 0;
+      if (it.mag) { const n = Math.min(it.mag, R.count(p, it.ammo)); R.removeItem(p, it.ammo, n); p.loaded = n; }
+      G.log(`В руках: ${it.name}.`, 'sys');
+    } else if (it.type === 'armor') {
+      G.unequip('armor', true);
+      R.removeItem(p, id, 1); p.armor = id;
+      G.log(`Надето: ${it.name}.`, 'sys');
+    }
+    UI.refresh();
+  };
+  G.unequip = function (slot, silent) {
+    const p = G.player;
+    if (!p[slot]) return;
+    if (slot === 'weapon') {
+      const w = ITEMS[p.weapon];
+      if (w.ammo && p.loaded > 0) R.addItem(p, w.ammo, p.loaded);
+      p.loaded = 0;
+    }
+    R.addItem(p, p[slot], 1);
+    if (!silent) G.log(`Снято: ${ITEMS[p[slot]].name}.`, 'sys');
+    p[slot] = null;
+  };
+
+  G.useItem = function (id) {
+    const p = G.player, it = ITEMS[id];
+    if (it.type !== 'aid') return;
+    if (G.combat && !G.combat.spend(2)) { G.log('Нужно 2 ОД.', 'warn'); return; }
+    const h = R.healAmount(p, id);
+    R.removeItem(p, id, 1);
+    p.hp = Math.min(R.maxHP(p), p.hp + h);
+    G.log(`${it.name}: +${h} ОЗ.`, 'good');
+    if (G.loc) ENG.floater(p.x, p.y, '+' + h, '#9dff8a');
+    UI.refresh();
+    if (G.combat) COMBAT.autoEnd(G);
+  };
+
+  // Навык «Медицина»: первая помощь без расходников
+  G.firstAid = function () {
+    const p = G.player;
+    if (p.hp >= R.maxHP(p)) { G.hint('Вы здоровы'); return; }
+    if (G.combat) {
+      if (!G.combat.spend(4)) { G.log('Первая помощь в бою: 4 ОД.', 'warn'); return; }
+    } else if (G.time - p.lastFirstAid < 120) {
+      G.log(`Первую помощь можно оказывать раз в 2 часа (через ${120 - (G.time - p.lastFirstAid)} мин).`, 'warn'); return;
+    }
+    const res = R.check(R.skill(p, 'medic') + 20, p.stats.luck);
+    p.lastFirstAid = G.time;
+    if (!G.combat) G.passTime(15);
+    if (res.ok) {
+      const h = R.rnd(2, 6) + Math.floor(R.skill(p, 'medic') / 6);
+      p.hp = Math.min(R.maxHP(p), p.hp + h);
+      G.log(`Первая помощь (${res.chance}%): +${h} ОЗ.`, 'good');
+      if (G.loc) ENG.floater(p.x, p.y, '+' + h, '#9dff8a');
+      if (!G.combat) G.giveXP(5);
+    } else G.log(`Первая помощь не удалась (${res.chance}%).`, 'warn');
+    UI.refresh();
+    if (G.combat) COMBAT.autoEnd(G);
+  };
+
+  G.gameOver = function () {
+    G.player.dead = true;
+    G.log('Вы погибли.', 'bad');
+    setTimeout(() => UI.openDead(() => G.load(), () => location.reload()), 1200);
+  };
+
+  // ---------- сохранение ----------
+  G.save = function () {
+    if (G.combat) { G.log('Нельзя сохраняться в бою.', 'warn'); return; }
+    if (G.scene === 'local') WORLD_API.saveLocationState(G);
+    const p = { ...G.player };
+    delete p.path; delete p.onArrive; delete p.stepCb;
+    const data = { player: p, locStates: G.locStates, quests: G.quests, flags: G.flags, time: G.time, world: G.world,
+      scene: G.scene, locId: G.loc && !G.loc.def.temp ? G.loc.id : null };
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); G.log('Игра сохранена.', 'good'); }
+    catch (e) { G.log('Не удалось сохранить: ' + e.message, 'bad'); }
+  };
+  G.hasSave = function () { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } };
+  G.load = function () {
+    let data;
+    try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { data = null; }
+    if (!data) { G.hint('Сохранений нет'); return; }
+    UI.closeModal();
+    Object.assign(G, { player: data.player, locStates: data.locStates, quests: data.quests, flags: data.flags, time: data.time, world: data.world, combat: null, dialog: null, mode: 'play' });
+    G.player.dead = false;
+    UI.hideDialog();
+    WMAP.leave();
+    if (data.locId) {
+      const p = G.player;
+      WORLD_API.loadLocation(G, data.locId, { at: { x: p.x, y: p.y } });
+    } else WMAP.enter(G);
+    G.log('Игра загружена.', 'good');
+  };
+
+  function newGame() {
+    UI.openCharacter(true, p => {
+      G.player = p;
+      G.locStates = {}; G.quests = { meds: 0 }; G.flags = {}; G.time = 8 * 60;
+      G.world = WMAP.initState();
+      document.getElementById('log-box').innerHTML = '';
+      G.log(`${p.name}, вы выходите из пустоши к поселению у старой заправки.`, 'sys');
+      G.log('Подсказка: поговорите со старостой Михалычем (клик по NPC).', 'sys');
+      WORLD_API.loadLocation(G, 'camp');
+    });
+  }
+
+  // ---------- ввод ----------
+  function bindInput() {
+    const cv = ENG.canvas;
+    cv.addEventListener('mousemove', e => {
+      ENG.mouse.sx = e.clientX; ENG.mouse.sy = e.clientY; ENG.mouse.inside = true;
+      updateHover();
+    });
+    cv.addEventListener('mouseleave', () => { ENG.mouse.inside = false; ENG.mouse.tile = null; });
+    cv.addEventListener('mousedown', e => {
+      if (e.button !== 0 || UI.modalOpen()) return;
+      ENG.mouse.sx = e.clientX; ENG.mouse.sy = e.clientY; ENG.mouse.inside = true;
+      if (G.scene === 'world') { WMAP.click(G, e.clientX, e.clientY); return; }
+      if (G.scene !== 'local' || G.mode === 'dialog' || G.player.dead) return;
+      updateHover();
+      WORLD_API.click(G, ENG.mouse.tile, G.ui.hover || {});
+      UI.refresh();
+    });
+    cv.addEventListener('contextmenu', e => { e.preventDefault(); UI.setMode(G.ui.mode === 'move' ? 'attack' : 'move'); });
+    cv.addEventListener('wheel', e => {
+      ENG.zoom = Math.max(0.55, Math.min(1.8, ENG.zoom * (e.deltaY < 0 ? 1.1 : 0.9)));
+    }, { passive: true });
+
+    addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT') return;
+      const k = e.key.toLowerCase();
+      if (e.key === 'F5') { e.preventDefault(); if (G.player) G.save(); return; }
+      if (e.key === 'F9') { e.preventDefault(); G.load(); return; }
+      if (e.key === 'F2') { e.preventDefault(); G.debug = !G.debug; return; }
+      if (!G.player || G.scene === 'menu') return;
+      if (G.mode === 'dialog' && G.dialog) {
+        const n = parseInt(e.key, 10);
+        if (n >= 1 && n <= 9) WORLD_API.dialogChoose(G, n - 1);
+        return;
+      }
+      if (e.key === 'Escape') { if (UI.modalOpen()) { if (!['create', 'title', 'dead', 'enc'].includes(currentModalName())) UI.closeModal(); } else UI.setMode('move'); return; }
+      const map = { '1': 'move', a: 'attack', ф: 'attack', s: 'sneak', ы: 'sneak', k: 'steal', л: 'steal', l: 'lockpick', д: 'lockpick', x: 'look', ч: 'look', h: 'heal', р: 'heal', r: 'reload', к: 'reload', i: 'inventory', ш: 'inventory', c: 'character', с: 'character', m: 'map', ь: 'map' };
+      if (k === ' ') { e.preventDefault(); if (G.combat) COMBAT.endPlayerTurn(G); return; }
+      if (map[k]) {
+        if (UI.modalOpen() && !['inventory', 'character'].includes(map[k])) return;
+        UI.action(map[k]);
+      }
+    });
+  }
+  function currentModalName() { const r = document.getElementById('modal-root'); return r.firstElementChild && r.firstElementChild.classList.contains('title-screen') ? 'title' : r.querySelector('#c-go') ? 'create' : ''; }
+
+  function updateHover() {
+    if (G.scene !== 'local' || !G.loc) { G.ui.hover = null; return; }
+    const w = ENG.screenToWorld(ENG.mouse.sx, ENG.mouse.sy);
+    const t = ENG.fromIso(w.x, w.y - 16);
+    const tile = { x: Math.floor(t.x + 0.5), y: Math.floor(t.y + 0.5) };
+    const changed = !ENG.mouse.tile || tile.x !== ENG.mouse.tile.x || tile.y !== ENG.mouse.tile.y;
+    ENG.mouse.tile = tile;
+    const prev = G.ui.hover;
+    G.ui.hover = WORLD_API.pick(G, w.x, w.y);
+    // предпросмотр пути и стоимости в бою
+    const p = G.player;
+    let cost = 0;
+    if (G.combat && G.combat.isPlayerTurn() && !G.combat.busy) {
+      const a = G.ui.hover.actor;
+      if (a && !a.dead && a.hostile) { cost = R.weaponOf(p).ap; G.ui.previewPath = null; }
+      else if (changed) {
+        const path = ENG.findPath(G.loc, p.x, p.y, tile.x, tile.y, { maxLen: 30 });
+        G.ui.previewPath = path;
+      }
+      if (!a && G.ui.previewPath) cost = Math.min(G.ui.previewPath.length, p.ap);
+    } else G.ui.previewPath = null;
+    const hoverChanged = !prev || prev.actor !== G.ui.hover.actor || prev.obj !== G.ui.hover.obj;
+    if (cost !== G.ui.apCost || hoverChanged) { G.ui.apCost = cost; UI.refresh(); }
+    // курсор
+    const h = G.ui.hover;
+    if (G.ui.mode === 'move') ENG.canvas.style.cursor = h.actor ? (h.actor.hostile && !h.actor.dead ? 'crosshair' : 'pointer') : h.obj && h.obj.container ? 'pointer' : 'default';
+  }
+
+  // ---------- цикл ----------
+  let last = performance.now(), clockAcc = 0;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    const t = now / 1000;
+    if (G.scene === 'local' && G.loc) {
+      WORLD_API.update(G, dt);
+      ENG.updateFx(dt);
+      ENG.render(G, t);
+      if (!G.combat && G.mode !== 'dialog') {
+        clockAcc += dt;
+        if (clockAcc >= 2) { clockAcc = 0; G.passTime(1); document.getElementById('clock').textContent = G.clockText(); }
+      }
+    } else if (G.scene === 'world') {
+      WMAP.update(G, dt);
+      WMAP.render(G, t);
+    } else {
+      ENG.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ENG.ctx.fillStyle = '#000';
+      ENG.ctx.fillRect(0, 0, ENG.canvas.width, ENG.canvas.height);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- старт ----------
+  async function boot() {
+    ENG.init(document.getElementById('view'));
+    UI.init(G);
+    G.log('Загрузка ассетов...', 'sys');
+    await ENG.load();
+    document.getElementById('log-box').innerHTML = '';
+    bindInput();
+    G.player = R.newPlayer('Странник', { str: 5, per: 5, end: 5, cha: 5, int: 5, agi: 5, luck: 5 }, []);
+    G.player.hp = R.maxHP(G.player);
+    UI.refresh();
+    UI.openTitle(G.hasSave(), newGame, () => G.load());
+    requestAnimationFrame(frame);
+  }
+  boot();
+})();

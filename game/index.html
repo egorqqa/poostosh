@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Пустошь: Ржавый Ручей</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="game">
+  <canvas id="view"></canvas>
+
+  <div id="topbar">
+    <div id="loc-name"></div>
+    <div id="status-tags"></div>
+    <div id="clock"></div>
+  </div>
+  <div id="float-hint"></div>
+
+  <!-- Нижний интерфейс -->
+  <div id="hud">
+    <div id="hud-left" class="panel">
+      <div id="dialog-box" class="hidden">
+        <div class="dlg-head"><img id="dlg-portrait" alt=""><div><div id="dlg-name"></div><div id="dlg-sub"></div></div></div>
+        <div id="dlg-text"></div>
+        <ol id="dlg-options"></ol>
+      </div>
+      <div id="log-box"></div>
+    </div>
+
+    <div id="hud-center">
+      <div id="ap-bar"></div>
+      <div id="weapon-box" class="panel" title="ЛКМ — режим атаки, ПКМ — перезарядка">
+        <div id="wpn-name"></div>
+        <div id="wpn-icon"></div>
+        <div id="wpn-info"></div>
+      </div>
+      <div id="vitals">
+        <div class="vit"><span>ОЗ</span><b id="hp-val"></b></div>
+        <div class="vit"><span>КБ</span><b id="ac-val"></b></div>
+        <div class="vit"><span>ОД</span><b id="ap-val"></b></div>
+        <button id="btn-endturn" class="hidden">Конец хода</button>
+      </div>
+    </div>
+
+    <div id="hud-right" class="panel">
+      <div id="actions"></div>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="tooltip"></div>
+</div>
+
+<script src="js/version.js"></script>
+<script src="js/manifest.js"></script>
+<script src="js/updater.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/data.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/world.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/worldmap.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
