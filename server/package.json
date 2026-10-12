@@ -1,0 +1,8 @@
+{
+  "name": "poostosh-server",
+  "private": true,
+  "description": "Выделенный сервер игры «Пустошь»",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "^8.18.0" }
+}

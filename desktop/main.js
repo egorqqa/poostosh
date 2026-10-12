@@ -9,7 +9,7 @@ let server = null;
 function startServer(opts) {
   if (server) return { ok: true, port: server.port, addresses: server.addresses, already: true };
   const { createServer } = require('../server/server.js');
-  server = createServer({ port: +opts.port || 7777, password: opts.password || '', dataDir: app.getPath('userData'), log: console.log });
+  server = createServer({ port: +opts.port || 7777, password: opts.password || '', name: opts.name, motd: opts.motd, max: opts.max, dataDir: app.getPath('userData'), log: console.log });
   return { ok: true, port: server.port, addresses: server.addresses };
 }
 
@@ -17,7 +17,7 @@ function startServer(opts) {
 if (args.includes('--server')) {
   app.whenReady().then(() => {
     const port = +arg('port', 7777);
-    startServer({ port, password: arg('password', '') });
+    startServer({ port, password: arg('password', ''), name: arg('name', 'Пустошь'), motd: arg('motd', ''), max: arg('max', 32) });
     const win = new BrowserWindow({ width: 820, height: 560, title: 'Сервер «Пустошь»', autoHideMenuBar: true, icon: path.join(__dirname, 'icon.ico'), backgroundColor: '#0d0b08' });
     win.setMenu(null);
     setTimeout(() => win.loadURL(`http://127.0.0.1:${port}/server`), 400);

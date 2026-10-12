@@ -1,0 +1,17 @@
+# Запуск: заполните .env (см. deploy/.env.example) и выполните  docker compose up -d --build
+services:
+  poostosh:
+    build: .
+    container_name: poostosh
+    restart: unless-stopped
+    ports:
+      - "${PORT:-7777}:7777"
+    environment:
+      PASSWORD: "${PASSWORD:-}"
+      SERVER_NAME: "${SERVER_NAME:-Пустошь}"
+      MOTD: "${MOTD:-}"
+      MAX_PLAYERS: "${MAX_PLAYERS:-32}"
+    volumes:
+      - poostosh-data:/data
+volumes:
+  poostosh-data:

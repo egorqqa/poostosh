@@ -22,3 +22,15 @@ jobs:
           name: ${{ github.ref_name }}
           body_path: CHANGELOG_LATEST.md
           files: dist/*.zip
+
+  server-docker-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Сборка образа сервера
+        run: docker build -t poostosh-server .
+      - name: Запуск и проверка /info
+        run: |
+          docker run -d --name srv -p 7777:7777 -e PASSWORD=test -e SERVER_NAME=CI poostosh-server
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:7777/info && exit 0; sleep 1; done
+          docker logs srv; exit 1

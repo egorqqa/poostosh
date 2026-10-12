@@ -22,6 +22,9 @@ function localAddresses() {
 function createServer(opts = {}) {
   const port = +opts.port || 7777;
   const password = String(opts.password || '');
+  const serverName = String(opts.name || 'Пустошь').slice(0, 40);
+  const motd = String(opts.motd || '').slice(0, 300);
+  const maxPlayers = +opts.max || 32;
   const log = opts.log || console.log;
   const dataFile = opts.dataDir ? path.join(opts.dataDir, 'world.json') : path.join(__dirname, '..', 'data', 'world.json');
   const version = readVersion();
@@ -76,7 +79,7 @@ function createServer(opts = {}) {
     const url = decodeURIComponent(req.url.split('?')[0]);
     if (url === '/info') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
-      res.end(JSON.stringify({ name: 'Пустошь', version, players: playerList(), uptime: Math.round((Date.now() - started) / 1000), log: logLines.slice(-60), addresses: localAddresses(), port, locked: !!password }));
+      res.end(JSON.stringify({ name: serverName, motd, max: maxPlayers, version, players: playerList(), uptime: Math.round((Date.now() - started) / 1000), log: logLines.slice(-60), addresses: localAddresses(), port, locked: !!password }));
       return;
     }
     if (url === '/server') { serveFile(path.join(__dirname, 'status.html'), res); return; }
@@ -104,13 +107,14 @@ function createServer(opts = {}) {
       try { m = JSON.parse(raw); } catch (e) { return; }
       if (!p.ready) {
         if (m.t !== 'hello') return;
+        if (playerList().length >= maxPlayers) { send(p, { t: 'error', code: 'full', text: `Сервер заполнен (${maxPlayers} игроков)` }); setTimeout(() => ws.close(), 100); return; }
         if (password && m.password !== password) { send(p, { t: 'error', code: 'password', text: 'Неверный пароль' }); say('Отказ (пароль):', p.ip); setTimeout(() => ws.close(), 100); return; }
         let name = String(m.name || 'Странник').slice(0, 18).trim() || 'Странник';
         const taken = new Set(playerList().map(x => x.name));
         for (let i = 2; taken.has(name); i++) name = `${String(m.name).slice(0, 15)} ${i}`;
         p.name = name; p.ready = true;
         clearTimeout(kick);
-        send(p, { t: 'welcome', id: p.id, name, version, players: playerList() });
+        send(p, { t: 'welcome', id: p.id, name, version, players: playerList(), serverName, motd });
         toAll({ t: 'players', players: playerList() });
         toAll({ t: 'chat', system: true, text: `${name} заходит на сервер.` }, p.id);
         say('Вошёл:', name, `(${p.ip})`, m.version !== version ? `— версия клиента ${m.version}, сервера ${version}` : '');
@@ -179,7 +183,7 @@ function createServer(opts = {}) {
 
   httpServer.on('error', e => say('Ошибка сервера:', e.message));
   httpServer.listen(port, () => {
-    say(`Сервер «Пустошь» ${version} запущен. Порт ${port}${password ? ', с паролем' : ', без пароля'}.`);
+    say(`Сервер «${serverName}» ${version} запущен. Порт ${port}${password ? ', с паролем' : ', без пароля'}, до ${maxPlayers} игроков.`);
     say('Адреса для подключения:', [...localAddresses(), '127.0.0.1'].join(', '));
   });
 
@@ -194,7 +198,11 @@ module.exports = { createServer, localAddresses };
 if (require.main === module) {
   const args = process.argv.slice(2);
   const arg = (n, d) => { const i = args.indexOf('--' + n); return i >= 0 && args[i + 1] != null ? args[i + 1] : d; };
-  const srv = createServer({ port: arg('port', 7777), password: arg('password', ''), dataDir: arg('data', null) });
+  const env = process.env;
+  const srv = createServer({
+    port: arg('port', env.PORT || 7777), password: arg('password', env.PASSWORD || ''), dataDir: arg('data', env.DATA_DIR || null),
+    name: arg('name', env.SERVER_NAME || 'Пустошь'), motd: arg('motd', env.MOTD || ''), max: arg('max', env.MAX_PLAYERS || 32),
+  });
   const stop = () => { srv.close(); process.exit(0); };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);

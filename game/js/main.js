@@ -318,7 +318,13 @@
       G.player.dead = false;
       if (G.player.hp <= 0) G.player.hp = Math.ceil(R.maxHP(G.player) / 2);
       document.getElementById('log-box').innerHTML = '';
-      G.log(`Вы на сервере ${NET.server} как «${NET.name}». Игроков онлайн: ${NET.players.length}. Enter — чат.`, 'good');
+      G.log(`Вы на сервере «${NET.serverName}» (${NET.server}) как «${NET.name}». Игроков онлайн: ${NET.players.length}. Enter — чат, «/о текст» — чат отряда.`, 'good');
+      if (NET.motd) G.log(NET.motd, 'warn');
+      try {
+        const rec = JSON.parse(localStorage.getItem('mp_recent') || '[]').filter(s => s.host + ':' + s.port !== NET.server);
+        rec.unshift({ host: NET.server.split(':')[0], port: +NET.server.split(':')[1], name: NET.serverName });
+        localStorage.setItem('mp_recent', JSON.stringify(rec.slice(0, 6)));
+      } catch (e) { /* */ }
       if (NET.serverVersion !== window.GAME_VERSION) G.log(`Внимание: версия сервера ${NET.serverVersion}, у вас ${window.GAME_VERSION}.`, 'warn');
       G.world.c = DATA.WORLD.start.x; G.world.r = DATA.WORLD.start.y;
       WORLD_API.goLocation(G, 'camp');

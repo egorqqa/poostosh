@@ -28,6 +28,31 @@ git tag vДДММГГ.НОМЕР && git push --tags   # GitHub Actions собе�
 - Чат — клавиша **Enter**. Персонаж сохраняется отдельно для каждого сервера.
 - Клик по другому игроку: **обмен** (обе стороны выкладывают предметы и крышки и нажимают «Готов») или **приглашение в отряд**. Отряд: панель с ОЗ и местом союзников, их метки на карте мира, 30% опыта союзникам, чат отряда — сообщение с префиксом `/о`.
 
+## Свой сервер в интернете (VPS)
+Подойдёт любой VPS с Linux (1 ядро, 512 МБ ОЗУ хватит). Откройте на нём TCP-порт 7777.
+
+**Вариант 1 — Docker:**
+```
+git clone https://github.com/egorqqa/poostosh.git && cd poostosh
+cp deploy/.env.example .env && nano .env        # пароль, название, приветствие, лимит игроков
+docker compose up -d --build
+```
+Мир хранится в томе `poostosh-data` и переживает перезапуски. Обновление: `git pull && docker compose up -d --build`.
+
+**Вариант 2 — без Docker (Ubuntu/Debian, systemd):**
+```
+curl -fsSL https://raw.githubusercontent.com/egorqqa/poostosh/main/deploy/install.sh | sudo bash
+sudo nano /opt/poostosh/.env && sudo systemctl restart poostosh
+```
+Журнал: `journalctl -u poostosh -f`. Мир — в `/var/lib/poostosh/world.json`.
+
+Настройки сервера (параметры или переменные окружения): `--port`/`PORT`, `--password`/`PASSWORD`, `--name`/`SERVER_NAME`, `--motd`/`MOTD`, `--max`/`MAX_PLAYERS`, `--data`/`DATA_DIR`. Страница состояния: `http://IP:7777/server`, играть в браузере: `http://IP:7777`.
+
+**Список серверов в игре.** В окне «Сетевая игра» показываются серверы из файла [`servers.json`](servers.json) этого репозитория, избранные и недавние — с онлайном, версией и пингом. Чтобы ваш VPS видели все, добавьте его в `servers.json`:
+```json
+{ "servers": [ { "name": "Пустошь — общий мир", "host": "203.0.113.10", "port": 7777 } ] }
+```
+
 ## Управление
 | Действие | Клавиша / мышь |
 |---|---|

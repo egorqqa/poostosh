@@ -29,7 +29,7 @@ window.NET = (function () {
           if (m.t === 'error') { fail(m.text || 'Отказано'); return; }
           if (m.t === 'welcome') {
             done = true; clearTimeout(to);
-            Object.assign(N, { ws, active: true, id: m.id, name: m.name, server: `${host}:${port}`, players: m.players, serverVersion: m.version });
+            Object.assign(N, { ws, active: true, id: m.id, name: m.name, server: `${host}:${port}`, players: m.players, serverVersion: m.version, serverName: m.serverName || 'Пустошь', motd: m.motd || '' });
             startTimers();
             resolve(m);
           }

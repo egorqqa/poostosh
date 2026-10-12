@@ -585,6 +585,12 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
     const back = () => U.openTitle(G.hasSave(), U._onNew, U._onLoad);
     U.openModal('mp', `<div class="modal" style="width:min(720px,96vw)">
       <h2>Сетевая игра <button class="close" id="mp-back">✕</button></h2>
+      <div class="screen" style="margin-bottom:8px">
+        <div class="cols" style="justify-content:space-between;align-items:center"><span class="warn">Серверы</span>
+          <span><button id="sl-refresh">Обновить</button> <button id="sl-fav" data-tip="Добавить адрес из поля «Адрес сервера» в избранное">★ В избранное</button></span></div>
+        <div id="sl-list" style="max-height:190px;overflow:auto;margin-top:6px"><div class="muted">Загрузка списка...</div></div>
+        <div class="muted" style="font-size:11px;margin-top:4px">Клик — выбрать сервер, двойной клик — подключиться. Общий список серверов — файл servers.json в репозитории игры.</div>
+      </div>
       <div class="cols">
         <div class="screen" style="flex:1">
           <div class="warn">Подключиться к серверу</div>
@@ -615,6 +621,56 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
         catch (e) { st.textContent = 'Ошибка: ' + e; }
       };
       root.querySelector('#mp-join').onclick = () => join(root.querySelector('#mp-host').value.trim(), +root.querySelector('#mp-port').value || 7777, root.querySelector('#mp-pass').value, root.querySelector('#mp-name').value.trim() || 'Странник');
+      // ---------- список серверов ----------
+      const load = k => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) { return []; } };
+      const listEl = root.querySelector('#sl-list');
+      const fill = s => { root.querySelector('#mp-host').value = s.host; root.querySelector('#mp-port').value = s.port; };
+      async function probe(s) {
+        const ctl = new AbortController(), t0 = performance.now();
+        const to = setTimeout(() => ctl.abort(), 3000);
+        try {
+          const r = await fetch(`http://${s.host}:${s.port}/info`, { signal: ctl.signal, cache: 'no-store' });
+          const i = await r.json();
+          return { ...s, info: i, ping: Math.round(performance.now() - t0) };
+        } catch (e) { return { ...s, info: null }; } finally { clearTimeout(to); }
+      }
+      async function refresh() {
+        listEl.innerHTML = '<div class="muted">Опрос серверов...</div>';
+        let pub = [];
+        try { pub = ((await (await fetch(`https://raw.githubusercontent.com/${window.GAME_REPO}/main/servers.json`, { cache: 'no-store' })).json()).servers || []).map(s => ({ ...s, src: 'список' })); } catch (e) { /* нет сети */ }
+        const all = [...load('mp_favs').map(s => ({ ...s, src: '★' })), ...pub, ...load('mp_recent').map(s => ({ ...s, src: 'недавний' })), { host: '127.0.0.1', port: 7777, name: 'Этот компьютер', src: 'локальный' }];
+        const seen = new Set(), uniq = all.filter(s => { const k = s.host + ':' + s.port; if (seen.has(k)) return false; seen.add(k); return true; });
+        const res = await Promise.all(uniq.map(probe));
+        res.sort((a, b) => (!!b.info - !!a.info) || ((b.info ? b.info.players.length : 0) - (a.info ? a.info.players.length : 0)));
+        listEl.innerHTML = res.map((s, i) => {
+          const i2 = s.info, ver = i2 && i2.version !== window.GAME_VERSION;
+          return `<div class="item" data-sl="${i}" style="grid-template-columns:1fr auto auto;${i2 ? '' : 'opacity:.5'}">
+            <div><div class="nm">${i2 && i2.locked ? '🔒 ' : ''}${(i2 && i2.name) || s.name || s.host}</div><div class="sub">${s.host}:${s.port} · ${s.src}${i2 && i2.motd ? ' · ' + i2.motd.replace(/</g, '&lt;').slice(0, 60) : ''}</div></div>
+            <div class="qty">${i2 ? `${i2.players.length}/${i2.max || '?'} · <span class="${ver ? 'bad' : ''}" data-tip="${ver ? 'Версия отличается от вашей' : ''}">${i2.version}</span> · ${s.ping} мс` : 'не отвечает'}</div>
+            <div>${s.src === '★' ? `<button data-unfav="${s.host}:${s.port}" style="padding:0 6px">✕</button>` : ''}</div></div>`;
+        }).join('') || '<div class="muted">Серверов нет. Создайте свой или введите адрес вручную.</div>';
+        listEl._res = res;
+      }
+      listEl.addEventListener('click', e => {
+        const un = e.target.closest('[data-unfav]');
+        if (un) { localStorage.setItem('mp_favs', JSON.stringify(load('mp_favs').filter(s => s.host + ':' + s.port !== un.dataset.unfav))); refresh(); return; }
+        const r = e.target.closest('[data-sl]'); if (r) fill(listEl._res[+r.dataset.sl]);
+      });
+      listEl.addEventListener('dblclick', e => {
+        const r = e.target.closest('[data-sl]'); if (!r) return;
+        fill(listEl._res[+r.dataset.sl]);
+        root.querySelector('#mp-join').click();
+      });
+      root.querySelector('#sl-refresh').onclick = refresh;
+      root.querySelector('#sl-fav').onclick = () => {
+        const host = root.querySelector('#mp-host').value.trim(), port = +root.querySelector('#mp-port').value || 7777;
+        if (!host) return;
+        const f = load('mp_favs').filter(s => s.host + ':' + s.port !== host + ':' + port);
+        f.unshift({ host, port, name: host });
+        localStorage.setItem('mp_favs', JSON.stringify(f.slice(0, 20)));
+        refresh();
+      };
+      refresh();
       const sv = root.querySelector('#sv-start');
       if (sv) sv.onclick = async () => {
         const pt = +root.querySelector('#sv-port').value || 7777, pw = root.querySelector('#sv-pass').value;

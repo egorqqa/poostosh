@@ -1,0 +1,16 @@
+[Unit]
+Description=Poostosh game server
+After=network.target
+
+[Service]
+Type=simple
+User=poostosh
+WorkingDirectory=/opt/poostosh
+EnvironmentFile=/opt/poostosh/.env
+Environment=DATA_DIR=/var/lib/poostosh
+ExecStart=/usr/bin/node /opt/poostosh/server/server.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
