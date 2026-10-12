@@ -89,19 +89,24 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); font
 #dlg-options li.disabled { color: #4f6a4a; cursor: default; }
 
 /* центр: оружие */
-#hud-center { display: grid; grid-template-rows: 16px 1fr; grid-template-columns: 1fr 74px 52px; gap: 6px; }
+#hud-center { display: grid; grid-template-rows: 16px minmax(0, 1fr); grid-template-columns: 1fr 74px 52px; gap: 6px; min-height: 0; }
+#hud-center > * { min-height: 0; }
 #ap-bar { grid-column: 1 / 4; display: flex; gap: 4px; justify-content: center; align-items: center; }
 #ap-bar i { width: 14px; height: 10px; border-radius: 6px; background: #2b3a22; border: 1px solid #111; }
 #ap-bar i.on { background: radial-gradient(circle at 40% 35%, #c8ff8a, #4cc23a 60%, #2a6a20); box-shadow: 0 0 5px #6f5; }
 #ap-bar i.cost { background: radial-gradient(circle at 40% 35%, #ffe08a, #e0a020 60%, #7a5010); box-shadow: 0 0 5px #fb3; }
-#weapon-box { cursor: pointer; padding: 6px 8px; display: flex; flex-direction: column; color: var(--amber);
+#weapon-box { cursor: pointer; padding: 5px 8px; min-height: 0; display: flex; flex-direction: column; color: var(--amber);
   background: radial-gradient(ellipse at center, #1d1a10, #0b0905); }
 #weapon-box.active { outline-color: var(--amber); box-shadow: inset 0 0 18px rgba(0,0,0,.9), 0 0 10px rgba(240,180,60,.6); }
 #weapon-box:hover { filter: brightness(1.15); }
 #wpn-name { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
 #wpn-icon { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
-#wpn-icon svg { max-width: 92%; max-height: 92px; filter: drop-shadow(0 2px 3px #000); }
+#wpn-icon svg { max-width: 92%; max-height: 64px; filter: drop-shadow(0 2px 3px #000); }
 #wpn-info { display: flex; justify-content: space-between; font-size: 12px; color: #d5b56a; }
+#aim-sel { display: flex; gap: 3px; margin-top: 4px; }
+#aim-sel span { flex: 1; text-align: center; font-size: 10px; padding: 1px 0; border: 1px solid #5a4e3a; border-radius: 3px; color: #a89a7c; background: #15120c; cursor: pointer; }
+#aim-sel span:hover { color: #fff; }
+#aim-sel span.on { color: #1a1208; background: var(--amber); border-color: var(--amber); }
 #vitals { display: flex; flex-direction: column; gap: 5px; }
 .vit { background: #0b0a07; border: 1px solid #514735; border-radius: 3px; padding: 2px 5px; display: flex; justify-content: space-between; align-items: baseline; }
 .vit span { font-size: 10px; color: #a89a7c; } .vit b { color: var(--red); font-size: 16px; font-family: var(--font); }

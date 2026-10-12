@@ -29,7 +29,11 @@ window.UI = (function () {
     box.addEventListener('click', e => { const el = e.target.closest('.act'); if (el) { SND.play('ui'); U.action(el.dataset.act); } });
     $('#quick-slots').addEventListener('click', e => { const el = e.target.closest('.qs'); if (el) G.useQuick(+el.dataset.i); });
     $('#btn-sound').addEventListener('click', () => { SND.set('mute', !SND.opts.mute); U.refresh(); });
-    $('#weapon-box').addEventListener('click', () => U.action('attack'));
+    $('#weapon-box').addEventListener('click', e => {
+      const b = e.target.closest('[data-aim]');
+      if (b) { e.stopPropagation(); G.ui.aim = b.dataset.aim; SND.play('ui'); U.refresh(); return; }
+      U.action('attack');
+    });
     $('#weapon-box').addEventListener('contextmenu', e => { e.preventDefault(); U.action('reload'); });
     $('#btn-endturn').addEventListener('click', () => COMBAT.endPlayerTurn(G));
     $('#dlg-options').addEventListener('click', e => { const li = e.target.closest('li'); if (li && !li.classList.contains('disabled')) { SND.play('ui'); WORLD_API.dialogChoose(G, +li.dataset.i); } });
@@ -92,8 +96,10 @@ window.UI = (function () {
     const w = R.weaponOf(p);
     $('#wpn-name').textContent = w.name;
     $('#wpn-icon').innerHTML = ICONS.WEAPON[w.icon] || '';
-    const chance = G.ui.hover && G.ui.hover.actor && !G.ui.hover.actor.dead && G.loc ? COMBAT.hitChance(G, p, G.ui.hover.actor) : null;
-    $('#wpn-info').innerHTML = `<span>ОД ${w.ap} · урон ${w.dmg[0]}–${w.dmg[1]}${w.melee ? '' : ' · дальн. ' + w.range}</span><span>${w.mag ? `${p.loaded}/${w.mag} · ${R.count(p, w.ammo)}` : ''}${chance != null && G.ui.mode === 'attack' ? ` · ${chance}%` : ''}</span>`;
+    const aim = G.ui.aim || 'torso';
+    const chance = G.ui.hover && G.ui.hover.actor && !G.ui.hover.actor.dead && G.loc ? COMBAT.hitChance(G, p, G.ui.hover.actor, aim) : null;
+    $('#wpn-info').innerHTML = `<span>ОД ${w.ap + COMBAT.aimCost(aim)} · урон ${w.dmg[0]}–${w.dmg[1]}${w.melee ? '' : ' · дальн. ' + w.range}</span><span>${w.mag ? `${p.loaded}/${w.mag} · ${R.count(p, w.ammo)}` : ''}${chance != null && (G.ui.mode === 'attack' || G.ui.hover.actor.hostile) ? ` · <b>${chance}%</b>` : ''}</span>`;
+    $('#aim-sel').innerHTML = Object.entries(DATA.AIM).map(([k, A]) => `<span data-aim="${k}" class="${k === aim ? 'on' : ''}" data-tip="${A.name}: ${A.desc}${A.ap ? ' +' + A.ap + ' ОД.' : ''} [Z]">${A.name}</span>`).join('');
     $('#weapon-box').classList.toggle('active', G.ui.mode === 'attack');
     const qs = G.quickSlots ? G.quickSlots() : [];
     $('#quick-slots').innerHTML = qs.map((id, i) => {
@@ -117,6 +123,7 @@ window.UI = (function () {
     if (G.sneaking) tags.push(`<span class="tag sneak">СКРЫТНО${G.risk ? ' · риск ' + G.risk + '%/с' : ''}</span>`);
     if (R.overloaded(p)) tags.push('<span class="tag danger">ПЕРЕГРУЗ</span>');
     if (NET.active) tags.push(`<span class="tag online" data-tip="${NET.players.map(x => x.name + (x.loc ? '' : ' (карта)')).join('\n')}">ОНЛАЙН: ${NET.players.length}${NET.isAuth && G.scene === 'local' ? ' · ведущий' : ''}</span>`);
+    if (p.perkPts > 0) tags.push(`<span class="tag sneak">Новый перк!</span>`);
     if (p.freePts > 0) tags.push(`<span class="tag sneak">Очки навыков: ${p.freePts}</span>`);
     $('#status-tags').innerHTML = tags.join('');
     if (modalRefresh) modalRefresh();
@@ -188,7 +195,10 @@ window.UI = (function () {
   U.modalOpen = () => !!currentModal;
   U.current = () => currentModal;
   U.openModal = function (name, html, mount, opts = {}) {
-    const root = $('#modal-root');
+    // новый контейнер — чтобы не копились обработчики событий прошлых окон
+    const old = $('#modal-root');
+    const root = old.cloneNode(false);
+    old.replaceWith(root);
     root.className = opts.full ? 'full' : '';
     root.innerHTML = html;
     currentModal = name;
@@ -427,7 +437,9 @@ window.UI = (function () {
              ['Урон в ближнем', '+' + R.meleeBonus(p), 'mb'], ['Шанс крита', R.critChance(p) + '%', 'crit'], ['Порядок хода', R.sequence(p), 'seq'], ['Лечение/час', R.healRate(p), 'heal'],
              ['Очков навыков/ур.', R.skillPerLevel(p), 'spl']]
             .map(([n, v, k]) => `<div class="stat-row" data-desc="d_${k}"><span>${n}</span><b>${v}</b><span></span></div>`).join('')}
-          ${create ? '' : `<div style="margin-top:8px" class="warn">Задания</div><div class="muted" style="font-size:12px">${questText()}</div>`}`;
+          ${create ? '' : `<div style="margin-top:8px" class="warn">Перки</div><div class="muted" style="font-size:12px">${(p.perks || []).map(id => (DATA.PERKS.find(k => k.id === id) || {}).name).join(', ') || 'нет'}</div>
+          ${p.perkPts > 0 ? `<button class="primary" id="c-perk" style="margin-top:4px">Выбрать перк (${p.perkPts})</button>` : '<div class="muted" style="font-size:11px">Новый перк — на каждом чётном уровне.</div>'}
+          <div style="margin-top:8px" class="warn">Задания</div><div class="muted" style="font-size:12px">${questText()}</div>`}`;
         root.querySelector('#c-skills').innerHTML = `<div class="warn" style="margin-bottom:4px">Навыки${create ? ` · профильных: ${p.tags.length}/3` : p.freePts ? ` · свободных очков: <b>${p.freePts}</b>` : ''}</div>` + SKILLS.map(s => `
           <div class="stat-row skill-row" data-desc="${s.id}">${create ? `<span class="tagbox ${p.tags.includes(s.id) ? 'on' : ''}" data-tag="${s.id}"></span>` : `<span>${p.tags.includes(s.id) ? '<span class="warn">★</span>' : ''}</span>`}
           <span>${s.name}</span><b>${R.skill(p, s.id)}%</b><span class="pm">${!create && p.freePts > 0 ? `<button data-sk="${s.id}">+</button>` : ''}</span></div>`).join('');
@@ -465,6 +477,7 @@ window.UI = (function () {
           p.skillPts[k] = (p.skillPts[k] || 0) + 1; p.freePts--;
           draw(); U.refresh(); return;
         }
+        if (e.target.id === 'c-perk') { U.openPerks(); return; }
         if (e.target.id === 'c-go') {
           p.name = root.querySelector('#c-name').value.trim() || 'Странник';
           p.hp = R.maxHP(p);
@@ -633,6 +646,78 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
       root.querySelector('#s-tips').onchange = e => TUT.setEnabled(e.target.checked);
       root.querySelector('#s-mini').onchange = e => { if (MINI.visible !== e.target.checked) MINI.toggle(); };
     }, { full: true });
+  };
+
+  U.cycleAim = function () {
+    const keys = Object.keys(DATA.AIM);
+    G.ui.aim = keys[(keys.indexOf(G.ui.aim || 'torso') + 1) % keys.length];
+    G.hint('Прицел: ' + DATA.AIM[G.ui.aim].name);
+    U.refresh();
+  };
+
+  U.openPerks = function () {
+    const p = G.player;
+    U.openModal('perks', `<div class="modal" style="width:min(640px,96vw);max-height:100%">
+      <h2>Выбор перка <button class="close" id="pk-back">✕</button></h2>
+      <div class="muted" style="margin-bottom:6px">Доступно выборов: ${p.perkPts || 0}. Перк выбирается навсегда.</div>
+      <div class="screen" style="flex:1" id="pk-list"></div></div>`, root => {
+      const draw = () => {
+        root.querySelector('#pk-list').innerHTML = DATA.PERKS.map(k => {
+          const taken = R.has(p, k.id);
+          const lvlOk = p.level >= k.level, statOk = !k.stat || p.stats[k.stat[0]] >= k.stat[1];
+          const ok = !taken && lvlOk && statOk && p.perkPts > 0;
+          const req = `ур. ${k.level}${k.stat ? ', ' + DATA.SPECIAL.find(s => s.id === k.stat[0]).name + ' ' + k.stat[1] : ''}`;
+          return `<div class="item" style="grid-template-columns:1fr auto;cursor:default"><div><div class="nm">${taken ? '✔ ' : ''}${k.name}</div><div class="sub">${k.desc} <span class="${lvlOk && statOk ? 'muted' : 'bad'}">(${req})</span></div></div>
+            <div>${taken ? '<span class="good">взят</span>' : `<button ${ok ? '' : 'disabled'} data-pk="${k.id}">Выбрать</button>`}</div></div>`;
+        }).join('');
+      };
+      root.querySelector('#pk-back').onclick = () => U.openCharacter(false);
+      root.addEventListener('click', e => {
+        const b = e.target.closest('[data-pk]');
+        if (!b) return;
+        p.perks = p.perks || [];
+        p.perks.push(b.dataset.pk); p.perkPts--;
+        if (b.dataset.pk === 'tough') p.hp += 12;
+        G.log(`Новый перк: «${DATA.PERKS.find(k => k.id === b.dataset.pk).name}».`, 'good');
+        SND.play('quest');
+        U.openCharacter(false);
+      });
+      draw();
+    });
+  };
+
+  U.openCraft = function (npc) {
+    U.openModal('craft', `<div class="modal" style="width:min(680px,96vw);max-height:100%">
+      <h2>Мастерская: ${npc.name} <button class="close" data-close>✕</button></h2>
+      <div class="muted" style="margin-bottom:6px">Борис делает полезное из хлама. Хлам находится при обыске и у торговцев.</div>
+      <div class="screen" style="flex:1" id="cr-list"></div>
+      <div class="muted" style="margin-top:6px" id="cr-st"></div></div>`, root => {
+      const p = G.player;
+      const draw = () => {
+        root.querySelector('#cr-st').textContent = `Крышки: ${p.caps} · Хлам: ${R.count(p, 'junk')}`;
+        root.querySelector('#cr-list').innerHTML = DATA.RECIPES.map((r, i) => {
+          const needs = r.need.map(([id, n]) => `<span class="${R.count(p, id) >= n ? '' : 'bad'}">${ITEMS[id].name} ×${n} (${R.count(p, id)})</span>`).join(', ');
+          const ok = r.need.every(([id, n]) => R.count(p, id) >= n) && p.caps >= r.caps;
+          return `<div class="item" style="grid-template-columns:40px 1fr auto;cursor:default"><div class="ico">${itemIcon(r.id)}</div>
+            <div><div class="nm">${ITEMS[r.id].name}${r.n > 1 ? ' ×' + r.n : ''}</div><div class="sub">${r.desc}<br>Нужно: ${needs}${r.caps ? `, <span class="${p.caps >= r.caps ? '' : 'bad'}">${r.caps} крышек</span>` : ''}</div></div>
+            <div><button ${ok ? '' : 'disabled'} data-cr="${i}">Сделать</button></div></div>`;
+        }).join('');
+      };
+      root.addEventListener('click', e => {
+        const b = e.target.closest('[data-cr]');
+        if (!b) return;
+        const r = DATA.RECIPES[+b.dataset.cr];
+        if (!r.need.every(([id, n]) => R.count(p, id) >= n) || p.caps < r.caps) return;
+        r.need.forEach(([id, n]) => R.removeItem(p, id, n));
+        p.caps -= r.caps;
+        R.addItem(p, r.id, r.n);
+        G.log(`Борис сделал: ${ITEMS[r.id].name}${r.n > 1 ? ' ×' + r.n : ''}.`, 'good');
+        SND.play('reload');
+        U.refresh();
+      });
+      modalRefresh = draw;
+      draw();
+    });
   };
 
   U.openRespawn = function () {

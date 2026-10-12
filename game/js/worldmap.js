@@ -179,6 +179,24 @@ window.WMAP = (function () {
     }
   }
 
+  // отметка над местом на карте: «!» — есть цель, «?» — можно сдать, «✔» — всё сделано
+  M.siteMark = function (G, id) {
+    const q = k => G.q(k), has = it => G.hasItem(it), f = G.flags;
+    if (id === 'camp') {
+      if ((has('meds') && G.quests.meds < 3) || (q('debt') === 1 && f.tihonDebtPaid) || has('toolbox') || has('battery') || q('wounded') === 2 || (q('marauder') < 9 && f.marauderKilled)) return '?';
+      if (!G.quests.meds || !q('debt') || !q('tools') || !q('wounded') || !q('marauder') || !q('ration') || (q('tools') === 9 && !q('battery'))) return '!';
+      return null;
+    }
+    if (id === 'post') { if (G.quests.meds >= 1 && G.quests.meds < 3 && !has('meds')) return '!'; if (G.quests.meds >= 3 || has('meds')) return '✔'; return null; }
+    if (id === 'zarya') {
+      if (q('battery') === 1 && !has('battery')) return '!';
+      if (G.qZarya && G.qZarya()) return '!';
+      if (q('battery') === 9) return '✔';
+      return null;
+    }
+    return G.siteQuestMark ? G.siteQuestMark(id) : null;
+  };
+
   M.render = function (G, t) {
     const ctx = ENG.ctx, dpr = ENG.dpr, W = G.world;
     const vw = ENG.viewW(), vh = ENG.viewH();
@@ -206,10 +224,22 @@ window.WMAP = (function () {
       if (!siteState(G, s.id).known) continue;
       const p = center(s.x, s.y), im = ENG.img[s.sprite];
       if (im) { const k = Math.min(90 / im.width, 90 / im.height); ctx.drawImage(im, p.x - im.width * k / 2, p.y + 30 - im.height * k, im.width * k, im.height * k); }
+      const visited = W.visited && W.visited[s.id];
+      const label = s.name + (visited ? '' : ' · не исследовано');
       ctx.font = 'bold 13px Consolas, monospace';
-      const w = ctx.measureText(s.name).width + 10;
+      const w = ctx.measureText(label).width + 10;
       ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2, p.y + 32, w, 17);
-      ctx.fillStyle = '#f0b43c'; ctx.fillText(s.name, p.x, p.y + 45);
+      ctx.fillStyle = visited ? '#f0b43c' : '#a89a7c'; ctx.fillText(label, p.x, p.y + 45);
+      const mk = M.siteMark(G, s.id);
+      if (mk) {
+        const bx = p.x + 30, by = p.y - 26 + Math.sin(t * 4) * 2;
+        ctx.beginPath(); ctx.arc(bx, by, 11, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(10,10,6,.85)'; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = mk === '!' ? '#ffd040' : '#7dfc6a'; ctx.stroke();
+        ctx.font = 'bold 15px Consolas, monospace';
+        ctx.fillStyle = mk === '!' ? '#ffd040' : '#7dfc6a';
+        ctx.fillText(mk, bx, by + 5);
+      }
     }
     // маршрут
     if (W.path.length) {

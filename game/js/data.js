@@ -238,6 +238,7 @@ window.DATA = (function () {
             { t: 'Что случилось с инструментами?', if: g => g.q('tools') === 0, go: 'tools' },
             { t: 'Вот твой ящик с инструментами.', if: g => g.hasItem('toolbox'), go: 'tools_done' },
             { t: 'Где мне взять отмычки?', if: g => g.q('tools') === 1 && !g.hasItem('toolbox'), go: 'picks' },
+            { t: 'Мастерская: сделай мне кое-что из хлама.', act: 'craft', end: true },
             { t: 'Есть ещё работа?', if: g => g.q('tools') === 9 && g.q('battery') === 0, go: 'battery' },
             { t: 'Вот аккумулятор с погрузчика.', if: g => g.hasItem('battery'), go: 'battery_done' },
             { t: 'Бывай.', end: true },
@@ -558,5 +559,38 @@ window.DATA = (function () {
     windmill: { name: 'Ветряк', look: 'Самодельный ветряк крутит генератор. Свет в Ручье — его заслуга.', lookXp: 5 },
   };
 
-  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, INTERACT };
+  // ---- перки (выбор на каждом чётном уровне) ----
+  const PERKS = [
+    { id: 'eagle', name: 'Меткий глаз', desc: '+15% к навыку Оружие и +5% к шансу крита.', level: 2 },
+    { id: 'quiet', name: 'Тихий шаг', desc: '+20% к Скрытности и +10% к Краже.', level: 2 },
+    { id: 'trader', name: 'Барыга', desc: 'Покупка на 15% дешевле, продажа на 15% дороже.', level: 2 },
+    { id: 'tough', name: 'Крепкий', desc: '+12 ОЗ и +1 к порогу урона (ПУ).', level: 2 },
+    { id: 'quick', name: 'Быстрые руки', desc: 'Перезарядка, аптечки и бинты в бою стоят 1 ОД вместо 2.', level: 2 },
+    { id: 'talker', name: 'Язык без костей', desc: '+15% к Красноречию.', level: 2 },
+    { id: 'scav', name: 'Старатель', desc: 'Обыск находит больше: +25% к шансу и +1 к количеству.', level: 2 },
+    { id: 'fieldmedic', name: 'Полевой медик', desc: 'Аптечки и бинты лечат на 50% больше, первая помощь — раз в 30 минут.', level: 4 },
+    { id: 'action', name: 'Боец', desc: '+1 очко действия в бою.', level: 4, stat: ['agi', 6] },
+    { id: 'sniper', name: 'Снайпер', desc: 'Прицельные выстрелы на 10% точнее, выстрел в голову чаще оглушает.', level: 4, stat: ['per', 7] },
+  ];
+
+  // ---- прицельные выстрелы ----
+  const AIM = {
+    torso: { name: 'Корпус', pen: 0, ap: 0, desc: 'Обычный выстрел.' },
+    head: { name: 'Голова', pen: 30, ap: 1, desc: '−30% к попаданию, +25% к криту, урон ×1.25. Крит оглушает: враг теряет половину ОД.' },
+    arms: { name: 'Руки', pen: 20, ap: 1, desc: '−20% к попаданию. Может выбить оружие из рук.' },
+    legs: { name: 'Ноги', pen: 15, ap: 1, desc: '−15% к попаданию. Враг хромает: −2 ОД до конца боя.' },
+  };
+
+  // ---- мастерская Бориса ----
+  const RECIPES = [
+    { id: 'ammo9', n: 10, need: [['junk', 2]], caps: 5, desc: 'Переснаряжённые гильзы.' },
+    { id: 'shells', n: 6, need: [['junk', 2]], caps: 5, desc: 'Дробь из гвоздей и порох из старых патронов.' },
+    { id: 'ammo762', n: 8, need: [['junk', 3]], caps: 10, desc: 'Самокрутные винтовочные патроны.' },
+    { id: 'bandage', n: 2, need: [['junk', 1]], caps: 0, desc: 'Стираные тряпки и кипяток.' },
+    { id: 'lockpicks', n: 1, need: [['junk', 2]], caps: 10, desc: 'Набор отмычек из пружин и спиц.' },
+    { id: 'medkit', n: 1, need: [['bandage', 2], ['water', 1]], caps: 15, desc: 'Бинты, вода и что-то покрепче из запасов Бориса.' },
+    { id: 'leather', n: 1, need: [['jacket', 1], ['junk', 4]], caps: 40, desc: 'Усилить кожаную куртку пластинами — получится кожаная броня.' },
+  ];
+
+  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, INTERACT, PERKS, AIM, RECIPES };
 })();

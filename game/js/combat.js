@@ -65,6 +65,7 @@ window.COMBAT = (function () {
   C.end = function (G, msg) {
     if (!G.combat) return;
     clearTimeout(G.combat.remoteTimer);
+    for (const a of G.combat.list) { a.crippled = false; a.stunned = false; }
     G.combat = null;
     G.player.ap = R.maxAP(G.player);
     G.log(msg || 'Бой окончен.', 'warn');
@@ -88,6 +89,7 @@ window.COMBAT = (function () {
     if (a.dead || a.gone || (!isPC(a) && !a.hostile) || !G.loc.actors.includes(a) && a !== G.player) return C.nextTurn(G);
     cb.current = a;
     a.ap = R.maxAP(a);
+    if (a.stunned) { a.stunned = false; a.ap = Math.ceil(a.ap / 2); G.log(`${a.name} оглушён и теряет половину ОД.`, 'good'); }
     if (net()) NET.forceSnap();
     if (isPC(a) && cb.round > 1 && !anyoneSeen(G, foes)) {
       C.end(G, 'Враги потеряли вас из виду. Бой окончен.');
@@ -152,7 +154,8 @@ window.COMBAT = (function () {
   };
 
   // ---------- расчёты ----------
-  C.hitChance = function (G, att, def) {
+  C.aimCost = aim => (DATA.AIM[aim] || DATA.AIM.torso).ap;
+  C.hitChance = function (G, att, def, aim = 'torso') {
     const w = R.weaponOf(att);
     const d = ENG.dist(att, def);
     if (d > w.range) return 0;
@@ -160,6 +163,8 @@ window.COMBAT = (function () {
     let ch = R.skill(att, w.melee ? 'melee' : 'guns') + 15 - R.AC(def);
     if (!w.melee) ch -= Math.max(0, d - att.stats.per + 1) * 3;
     if (!def.alerted && !isPC(def)) ch += 20;
+    const A = DATA.AIM[aim] || DATA.AIM.torso;
+    if (A.pen) ch -= Math.max(0, A.pen - (R.has(att, 'sniper') ? 10 : 0));
     return R.clamp(Math.round(ch), 5, 95);
   };
 
@@ -179,7 +184,9 @@ window.COMBAT = (function () {
     if (ev.hit) {
       def.hitFlash = 0.15;
       ENG.floater(def.x, def.y, (ev.crit ? 'КРИТ! ' : '') + '-' + ev.dmg, ev.crit ? '#ffcf40' : '#ff5a3c');
-      G.log(`${an} ${att === me ? 'попадаете' : 'попадает'} ${def === me ? 'в вас' : 'в: ' + def.name}${ev.sneak ? ' (из скрытности)' : ''}${ev.crit ? ' — критическое!' : ''} −${ev.dmg} ОЗ (${ev.chance}%).`, def === me ? 'bad' : att === me ? 'good' : 'sys');
+      const aimTxt = ev.aim && ev.aim !== 'torso' ? ` [${DATA.AIM[ev.aim].name.toLowerCase()}]` : '';
+      G.log(`${an} ${att === me ? 'попадаете' : 'попадает'} ${def === me ? 'в вас' : 'в: ' + def.name}${aimTxt}${ev.sneak ? ' (из скрытности)' : ''}${ev.crit ? ' — критическое!' : ''} −${ev.dmg} ОЗ (${ev.chance}%).${ev.effect ? ' ' + def.name + ': ' + ev.effect + '!' : ''}`, def === me ? 'bad' : att === me ? 'good' : 'sys');
+      if (ev.effect) ENG.floater(def.x, def.y + 0.6, ev.effect, '#ffd040');
     } else {
       ENG.floater(def.x, def.y, 'Мимо', '#d9cfb5');
       G.log(`${an} ${att === me ? 'промахиваетесь' : 'промахивается'} (${ev.chance}%).`, 'sys');
@@ -187,10 +194,11 @@ window.COMBAT = (function () {
     if (ev.killed && def !== me) G.log(`${def.name} убит.`, 'warn');
   };
 
-  async function attack(G, att, def) {
+  async function attack(G, att, def, aim = 'torso') {
     const w = R.weaponOf(att);
-    const chance = C.hitChance(G, att, def);
-    att.ap -= w.ap;
+    const A = DATA.AIM[aim] || DATA.AIM.torso;
+    const chance = C.hitChance(G, att, def, aim);
+    att.ap -= w.ap + A.ap;
     att.dir = ENG.dirFromDelta(def.x - att.x, def.y - att.y);
     att.aimT = 0.45;
     await sleep(180);
@@ -200,11 +208,12 @@ window.COMBAT = (function () {
       att.loaded--;
       if (att.isRemote) NET.event(att.pid, { kind: 'ammo' });
     }
-    const ev = { type: 'attack', att: att.id, def: def.id, hit, chance, melee: !!w.melee, sneak, dmg: 0, crit: false, killed: false };
+    const ev = { type: 'attack', att: att.id, def: def.id, hit, chance, melee: !!w.melee, sneak, dmg: 0, crit: false, killed: false, aim, effect: '' };
     if (hit) {
-      const critCh = (isPC(att) ? R.critChance(att) : Math.floor(R.critChance(att) / 2)) + (w.crit || 0) + (sneak ? 30 : 0);
+      const critCh = (isPC(att) ? R.critChance(att) : Math.floor(R.critChance(att) / 2)) + (w.crit || 0) + (sneak ? 30 : 0) + (aim === 'head' ? 25 : 0);
       const crit = R.rnd(1, 100) <= critCh;
       let dmg = R.rnd(w.dmg[0], w.dmg[1]) + (w.melee ? R.meleeBonus(att) : 0);
+      if (aim === 'head') dmg = Math.round(dmg * 1.25);
       const dt = crit ? Math.floor(R.DT(def) / 2) : R.DT(def);
       if (crit) dmg = Math.round(dmg * (sneak ? 2.5 : 1.5));
       dmg = Math.max(1, Math.round((dmg - dt) * (1 - R.DR(def) / 100)));
@@ -213,6 +222,18 @@ window.COMBAT = (function () {
       if (def.isRemote) { def.hpLock = Date.now() + 1500; NET.event(def.pid, { kind: 'hit', dmg }); }
       if (def.isPlayer) def.damagedSinceTurn = true;
       if (def.hp <= 0) ev.killed = true;
+      // эффекты прицельных выстрелов
+      if (!ev.killed && !isPC(def)) {
+        if (aim === 'head' && (crit || (R.has(att, 'sniper') && R.rnd(1, 100) <= 35))) { def.stunned = true; ev.effect = 'оглушён'; }
+        if (aim === 'legs' && !def.crippled) { def.crippled = true; ev.effect = 'хромает (−2 ОД)'; }
+        if (aim === 'arms' && def.weapon && (crit || R.rnd(1, 100) <= 40)) {
+          R.addItem(def, def.weapon, 1);
+          const dw = ITEMS[def.weapon];
+          if (dw.ammo && def.loaded > 0) R.addItem(def, dw.ammo, def.loaded);
+          def.weapon = null; def.loaded = 0; ev.effect = 'выронил оружие';
+          NET.syncEnt(def);
+        }
+      }
     }
     C.showAttack(G, ev);
     if (net()) NET.fx(ev);
@@ -248,6 +269,7 @@ window.COMBAT = (function () {
     if (by && by.isPlayer) G.giveXP(a.xpValue || 25);
     if (by && by.isRemote) NET.event(by.pid, { kind: 'xp', n: a.xpValue || 25 });
     if (a.tpl === 'klyk') G.flags.klykDead = true;
+    if (a.tpl === 'marauder') G.flags.marauderKilled = true;
     NET.syncEnt(a);
   }
   C.kill = kill;
@@ -269,7 +291,8 @@ window.COMBAT = (function () {
     if (!w.mag) { G.hint('Это оружие не нужно заряжать'); return; }
     if (p.loaded >= w.mag) { G.hint('Магазин полон'); return; }
     if (!R.count(p, w.ammo)) { G.log(`Нет патронов: ${ITEMS[w.ammo].name}.`, 'bad'); return; }
-    if (G.combat && !G.combat.spend(2)) { G.log('Нужно 2 ОД для перезарядки.', 'warn'); return; }
+    const rc = R.has(p, 'quick') ? 1 : 2;
+    if (G.combat && !G.combat.spend(rc)) { G.log(`Нужно ${rc} ОД для перезарядки.`, 'warn'); return; }
     reload(G, p);
     SND.play('reload');
     G.log(`Перезарядка: ${p.loaded}/${w.mag}.`, 'sys');
@@ -317,7 +340,9 @@ window.COMBAT = (function () {
   };
 
   // атака участником боя; возвращает строку-ошибку или undefined
-  C.actorAttack = async function (G, a, target) {
+  C.actorAttack = async function (G, a, target, aim = 'torso') {
+    if (!DATA.AIM[aim]) aim = 'torso';
+    const extra = C.aimCost(aim);
     if (!G.combat) C.start(G, target, a);
     const c = G.combat;
     if (!c || c.mirror || c.current !== a || c.busy) return;
@@ -327,14 +352,14 @@ window.COMBAT = (function () {
     if (w.melee && d > 1) {
       const path = ENG.findPath(G.loc, a.x, a.y, target.x, target.y, { adjacent: true, ignore: a });
       if (!path) return 'Не подойти.';
-      if (path.length + w.ap > a.ap) return `Нужно ${path.length + w.ap} ОД (подойти и ударить).`;
+      if (path.length + w.ap + extra > a.ap) return `Нужно ${path.length + w.ap + extra} ОД (подойти и ударить).`;
       await C.actorWalk(G, a, path, null, true);
       if (G.combat !== c) return;
     } else if (d > w.range) return `Слишком далеко: дальность ${w.range}, до цели ${d}.`;
     if (!w.melee && !ENG.los(G.loc, a.x, a.y, target.x, target.y)) return 'Цель вне линии огня.';
-    if (a.ap < w.ap) return `Не хватает ОД: нужно ${w.ap}.`;
+    if (a.ap < w.ap + extra) return `Не хватает ОД: нужно ${w.ap + extra}.`;
     c.busy = true;
-    await attack(G, a, target);
+    await attack(G, a, target, aim);
     if (G.combat !== c) return;
     c.busy = false;
     if (!hostilesLeft(G).length) { C.end(G, 'Победа! Врагов не осталось.'); return; }
@@ -354,10 +379,10 @@ window.COMBAT = (function () {
     if (!G.combat && !target.alerted && G.sneaking) G.log('Атака из скрытности!', 'good');
     if (!isAuth()) {
       if (G.combat) { G.combat.busy = true; }
-      NET.req({ act: 'attack', target: target.id });
+      NET.req({ act: 'attack', target: target.id, aim: G.ui.aim || 'torso' });
       return;
     }
-    const err = await C.actorAttack(G, p, target);
+    const err = await C.actorAttack(G, p, target, G.ui.aim || 'torso');
     if (err) G.log(err, 'warn');
   };
 

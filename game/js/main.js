@@ -35,7 +35,7 @@
     if (xp) G.giveXP(xp);
   };
   G.revealSite = id => { WMAP.siteState(G, id).known = true; G.log('Новая локация отмечена на карте мира.', 'good'); };
-  G.marauderDead = () => { const m = G.anyNpc('marauder'); return !!(m && m.dead); };
+  G.marauderDead = () => { const m = G.anyNpc('marauder'); return !!(m && m.dead) || !!G.flags.marauderKilled; };
   G.angerMarauder = function () {
     const m = G.findNpc('marauder');
     if (m) { m.hostile = true; m.alerted = false; NET.syncEnt(m); }
@@ -101,6 +101,7 @@
       p.hp = R.maxHP(p);
       G.log(`НОВЫЙ УРОВЕНЬ ${p.level}! +${pts} очков навыков (окно «Персонаж»).`, 'good');
       SND.play('levelup');
+      if (p.level % 2 === 0) { p.perkPts = (p.perkPts || 0) + 1; G.log('Доступен новый перк! Откройте окно «Персонаж» (C).', 'good'); }
       if (G.loc) ENG.floater(p.x, p.y, 'Новый уровень!', '#f0b43c');
     }
     UI.refresh();
@@ -137,7 +138,8 @@
   G.useItem = function (id) {
     const p = G.player, it = ITEMS[id];
     if (it.type !== 'aid') return;
-    if (G.combat && !G.combat.spend(2)) { G.log('Нужно 2 ОД.', 'warn'); return; }
+    const uc = R.has(p, 'quick') ? 1 : 2;
+    if (G.combat && !G.combat.spend(uc)) { G.log(`Нужно ${uc} ОД.`, 'warn'); return; }
     const h = R.healAmount(p, id);
     R.removeItem(p, id, 1);
     p.hp = Math.min(R.maxHP(p), p.hp + h);
@@ -154,8 +156,9 @@
     if (p.hp >= R.maxHP(p)) { G.hint('Вы здоровы'); return; }
     if (G.combat) {
       if (!G.combat.spend(4)) { G.log('Первая помощь в бою: 4 ОД.', 'warn'); return; }
-    } else if (G.time - p.lastFirstAid < 120) {
-      G.log(`Первую помощь можно оказывать раз в 2 часа (через ${120 - (G.time - p.lastFirstAid)} мин).`, 'warn'); return;
+    } else if (G.time - p.lastFirstAid < (R.has(p, 'fieldmedic') ? 30 : 120)) {
+      const cd = R.has(p, 'fieldmedic') ? 30 : 120;
+      G.log(`Первую помощь можно оказывать раз в ${cd >= 60 ? cd / 60 + ' ч' : cd + ' мин'} (через ${cd - (G.time - p.lastFirstAid)} мин).`, 'warn'); return;
     }
     const res = R.check(R.skill(p, 'medic') + 20, p.stats.luck);
     p.lastFirstAid = G.time;
@@ -241,15 +244,19 @@
   };
 
   // ---------- сохранение ----------
-  G.save = function () {
+  G.autosave = function () {
+    if (NET.active) { G.saveMP(true); return; }
+    if (!G.combat) G.save(true);
+  };
+  G.save = function (auto) {
     if (NET.active) { G.saveMP(false); return; }
-    if (G.combat) { G.log('Нельзя сохраняться в бою.', 'warn'); return; }
+    if (G.combat) { if (!auto) G.log('Нельзя сохраняться в бою.', 'warn'); return; }
     if (G.scene === 'local') WORLD_API.saveLocationState(G);
     const p = { ...G.player };
     delete p.path; delete p.onArrive; delete p.stepCb;
     const data = { player: p, locStates: G.locStates, quests: G.quests, flags: G.flags, time: G.time, world: G.world,
       scene: G.scene, locId: G.loc && !G.loc.def.temp ? G.loc.id : null };
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); G.log('Игра сохранена.', 'good'); }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); G.log(auto ? 'Автосохранение.' : 'Игра сохранена.', auto ? 'sys' : 'good'); }
     catch (e) { G.log('Не удалось сохранить: ' + e.message, 'bad'); }
   };
   G.hasSave = function () { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } };
@@ -327,6 +334,7 @@
       if (e.key === 'Escape') { if (UI.modalOpen()) { if (!['create', 'title', 'dead', 'enc', 'mp', 'update', 'settings'].includes(UI.current())) UI.closeModal(); } else UI.setMode('move'); return; }
       if (['1', '2', '3'].includes(e.key) && !UI.modalOpen() && G.scene === 'local') { G.useQuick(+e.key - 1); return; }
       if ((k === 'n' || k === 'т') && !UI.modalOpen()) { MINI.toggle(); return; }
+      if ((k === 'z' || k === 'я') && !UI.modalOpen()) { UI.cycleAim(); return; }
       const map = { q: 'move', й: 'move', a: 'attack', ф: 'attack', s: 'sneak', ы: 'sneak', k: 'steal', л: 'steal', l: 'lockpick', д: 'lockpick', x: 'look', ч: 'look', h: 'heal', р: 'heal', r: 'reload', к: 'reload', i: 'inventory', ш: 'inventory', c: 'character', с: 'character', m: 'map', ь: 'map' };
       if (k === ' ') { e.preventDefault(); if (G.combat) COMBAT.endPlayerTurn(G); return; }
       if (map[k]) {
@@ -350,7 +358,7 @@
     let cost = 0;
     if (G.combat && G.combat.isPlayerTurn() && !G.combat.busy) {
       const a = G.ui.hover.actor;
-      if (a && !a.dead && a.hostile) { cost = R.weaponOf(p).ap; G.ui.previewPath = null; }
+      if (a && !a.dead && a.hostile) { cost = R.weaponOf(p).ap + COMBAT.aimCost(G.ui.aim || 'torso'); G.ui.previewPath = null; }
       else if (changed) {
         const path = ENG.findPath(G.loc, p.x, p.y, tile.x, tile.y, { maxLen: 30 });
         G.ui.previewPath = path;

@@ -134,7 +134,8 @@ window.WORLD_API = (function () {
 
   // переход в локацию (в сетевой игре — с получением состояния от сервера)
   W.goLocation = async function (G, id, opts = {}) {
-    if (!NET.active) { W.loadLocation(G, id, opts); return; }
+    if (G.world) { G.world.visited = G.world.visited || {}; G.world.visited[id] = true; }
+    if (!NET.active) { W.loadLocation(G, id, opts); setTimeout(() => G.autosave(), 300); return; }
     const res = await NET.enter(id);
     if (res.state) G.locStates[id] = res.state; else delete G.locStates[id];
     NET.isAuth = !!res.authority;
@@ -150,6 +151,7 @@ window.WORLD_API = (function () {
         if (c) { p.x = p.rx = c[0]; p.y = p.ry = c[1]; break; }
       }
     }
+    setTimeout(() => G.autosave(), 300);
   };
 
   W.leaveToWorld = function (G) {
@@ -502,10 +504,11 @@ window.WORLD_API = (function () {
   const objKey = (G, o, what) => `obj_${G.loc.id}_${o.uid}_${what}`;
   function rollLoot(G, def) {
     const p = G.player, got = [];
-    const bonus = R.skill(p, 'survival') / 4 + p.stats.luck;
+    const scav = R.has(p, 'scav');
+    const bonus = R.skill(p, 'survival') / 4 + p.stats.luck + (scav ? 25 : 0);
     for (const [id, a, b, ch] of def.loot || []) {
       if (R.rnd(1, 100) > Math.min(100, ch + bonus)) continue;
-      const n = R.rnd(a, b);
+      const n = R.rnd(a, b) + (scav ? 1 : 0);
       R.addItem(p, id, n);
       got.push(`${DATA.ITEMS[id].name}${n > 1 ? ' ×' + n : ''}`);
     }
@@ -713,6 +716,7 @@ window.WORLD_API = (function () {
 
   const ACTIONS = {
     trade(G, npc) { setTimeout(() => UI.openTrade(npc), 0); },
+    craft(G, npc) { setTimeout(() => UI.openCraft(npc), 0); },
     takeQuest(G) {
       if (G.quests.meds === 0) {
         G.quests.meds = 1;

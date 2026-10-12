@@ -94,7 +94,7 @@ window.NET = (function () {
     }
     a.name = name; a.stats = s.stats; a.skillOverride = s.skills; a.baseHP = s.maxHp; a.level = s.level;
     if (!(N.isAuth && a.hpLock > now())) a.hp = s.hp;
-    a.weapon = s.weapon; a.armor = s.armor; a.loaded = s.loaded; a.sneaking = s.sneaking;
+    a.weapon = s.weapon; a.armor = s.armor; a.loaded = s.loaded; a.sneaking = s.sneaking; a.perks = s.perks || [];
     if (!s.dead && a.dead) { a.dead = false; }
     if (s.dead) a.dead = true;
     if (!G.combat) moveActorTo(a, s.x, s.y, s.dir);
@@ -124,7 +124,7 @@ window.NET = (function () {
     return {
       loc: inLoc ? G.loc.id : null, x: p.x, y: p.y, dir: p.dir, hp: p.hp, maxHp: R.maxHP(p), sneaking: !!G.sneaking,
       stats: p.stats, skills: Object.fromEntries(DATA.SKILLS.map(k => [k.id, R.skill(p, k.id)])),
-      weapon: p.weapon, armor: p.armor, loaded: p.loaded, level: p.level, dead: !!p.dead, aim: p.aimT > 0,
+      weapon: p.weapon, armor: p.armor, loaded: p.loaded, level: p.level, dead: !!p.dead, aim: p.aimT > 0, perks: p.perks || [],
     };
   }
   function sendPstate(force) {
@@ -225,7 +225,7 @@ window.NET = (function () {
       case 'attack': {
         const t = N.resolve(m.target);
         if (!t || t.dead) { ack('Цель недоступна.'); break; }
-        COMBAT.actorAttack(G, pr, t).then(r => ack(typeof r === 'string' ? r : null));
+        COMBAT.actorAttack(G, pr, t, m.aim).then(r => ack(typeof r === 'string' ? r : null));
         break;
       }
       case 'end': COMBAT.endTurnOf(G, pr); break;

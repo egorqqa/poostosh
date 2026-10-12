@@ -32,17 +32,21 @@ window.R = (function () {
     return a;
   }
 
+  // ---- перки ----
+  const has = (a, id) => !!(a && a.perks && a.perks.includes(id));
+  const PERK_SKILL = { eagle: { guns: 15 }, quiet: { sneak: 20, steal: 10 }, talker: { speech: 15 } };
+
   // ---- производные ----
-  const maxHP = a => a.isPlayer ? 20 + a.stats.str + 2 * a.stats.end + (a.level - 1) * (3 + Math.floor(a.stats.end / 2)) : a.baseHP;
-  const maxAP = a => 5 + Math.floor(a.stats.agi / 2);
+  const maxHP = a => a.isPlayer ? 20 + a.stats.str + 2 * a.stats.end + (a.level - 1) * (3 + Math.floor(a.stats.end / 2)) + (has(a, 'tough') ? 12 : 0) : a.baseHP;
+  const maxAP = a => 5 + Math.floor(a.stats.agi / 2) + (has(a, 'action') ? 1 : 0) - (a.crippled ? 2 : 0);
   const carryMax = a => 15 + 8 * a.stats.str;
   const armorOf = a => a.armor ? ITEMS[a.armor] : null;
   const AC = a => a.stats.agi + (armorOf(a) ? armorOf(a).ac : 0);
-  const DT = a => armorOf(a) ? armorOf(a).dt : 0;
+  const DT = a => (armorOf(a) ? armorOf(a).dt : 0) + (has(a, 'tough') ? 1 : 0);
   const DR = a => armorOf(a) ? armorOf(a).dr : 0;
   const meleeBonus = a => Math.max(1, a.stats.str - 5);
   const sequence = a => 2 * a.stats.per;
-  const critChance = a => a.stats.luck;
+  const critChance = a => a.stats.luck + (has(a, 'eagle') ? 5 : 0);
   const healRate = a => Math.max(1, Math.floor(a.stats.end / 3));
   const skillPerLevel = a => 5 + 2 * a.stats.int;
   const xpForLevel = l => 100 * l * (l + 1) / 2; // уровень 2 при 100 XP, 3 при 300...
@@ -52,7 +56,9 @@ window.R = (function () {
     const def = SKILLS.find(s => s.id === id);
     const tagged = a.tags && a.tags.includes(id);
     const pts = (a.skillPts && a.skillPts[id]) || 0;
-    return Math.min(300, def.base(a.stats) + (tagged ? 20 : 0) + pts * (tagged ? 2 : 1) + ((a.skillBonus && a.skillBonus[id]) || 0));
+    let perk = 0;
+    for (const p of a.perks || []) perk += (PERK_SKILL[p] && PERK_SKILL[p][id]) || 0;
+    return Math.min(300, def.base(a.stats) + (tagged ? 20 : 0) + pts * (tagged ? 2 : 1) + ((a.skillBonus && a.skillBonus[id]) || 0) + perk);
   }
 
   // бросок d100 с учётом удачи (критический провал / успех)
@@ -90,16 +96,17 @@ window.R = (function () {
   function weaponOf(a) { return ITEMS[a.weapon || 'fists']; }
 
   // ---- торговля ----
-  function buyMult(p, discount = 0) { return Math.max(1.05, 2.2 - skill(p, 'barter') * 0.01 - p.stats.cha * 0.04 - discount); }
-  function sellMult(p) { return Math.min(0.9, 0.25 + skill(p, 'barter') * 0.005 + p.stats.cha * 0.02); }
+  function buyMult(p, discount = 0) { return Math.max(1.05, 2.2 - skill(p, 'barter') * 0.01 - p.stats.cha * 0.04 - discount - (has(p, 'trader') ? 0.15 : 0)); }
+  function sellMult(p) { return Math.min(0.95, 0.25 + skill(p, 'barter') * 0.005 + p.stats.cha * 0.02 + (has(p, 'trader') ? 0.15 : 0)); }
 
   // ---- лечение ----
   function healAmount(a, itemId) {
     const it = ITEMS[itemId];
-    return it.heal + (it.healSkill ? Math.floor(skill(a, 'medic') / it.healSkill) : 0);
+    const h = it.heal + (it.healSkill ? Math.floor(skill(a, 'medic') / it.healSkill) : 0);
+    return has(a, 'fieldmedic') && (itemId === 'medkit' || itemId === 'bandage') ? Math.round(h * 1.5) : h;
   }
 
-  return { rnd, clamp, newPlayer, makeNpc, maxHP, maxAP, carryMax, AC, DT, DR, meleeBonus, sequence, critChance, healRate,
+  return { has, rnd, clamp, newPlayer, makeNpc, maxHP, maxAP, carryMax, AC, DT, DR, meleeBonus, sequence, critChance, healRate,
     skillPerLevel, xpForLevel, skill, check, itemDef, count, addItem, removeItem, weight, overloaded, weaponOf,
     buyMult, sellMult, healAmount };
 })();
