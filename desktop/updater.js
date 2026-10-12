@@ -66,7 +66,8 @@ function findAppDir(dir, depth = 0) {
 // PowerShell-скрипт: дождаться закрытия игры, скопировать новые файлы, запустить exe
 function writeSwapScript(tmp, src, dst) {
   const q = s => `'${s.replace(/'/g, "''")}'`;
-  const ps = `$ErrorActionPreference = 'SilentlyContinue'
+  const ps = `$ErrorActionPreference = 'Continue'
+Start-Transcript -Path (Join-Path $env:TEMP 'poostosh-update.log') -Force | Out-Null
 $src = ${q(src)}
 $dst = ${q(dst)}
 $tmp = ${q(tmp)}
@@ -81,11 +82,14 @@ Start-Sleep -Milliseconds 400
 $ok = $false
 for ($i = 0; $i -lt 25 -and -not $ok; $i++) {
   try { Copy-Item -Path (Join-Path $src '*') -Destination $dst -Recurse -Force -ErrorAction Stop; $ok = $true }
-  catch { Start-Sleep -Seconds 1 }
+  catch { Write-Output "copy try $i : $($_.Exception.Message)"; Start-Sleep -Seconds 1 }
 }
+Write-Output "copied: $ok"
 Start-Process -FilePath $exe -WorkingDirectory $dst
+Write-Output 'started'
 Start-Sleep -Seconds 2
-Remove-Item -LiteralPath $tmp -Recurse -Force
+Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+Stop-Transcript | Out-Null
 `;
   const file = path.join(tmp, 'swap.ps1');
   fs.writeFileSync(file, '\ufeff' + ps, 'utf8');
