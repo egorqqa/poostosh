@@ -21,7 +21,7 @@ def cutout(path, thin=False, holes=False):
     if holes:  # только голубоватые тени внутри (под лавкой)
         bg |= np.isin(lab, big) & ((b > r + 4) | (mn >= 232))
         bg = ndimage.binary_opening(bg, iterations=1) | (bg & (mn >= 240))
-    # водяной знак «Dola AI» в правом нижнем углу
+    # водяной знак в правом нижнем углу
     H, W = bg.shape
     wm = np.zeros_like(bg); wm[int(H * 0.89):, int(W * 0.8):] = True
     bg |= wm & (mn >= 140)
