@@ -1,5 +1,6 @@
 // Автообновление Windows-сборки: скачать zip релиза → распаковать → заменить файлы → перезапустить
-const { app, net } = require('electron');
+const { app } = require('electron');
+const https = require('https');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -11,23 +12,34 @@ function run(file, args) {
   return new Promise((res, rej) => execFile(file, args, { windowsHide: true, maxBuffer: 1 << 24 }, (err, out, errOut) => err ? rej(new Error(errOut || err.message)) : res(out)));
 }
 
-async function download(url, dest, onProgress) {
-  const resp = await net.fetch(url, { redirect: 'follow' });
-  if (!resp.ok) throw new Error(`Сервер ответил ${resp.status}`);
-  const total = +resp.headers.get('content-length') || 0;
-  const out = fs.createWriteStream(dest);
-  const reader = resp.body.getReader();
-  let got = 0, lastSent = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    got += value.length;
-    if (!out.write(Buffer.from(value))) await new Promise(r => out.once('drain', r));
-    if (Date.now() - lastSent > 150) { lastSent = Date.now(); onProgress({ stage: 'download', got, total }); }
-  }
-  await new Promise((res, rej) => out.end(err => err ? rej(err) : res()));
-  onProgress({ stage: 'download', got, total: total || got });
-  if (total && got !== total) throw new Error('Загрузка прервалась');
+function download(url, dest, onProgress, hops = 0) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'Poostosh-Updater', Accept: 'application/octet-stream' } }, res => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        res.resume();
+        if (hops > 6) { reject(new Error('Слишком много перенаправлений')); return; }
+        resolve(download(new URL(res.headers.location, url).toString(), dest, onProgress, hops + 1));
+        return;
+      }
+      if (res.statusCode !== 200) { res.resume(); reject(new Error(`Сервер ответил ${res.statusCode}`)); return; }
+      const total = +res.headers['content-length'] || 0;
+      let got = 0, lastSent = 0;
+      const out = fs.createWriteStream(dest);
+      res.on('data', chunk => {
+        got += chunk.length;
+        if (Date.now() - lastSent > 150) { lastSent = Date.now(); onProgress({ stage: 'download', got, total }); }
+      });
+      res.on('error', reject);
+      out.on('error', reject);
+      out.on('finish', () => {
+        onProgress({ stage: 'download', got, total: total || got });
+        if (total && got !== total) reject(new Error('Загрузка прервалась')); else resolve();
+      });
+      res.pipe(out);
+    });
+    req.on('error', e => reject(new Error('Нет связи с GitHub: ' + e.message)));
+    req.setTimeout(30000, () => req.destroy(new Error('таймаут')));
+  });
 }
 
 async function extract(zip, dir) {
@@ -99,8 +111,16 @@ async function installUpdate(url, onProgress) {
   fs.unlinkSync(zip);
   const script = writeSwapScript(tmp, src, appDir);
   onProgress({ stage: 'restart' });
-  const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', script], { detached: true, stdio: 'ignore', windowsHide: true });
-  child.unref();
+  // Скрипт запускается через WMI, чтобы он не был дочерним процессом игры:
+  // иначе Windows завершит его вместе с ней.
+  const cmd = `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${script}"`;
+  try {
+    await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      `$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = '${cmd.replace(/'/g, "''")}' }; exit [int]$r.ReturnValue`]);
+  } catch (e) {
+    const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', script], { detached: true, stdio: 'ignore', windowsHide: true });
+    child.unref();
+  }
   setTimeout(() => app.exit(0), 600);
 }
 
