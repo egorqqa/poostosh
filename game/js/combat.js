@@ -164,6 +164,7 @@ window.COMBAT = (function () {
     if (!w.melee && !ENG.los(G.loc, att.x, att.y, def.x, def.y)) return 0;
     let ch = R.skill(att, w.melee ? 'melee' : 'guns') + 15 - R.AC(def);
     if (!w.melee) ch -= Math.max(0, d - att.stats.per + 1) * 3;
+    if (!w.melee && d > 5) ch -= Math.round(12 * G.nightK()); // ночью вдаль стрелять труднее
     if (!def.alerted && !isPC(def)) ch += 20;
     const A = DATA.AIM[aim] || DATA.AIM.torso;
     if (A.pen) ch -= Math.max(0, A.pen - (R.has(att, 'sniper') ? 10 : 0));

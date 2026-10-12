@@ -688,6 +688,26 @@ window.ASSET_MANIFEST = {
 8
 ]
 },
+"char_wolf": {
+"src": "assets/chars/wolf.png",
+"w": 720,
+"h": 736,
+"fw": 120,
+"fh": 92,
+"ax": 60,
+"ay": 86,
+"frames": [
+6,
+6,
+5,
+5,
+5,
+5,
+6,
+6
+],
+"rows_found": 7
+},
 "ui_portrait": {
 "src": "assets/ui/portrait.png",
 "w": 120,

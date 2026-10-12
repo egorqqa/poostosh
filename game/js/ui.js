@@ -120,6 +120,7 @@ window.UI = (function () {
     $('#clock').textContent = G.clockText();
     const tags = [];
     if (G.combat) tags.push(`<span class="tag combat">БОЙ · раунд ${G.combat.round}${G.combat.isPlayerTurn() ? ' · ваш ход' : ' · ход: ' + (G.combat.current ? G.combat.current.name : '…')}</span>`);
+    if (G.scene !== 'menu' && G.player && G.nightK && G.nightK() > 0.55) tags.push('<span class="tag night" data-tip="Ночью враги замечают вас с меньшего расстояния, а стрелять вдаль труднее">НОЧЬ</span>');
     if (G.combat && G.combat.canFlee) tags.push('<span class="tag sneak">МОЖНО УЙТИ НА КАРТУ</span>');
     if (G.sneaking) tags.push(`<span class="tag sneak">СКРЫТНО${G.risk ? ' · риск ' + G.risk + '%/с' : ''}</span>`);
     if (R.overloaded(p)) tags.push('<span class="tag danger">ПЕРЕГРУЗ</span>');
@@ -326,15 +327,15 @@ window.UI = (function () {
         const p = G.player;
         SND.play('pickup');
         if (r.dataset.caps) { p.caps += src.caps; src.caps = 0; }
-        else if (r.dataset.id) { const s = src.inv.find(i => i.id === r.dataset.id); R.removeItem(src, s.id, s.n); R.addItem(p, s.id, s.n); }
-        else if (r.dataset.mine) { const s = p.inv.find(i => i.id === r.dataset.mine); if (ITEMS[s.id].type === 'quest') return; R.removeItem(p, s.id, s.n); R.addItem(src, s.id, s.n); }
+        else if (r.dataset.id) { const s = src.inv.find(i => i.id === r.dataset.id); const n = s.n; R.removeItem(src, s.id, n); R.addItem(p, s.id, n); }
+        else if (r.dataset.mine) { const s = p.inv.find(i => i.id === r.dataset.mine); if (ITEMS[s.id].type === 'quest') return; const n = s.n; R.removeItem(p, s.id, n); R.addItem(src, s.id, n); }
         NET.touch(src);
         U.refresh();
       });
       root.querySelector('#l-all').onclick = () => {
         const p = G.player;
         p.caps += src.caps || 0; src.caps = 0;
-        for (const s of src.inv.slice()) { R.removeItem(src, s.id, s.n); R.addItem(p, s.id, s.n); }
+        for (const s of src.inv.slice()) { const n = s.n; R.removeItem(src, s.id, n); R.addItem(p, s.id, n); }
         NET.touch(src);
         U.closeModal();
       };
@@ -600,6 +601,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
           <label>Порт</label><input type="number" id="mp-port" value="${port}">
           <label>Пароль</label><input type="password" id="mp-pass" value="">
           <label>Имя персонажа</label><input type="text" id="mp-name" maxlength="18" value="${last.name || 'Странник'}">
+          <label data-tip="Задайте пароль персонажа, чтобы входить им с любого компьютера. Без пароля персонаж привязан к этому компьютеру.">Пароль персонажа (для входа с других ПК)</label><input type="password" id="mp-cpass" value="">
           <div style="margin-top:10px"><button class="primary" id="mp-join">Подключиться</button></div>
         </div>
         <div class="screen" style="flex:1">
@@ -619,7 +621,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
       const join = async (h, pt, pw, nm) => {
         st.textContent = 'Подключение...';
         try { localStorage.setItem('mp_last', JSON.stringify({ ...last, host: h, port: pt, name: nm, svPort: root.querySelector('#sv-port') ? root.querySelector('#sv-port').value : last.svPort })); } catch (e) { /* */ }
-        try { await G.startMultiplayer(h, pt, pw, nm); }
+        try { await G.startMultiplayer(h, pt, pw, nm, root.querySelector('#mp-cpass').value); }
         catch (e) { st.textContent = 'Ошибка: ' + e; }
       };
       root.querySelector('#mp-join').onclick = () => join(root.querySelector('#mp-host').value.trim(), +root.querySelector('#mp-port').value || 7777, root.querySelector('#mp-pass').value, root.querySelector('#mp-name').value.trim() || 'Странник');
@@ -822,7 +824,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
 
   // ---------- журнал заданий ----------
   const SITE_OF = {
-    meds: g => g.hasItem('meds') ? 'camp' : 'post', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', rats: 'camp',
+    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', rats: 'camp',
     battery: g => g.hasItem('battery') ? 'camp' : 'zarya', zarya: g => ({ 1: 'zarya', 2: 'zarya', 3: 'zarya', 4: 'camp' })[g.q('zarya')],
     thread: g => ({ 1: g.flags.bridgeOpen ? 'rassvet' : 'bridge', 2: 'object9', 3: 'object9', 4: 'rassvet' })[g.q('thread')], mast: 'rassvet',
   };

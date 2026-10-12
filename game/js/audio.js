@@ -117,6 +117,8 @@ window.SND = (function () {
     rassvet: { root: 69.3, fifth: 1.498, wind: 0.15, ping: 1, pingNotes: [554, 659, 831] },
     object9: { root: 46.2, fifth: 1.335, wind: 0.28, ping: 1, pingNotes: [349, 415, 523] },
     object9_vault: { root: 34.6, fifth: 1.06, wind: 0.04, ping: 1, pingNotes: [698, 740, 1047] },
+    forest: { root: 49, fifth: 1.5, wind: 0.32, ping: 0.6, pingNotes: [392, 466] },
+    camp_cellar: { root: 41.2, fifth: 1.06, wind: 0.05, ping: 1, pingNotes: [880, 988] },
     wild: { root: 65.4, fifth: 1.498, wind: 0.3, ping: 0.6, pingNotes: [392, 523] },
     world: { root: 82.4, fifth: 1.498, wind: 0.2, ping: 0.7, pingNotes: [494, 659, 740] },
   };

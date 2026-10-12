@@ -268,8 +268,8 @@ window.WMAP = (function () {
   function encounter(G, tr) {
     const p = G.player;
     const roll = Math.random();
-    const kind = roll < 0.25 ? 'rats' : tr === 'r' || tr === 'x' || tr === 'c' || roll < 0.55 ? 'raiders' : 'wild';
-    const who = kind === 'rats' ? 'стаю радкрыс' : kind === 'raiders' ? 'группу рейдеров' : 'стаю одичалых';
+    const kind = tr === 'g' && roll < 0.35 ? 'wolves' : roll < 0.25 ? 'rats' : tr === 'r' || tr === 'x' || tr === 'c' || roll < 0.55 ? 'raiders' : 'wild';
+    const who = kind === 'wolves' ? 'стаю волков' : kind === 'rats' ? 'стаю радкрыс' : kind === 'raiders' ? 'группу рейдеров' : 'стаю одичалых';
     const spotChance = R.clamp(Math.round(R.skill(p, 'survival') * 0.6 + p.stats.per * 4), 5, 95);
     const spotted = Math.random() * 100 < spotChance;
     const seed = 'wild_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
@@ -398,6 +398,13 @@ window.WMAP = (function () {
       ctx.fillStyle = '#8fd0ff'; ctx.strokeStyle = '#08263a'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(pp.x + 10, pp.y - 8, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.font = 'bold 11px Consolas, monospace'; ctx.fillText(st.name, pp.x + 10, pp.y - 18);
+    }
+    // ночь на карте мира
+    const dk = G.darkness ? G.darkness() : 0;
+    if (dk > 0.02) {
+      ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = `rgba(6,10,28,${dk * 0.75})`; ctx.fillRect(0, 0, vw, vh + ENG.hudH);
+      ctx.restore();
     }
     // игрок
     const pulse = 1 + Math.sin(t * 5) * 0.15;

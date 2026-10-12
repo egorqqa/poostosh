@@ -4,6 +4,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
+const hashKey = s => crypto.createHash('sha256').update('poostosh:' + String(s || '')).digest('hex');
 const { WebSocketServer } = require('ws');
 
 const GAME_DIR = path.join(__dirname, '..', 'game');
@@ -35,11 +37,22 @@ function createServer(opts = {}) {
   // ---------- состояние мира ----------
   let world = { locStates: {} };
   try { world = JSON.parse(fs.readFileSync(dataFile, 'utf8')); } catch (e) { /* новый мир */ }
-  let dirty = false;
+  if (world.time == null) world.time = 8 * 60;
+  // персонажи хранятся на сервере: имя + пароль персонажа
+  const charsFile = path.join(path.dirname(dataFile), 'chars.json');
+  let chars = {};
+  try { chars = JSON.parse(fs.readFileSync(charsFile, 'utf8')); } catch (e) { /* пусто */ }
+  let dirty = false, dirtyChars = false;
   const saveWorld = () => {
-    if (!dirty) return;
-    try { fs.mkdirSync(path.dirname(dataFile), { recursive: true }); fs.writeFileSync(dataFile, JSON.stringify(world)); dirty = false; } catch (e) { say('Ошибка сохранения мира:', e.message); }
+    try {
+      fs.mkdirSync(path.dirname(dataFile), { recursive: true });
+      if (dirty) { fs.writeFileSync(dataFile, JSON.stringify(world)); dirty = false; }
+      if (dirtyChars) { fs.writeFileSync(charsFile, JSON.stringify(chars)); dirtyChars = false; }
+    } catch (e) { say('Ошибка сохранения мира:', e.message); }
   };
+  // общее игровое время: 1 игровая минута за 2 секунды
+  const clock = setInterval(() => { world.time++; dirty = true; }, 2000);
+  const clockBroadcast = setInterval(() => toAll({ t: 'time', time: world.time }), 10000);
   const saveTimer = setInterval(saveWorld, 20000);
   const persistent = loc => loc && !String(loc).startsWith('wild');
 
@@ -109,12 +122,15 @@ function createServer(opts = {}) {
         if (m.t !== 'hello') return;
         if (playerList().length >= maxPlayers) { send(p, { t: 'error', code: 'full', text: `Сервер заполнен (${maxPlayers} игроков)` }); setTimeout(() => ws.close(), 100); return; }
         if (password && m.password !== password) { send(p, { t: 'error', code: 'password', text: 'Неверный пароль' }); say('Отказ (пароль):', p.ip); setTimeout(() => ws.close(), 100); return; }
-        let name = String(m.name || 'Странник').slice(0, 18).trim() || 'Странник';
-        const taken = new Set(playerList().map(x => x.name));
-        for (let i = 2; taken.has(name); i++) name = `${String(m.name).slice(0, 15)} ${i}`;
-        p.name = name; p.ready = true;
+        const name = String(m.name || 'Странник').slice(0, 18).trim() || 'Странник';
+        const nameKey = name.toLowerCase();
+        if (playerList().some(x => x.name.toLowerCase() === nameKey)) { send(p, { t: 'error', code: 'online', text: `Персонаж «${name}» уже в игре` }); setTimeout(() => ws.close(), 100); return; }
+        const stored = chars[nameKey];
+        const h = hashKey(m.charKey);
+        if (stored && stored.hash !== h) { send(p, { t: 'error', code: 'charpass', text: `Неверный пароль персонажа «${name}». Если это не ваш персонаж — выберите другое имя.` }); setTimeout(() => ws.close(), 100); return; }
+        p.name = name; p.nameKey = nameKey; p.charHash = h; p.ready = true;
         clearTimeout(kick);
-        send(p, { t: 'welcome', id: p.id, name, version, players: playerList(), serverName, motd });
+        send(p, { t: 'welcome', id: p.id, name, version, players: playerList(), serverName, motd, time: world.time, char: stored ? stored.data : null });
         toAll({ t: 'players', players: playerList() });
         toAll({ t: 'chat', system: true, text: `${name} заходит на сервер.` }, p.id);
         say('Вошёл:', name, `(${p.ip})`, m.version !== version ? `— версия клиента ${m.version}, сервера ${version}` : '');
@@ -166,6 +182,11 @@ function createServer(opts = {}) {
           break;
         }
         case 'ping': send(p, { t: 'pong', at: m.at }); break;
+        case 'savechar': {
+          const js = JSON.stringify(m.data || null);
+          if (m.data && js.length < 400000) { chars[p.nameKey] = { hash: p.charHash, name: p.name, saved: Date.now(), data: m.data }; dirtyChars = true; }
+          break;
+        }
       }
     });
 
@@ -189,7 +210,7 @@ function createServer(opts = {}) {
 
   return {
     port, version, addresses: localAddresses(),
-    close() { clearInterval(saveTimer); dirty = true; saveWorld(); for (const p of players.values()) p.ws.close(); wss.close(); httpServer.close(); say('Сервер остановлен.'); },
+    close() { clearInterval(saveTimer); clearInterval(clock); clearInterval(clockBroadcast); dirty = true; saveWorld(); for (const p of players.values()) p.ws.close(); wss.close(); httpServer.close(); say('Сервер остановлен.'); },
   };
 }
 

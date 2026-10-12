@@ -27,6 +27,9 @@ window.DATA = (function () {
   // ---- предметы ----
   // type: weapon | armor | aid | ammo | misc | quest
   const ITEMS = {
+    fangs: { name: 'Клыки', type: 'weapon', icon: 'fists', weight: 0, value: 0, melee: true, dmg: [4, 10], ap: 4, range: 1, crit: 10, hidden: true },
+    fangs_big: { name: 'Клыки', type: 'weapon', icon: 'fists', weight: 0, value: 0, melee: true, dmg: [6, 13], ap: 4, range: 1, crit: 12, hidden: true },
+    wolf_pelt: { name: 'Волчья шкура', type: 'misc', icon: 'jacket', weight: 2, value: 25, desc: 'Жёсткая шкура мутантного волка. Сёма скупает такие.' },
     bite: { name: 'Укус', type: 'weapon', icon: 'fists', weight: 0, value: 0, melee: true, dmg: [2, 5], ap: 3, range: 1, crit: 5, hidden: true },
     bite_big: { name: 'Укус', type: 'weapon', icon: 'fists', weight: 0, value: 0, melee: true, dmg: [4, 9], ap: 3, range: 1, crit: 5, hidden: true },
     rat_tail: { name: 'Крысиный хвост', type: 'misc', icon: 'junk', weight: 0.05, value: 3, desc: 'Голый светящийся хвост радкрысы. Михалыч платит за них.' },
@@ -159,6 +162,12 @@ window.DATA = (function () {
     zorin: { name: 'Полковник Зорин', tint: 'infected', faction: 'infected', hostile: true,
       stats: { str: 9, per: 6, end: 9, cha: 2, int: 4, agi: 6, luck: 5 }, hp: 110,
       inv: [['ammo762', 30], ['medkit', 1]], caps: 150, weapon: 'ak', armor: 'vest', skills: { guns: 60, melee: 70 }, xp: 350 },
+    wolf: { name: 'Мутантный волк', model: 'wolf', faction: 'wolves', hostile: true,
+      stats: { str: 7, per: 7, end: 6, cha: 1, int: 2, agi: 8, luck: 5 }, hp: 30,
+      inv: [['wolf_pelt', 1]], caps: 0, weapon: 'fangs', skills: { melee: 62 }, xp: 70 },
+    wolf_alpha: { name: 'Вожак стаи', model: 'wolf', scale: 1.25, faction: 'wolves', hostile: true,
+      stats: { str: 9, per: 8, end: 8, cha: 1, int: 3, agi: 8, luck: 6 }, hp: 55,
+      inv: [['wolf_pelt', 2]], caps: 0, weapon: 'fangs_big', skills: { melee: 70 }, xp: 140 },
     rat: { name: 'Радкрыса', model: 'rat', faction: 'rats', hostile: true,
       stats: { str: 3, per: 6, end: 3, cha: 1, int: 1, agi: 8, luck: 4 }, hp: 9,
       inv: [['rat_tail', 1]], caps: 0, weapon: 'bite', skills: { melee: 50 }, xp: 15 },
@@ -241,6 +250,8 @@ window.DATA = (function () {
           opts: [
             { t: 'Покажи товар.', act: 'trade', end: true },
             { t: 'Для меня найдётся работа?', if: g => g.q('debt') === 0, go: 'debt' },
+            { t: 'Ищешь что-нибудь особенное?', if: g => g.q('pelts') === 0, go: 'pelts' },
+            { t: 'Вот три волчьи шкуры.', if: g => g.q('pelts') === 1 && R.count(g.player, 'wolf_pelt') >= 3, go: 'pelts_done' },
             { t: 'Купишь ящик «З-2» с Объекта 9?', if: g => g.hasItem('z2_crate') && g.q('thread') < 9, act: g => { g.takeFrom(g.player, 'z2_crate', 1); g.flags.z2Sold = true; g.setQuest('thread', 9); g.reward(150, 600, []); g.addRep(-15, 'опасный груз продан'); }, go: 'crate' },
             { t: 'Купишь образцы из лаборатории «Зари»?', if: g => g.hasItem('samples') && g.q('zarya') < 9, go: 'samples' },
             { t: 'Вот твои 15 крышек от Тихона.', if: g => g.q('debt') === 1 && g.player.caps >= 15, go: 'debt_done' },
@@ -257,6 +268,10 @@ window.DATA = (function () {
             { t: 'По рукам.', act: g => { g.takeFrom(g.player, 'samples', 1); g.flags.samplesSold = true; g.setQuest('zarya', 9); g.reward(150, 350, []); g.addRep(-20, 'антидот продан на сторону'); }, end: true },
             { t: 'Нет, отдам Ирине.', end: true },
           ] },
+        pelts: { text: 'Особенное? Волчьи шкуры! Караванщики за них дерутся. В Мёртвом лесу, к северу отсюда, бегает стая — злые, мутировавшие. Принеси три шкуры — дам 150 крышек. Я отметил лес на твоей карте.',
+          opts: [{ t: 'Добуду.', act: g => { g.setQuest('pelts', 1); g.revealSite('forest'); }, end: true }, { t: 'Не охотник я.', end: true }] },
+        pelts_done: { text: 'Хороши! Ни одной дырки... ну, почти. Держи, как договаривались. Будут ещё — неси, куплю.',
+          onEnter: g => { R.removeItem(g.player, 'wolf_pelt', 3); g.setQuest('pelts', 9); g.reward(140, 150, []); }, opts: [{ t: 'Бывай.', end: true }] },
         crate: { text: 'Шестьсот крышек — и забудь, где ты это взял. Я ничего не видел, ты ничего не продавал.', opts: [{ t: 'Бывай.', end: true }] },
         rumor: { text: 'Говорят, у Тихона-бродяги отмычки водятся. А рейдеры Клыка держат склад на блокпосту — шкаф с замком такой, что без отмычек и не суйся.',
           opts: [{ t: 'Спасибо.', go: 'hello' }] },
@@ -546,6 +561,24 @@ window.DATA = (function () {
   // ---- локации ----
   // объекты: [спрайт, x, y, {fw, fh, oy, block, name, container, lock, items, owner, desc}]
   const LOCATIONS = {
+    forest: {
+      name: 'Мёртвый лес', w: 40, h: 40, ground: ['overgrown_grassland', 'dirt_tracks', 'rubble_ground'], groundW: [5, 2, 1], base: '#3f4630',
+      entry: { x: 20, y: 36 },
+      exits: [{ x0: 15, y0: 38, x1: 25, y1: 39 }],
+      desc: 'Сухой лес. Деревья скрипят без ветра, а в чаще перекликаются волки.',
+      objects: [
+        ['tree_oak', 3, 3, {}], ['tree_pine', 9, 2, {}], ['tree_spruce', 14, 4, {}], ['tree_dead', 20, 2, {}], ['tree_pine', 26, 3, {}], ['tree_spruce', 32, 2, {}], ['tree_dead2', 37, 5, {}],
+        ['tree_yellow', 5, 10, {}], ['tree_spruce', 11, 9, {}], ['tree_oak', 30, 9, {}], ['tree_pine', 35, 12, {}], ['tree_willow', 2, 17, {}],
+        ['tree_small', 8, 16, {}], ['tree_dead', 15, 14, {}], ['tree_spruce', 24, 12, {}], ['tree_pine', 33, 18, {}], ['tree_oak', 37, 24, {}],
+        ['tree_spruce', 4, 25, {}], ['tree_dead2', 10, 29, {}], ['tree_pine', 28, 27, {}], ['tree_spruce', 34, 31, {}], ['tree_small', 6, 33, {}], ['tree_dead', 31, 36, {}],
+        ['log', 17, 20, {}], ['log2', 25, 22, {}], ['stump', 12, 23, {}], ['stump_big', 22, 31, {}], ['rocks_big', 27, 17, {}], ['rocks', 7, 21, {}], ['rocks2', 35, 7, {}],
+        ['bush_berry', 18, 8, {}], ['bush_round', 29, 33, {}], ['bush_dry', 13, 34, { block: false }], ['bush_low', 21, 26, { block: false }],
+        ['grass2', 16, 28, { block: false }], ['grass4', 9, 13, { block: false }], ['flowers', 23, 7, { block: false }], ['weeds', 33, 25, { block: false }], ['grass1', 5, 37, { block: false }],
+        ['tent_green', 19, 15, { fw: 4, fh: 3, oy: 6, name: 'Палатка охотника' }],
+        ['crate_small', 23, 16, { name: 'Схрон охотника', container: true, lock: 20, items: [['rifle', 1], ['ammo762', 15], ['bandage', 2], ['food', 2]], caps: 30, desc: 'Ящик, присыпанный ветками. Хозяин, похоже, не вернётся.' }],
+      ],
+      npcs: [['wolf', 15, 10, { wander: 3 }], ['wolf', 22, 11, { wander: 3 }], ['wolf', 28, 20, { wander: 3 }], ['wolf_alpha', 20, 6, { wander: 2 }]],
+    },
     camp_cellar: {
       name: 'Подвал водокачки', w: 20, h: 16, interior: true, ground: ['ruined_concrete_yard', 'rubble_ground'], groundW: [2, 2], base: '#26231d',
       wallColor: [96, 92, 84], entry: { x: 10, y: 13 },
@@ -836,6 +869,7 @@ window.DATA = (function () {
       { id: 'camp', x: 4, y: 8, name: 'Ржавый Ручей', sprite: 'booth', known: true },
       { id: 'post', x: 13, y: 2, name: 'Блокпост 17', sprite: 'mil_tower', known: false },
       { id: 'zarya', x: 15, y: 9, name: 'Промзона «Заря»', sprite: 'brick_factory', known: false },
+      { id: 'forest', x: 7, y: 2, name: 'Мёртвый лес', sprite: 'tree_spruce', known: false },
       { id: 'bridge', x: 18, y: 5, name: 'Ржавый мост', sprite: 'checkpoint2', known: false },
       { id: 'rassvet', x: 22, y: 3, name: 'Станция «Рассвет»', sprite: 'mil_radar', known: false },
       { id: 'object9', x: 23, y: 9, name: 'Объект 9', sprite: 'mil_bunker_door', known: false },
@@ -860,6 +894,7 @@ window.DATA = (function () {
       3: 'Объект 9: проникните в хранилище (код — у радиста Кузьмы, ключ-карта — у охраны, или Взлом 60) и разберитесь со складом «З-2».',
       4: 'Вернитесь к коменданту Вере на станцию «Рассвет».' } },
     mast: { title: 'Молчащая антенна', giver: 'kuzma', steps: { 1: 'Почините радиомачту «Рассвета»: нужно 3 хлама и Интеллект 6 или Взлом 35.', 2: 'Антенна работает — сообщите радисту Кузьме.' } },
+    pelts: { title: 'Шкуры для Сёмы', giver: 'semyon', steps: { 1: 'Добудьте 3 волчьи шкуры в Мёртвом лесу (к северу от Ручья) и принесите Сёме.' } },
     rats: { title: 'Крысиная напасть', giver: 'mihalych', steps: { 1: 'Перебейте радкрыс в подвале водокачки Ручья (вход — у водонапорной башни) и принесите Михалычу 5 крысиных хвостов.' } },
     battery: { title: 'Аккумулятор для Бориса', giver: 'boris', steps: { 1: 'Снимите аккумулятор с погрузчика в промзоне «Заря» (юго-восток) и принесите Борису. Погрузчик нужно обыскать.' } },
     ration: { title: 'Сухпаёк для Тихона', giver: 'tihon', steps: { 1: 'Принесите бродяге Тихону консервы (у Сёмы или в мешках у навеса).' } },

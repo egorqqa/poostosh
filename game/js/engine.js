@@ -378,6 +378,9 @@ window.ENG = (function () {
 
     // эффекты
     for (const fx of E.effects) fx.draw(ctx, t);
+    // ночь: затемнение с кругами света у героя и фонарей
+    const dark = !L.def.interior && G.darkness ? G.darkness() : 0;
+    if (dark > 0.02) drawDarkness(ctx, G, L, dark, t);
     ctx.font = 'bold 14px Consolas, monospace';
     ctx.textAlign = 'center';
     for (const f of E.floaters) {
@@ -479,6 +482,52 @@ window.ENG = (function () {
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
+
+  const LIGHTS = { lamp_post: 170, mil_lamp: 190, floodlight: 260, tent_green_lit: 130, gas_station: 150, med_tent: 120, mil_med_tent: 120, booth: 110 };
+  function drawDarkness(ctx, G, L, dark, t) {
+    const W = E.canvas.width, H = E.canvas.height, dpr = E.dpr;
+    if (!E.darkCv) E.darkCv = document.createElement('canvas');
+    const dc = E.darkCv;
+    if (dc.width !== W || dc.height !== H) { dc.width = W; dc.height = H; }
+    const g = dc.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = `rgba(6,10,28,${dark})`;
+    g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'destination-out';
+    const hole = (wx, wy, r, k = 1) => {
+      const s = E.worldToScreen(wx, wy), R = r * E.zoom * dpr;
+      const gr = g.createRadialGradient(s.x * dpr, s.y * dpr, 0, s.x * dpr, s.y * dpr, R);
+      gr.addColorStop(0, `rgba(0,0,0,${k})`); gr.addColorStop(0.55, `rgba(0,0,0,${k * 0.7})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(s.x * dpr, s.y * dpr, R, 0, Math.PI * 2); g.fill();
+    };
+    const p = G.player;
+    const pc = tileCenter(p.rx, p.ry);
+    hole(pc.x, pc.y - 30, 210, 0.95);
+    const glow = [];
+    for (const o of L.objects) {
+      const r = LIGHTS[o.sprite];
+      if (!r || o.hidden) continue;
+      const rr = E.objectRect(o);
+      const flick = 1 + Math.sin(t * 7 + o.uid) * 0.03;
+      hole(rr.x + rr.w / 2, rr.y + rr.h * 0.75, r * flick, 1);
+      glow.push([rr.x + rr.w / 2, rr.y + rr.h * 0.75, r * 0.6]);
+    }
+    g.globalCompositeOperation = 'source-over';
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(dc, 0, 0);
+    // тёплый свет фонарей
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [x, y, r] of glow) {
+      const s = E.worldToScreen(x, y), R = r * E.zoom * dpr;
+      const gr = ctx.createRadialGradient(s.x * dpr, s.y * dpr, 0, s.x * dpr, s.y * dpr, R);
+      gr.addColorStop(0, `rgba(255,170,70,${0.12 * dark / 0.62})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(s.x * dpr, s.y * dpr, R, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
 
   function inFront(a, o) {
     // персонаж перед объектом, если он южнее одной из передних граней

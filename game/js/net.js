@@ -9,14 +9,14 @@ window.NET = (function () {
   const now = () => Date.now();
 
   // ---------- подключение ----------
-  N.connect = function (host, port, password, name) {
+  N.connect = function (host, port, password, name, charKey) {
     return new Promise((resolve, reject) => {
       let done = false;
       let ws;
       try { ws = new WebSocket(`ws://${host}:${port}/ws`); } catch (e) { reject('Неверный адрес'); return; }
       const fail = text => { if (!done) { done = true; reject(text); try { ws.close(); } catch (e) { /* */ } } };
       const to = setTimeout(() => fail('Сервер не отвечает'), 8000);
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', name, password, version: window.GAME_VERSION }));
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', name, password, charKey, version: window.GAME_VERSION }));
       ws.onerror = () => fail('Не удалось подключиться');
       ws.onclose = () => {
         clearTimeout(to);
@@ -29,7 +29,7 @@ window.NET = (function () {
           if (m.t === 'error') { fail(m.text || 'Отказано'); return; }
           if (m.t === 'welcome') {
             done = true; clearTimeout(to);
-            Object.assign(N, { ws, active: true, id: m.id, name: m.name, server: `${host}:${port}`, players: m.players, serverVersion: m.version, serverName: m.serverName || 'Пустошь', motd: m.motd || '' });
+            Object.assign(N, { ws, active: true, id: m.id, name: m.name, server: `${host}:${port}`, players: m.players, serverVersion: m.version, serverName: m.serverName || 'Пустошь', motd: m.motd || '', char: m.char || null, serverTime: m.time });
             startTimers();
             resolve(m);
           }
@@ -291,6 +291,7 @@ window.NET = (function () {
       case 'op': applyOp(m); break;
       case 'req': handleReq(m); break;
       case 'ev': handleEv(m); break;
+      case 'time': if (G.player) G.time = m.time; break;
       case 'chat': G.log(m.system ? m.text : `[${m.name}] ${m.text}`, m.system ? 'sys' : 'chat'); break;
     }
   }

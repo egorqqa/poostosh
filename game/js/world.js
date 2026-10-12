@@ -81,9 +81,10 @@ window.WORLD_API = (function () {
     const npcs = [];
     const n = 2 + Math.floor(r() * 3);
     for (let i = 0; i < n; i++) {
-      const tpl = kind === 'rats' ? 'rat' : kind === 'raiders' ? (r() < 0.5 ? 'raider' : 'raider_melee') : (r() < 0.4 ? 'wild_gun' : 'wild');
+      const tpl = kind === 'wolves' ? 'wolf' : kind === 'rats' ? 'rat' : kind === 'raiders' ? (r() < 0.5 ? 'raider' : 'raider_melee') : (r() < 0.4 ? 'wild_gun' : 'wild');
       npcs.push([tpl, 12 + Math.floor(r() * 10), 6 + Math.floor(r() * 8), { wander: 3 }]);
     }
+    if (kind === 'wolves') { for (let i = 0; i < 6; i++) objects.push([['tree_pine', 'tree_spruce', 'tree_oak', 'tree_dead'][Math.floor(r() * 4)], 2 + Math.floor(r() * 30), 2 + Math.floor(r() * 24), {}]); if (r() < 0.3) npcs.push(['wolf_alpha', 16, 6, { wander: 2 }]); }
     if (kind === 'rats') { npcs.push(['rat', 14, 9, { wander: 3 }], ['rat', 18, 11, { wander: 3 }]); if (r() < 0.35) npcs.push(['rat_big', 16, 7, { wander: 2 }]); }
     return { name: 'Пустошь', w: 34, h: 34, exits: [{ x0: 12, y0: 32, x1: 22, y1: 33 }], ground: ['dirt_tracks', 'overgrown_grassland', 'rubble_ground', 'cracked_road'], groundW: [3, 3, 1, 1], base: '#5b4c35', entry: { x: 17, y: 30 }, objects, npcs, temp: true, desc: 'Безымянный клочок пустоши.' };
   }
@@ -346,7 +347,8 @@ window.WORLD_API = (function () {
   }
 
   // ---------- скрытность ----------
-  W.detectRadius = a => a.stats.per * 2 + 2 + (a.sentry ? 4 : 0);
+  // ночью враги видят хуже: радиус обнаружения до −40%
+  W.detectRadius = a => Math.max(3, Math.round((a.stats.per * 2 + 2 + (a.sentry ? 4 : 0)) * (1 - 0.4 * (window.G ? G.nightK() : 0))));
   W.sneakRisk = function (G, a, pl = G.player) {
     if (!pl || pl.dead) return 0;
     const d = ENG.dist(a, pl), R0 = W.detectRadius(a);

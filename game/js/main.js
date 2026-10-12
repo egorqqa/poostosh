@@ -160,7 +160,7 @@
     const q = G.q, p = G.player;
     switch (a.tpl) {
       case 'mihalych': return (G.hasItem('meds') && G.quests.meds < 3) || (q('rats') === 1 && R.count(p, 'rat_tail') >= 5) ? '?' : G.quests.meds === 0 || q('rats') === 0 ? '!' : null;
-      case 'semyon': return G.hasItem('samples') && q('zarya') < 9 ? '?' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
+      case 'semyon': return (G.hasItem('samples') && q('zarya') < 9) || (q('pelts') === 1 && R.count(p, 'wolf_pelt') >= 3) ? '?' : q('pelts') === 0 && q('debt') !== 0 ? '!' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
       case 'vera': return q('thread') === 1 ? '!' : q('thread') === 4 && (G.flags.z2Destroyed || G.hasItem('z2_crate')) ? '?' : null;
       case 'kuzma': return q('mast') === 2 ? '?' : q('mast') === 0 ? '!' : null;
       case 'palych': return q('thread') >= 2 && q('thread') < 9 && !G.hasItem('explosive') && !G.flags.z2Done && !G.flags.palychExplosive ? '!' : null;
@@ -184,9 +184,19 @@
       p.hp = Math.min(R.maxHP(p), p.hp + hours * R.healRate(p));
     }
   };
+  // освещённость: 0 — день, 0.62 — глубокая ночь (сумерки 19–21, рассвет 5–7)
+  G.darkness = function () {
+    const h = (G.time / 60) % 24, N = 0.62;
+    if (h >= 21 || h < 5) return N;
+    if (h >= 19) return N * (h - 19) / 2;
+    if (h < 7) return N * (7 - h) / 2;
+    return 0;
+  };
+  G.nightK = () => (G.loc && G.loc.def.interior ? 0 : G.darkness() / 0.62);
   G.clockText = function () {
     const d = Math.floor(G.time / 1440) + 1, h = Math.floor(G.time / 60) % 24, m = Math.floor(G.time % 60);
-    return `День ${d} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    const part = h >= 22 || h < 5 ? 'ночь' : h < 11 ? 'утро' : h < 18 ? 'день' : 'вечер';
+    return `День ${d} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${part}`;
   };
 
   // быстрые слоты 1–3
@@ -305,13 +315,20 @@
     const p = { ...G.player };
     delete p.path; delete p.onArrive; delete p.stepCb;
     const data = { player: p, quests: G.quests, flags: G.flags, time: G.time, world: G.world };
-    try { localStorage.setItem(mpKey(), JSON.stringify(data)); if (!silent) G.log('Персонаж сохранён.', 'good'); } catch (e) { /* */ }
+    try { localStorage.setItem(mpKey(), JSON.stringify(data)); } catch (e) { /* */ }
+    if (NET.active) NET.send({ t: 'savechar', data });
+    if (!silent) G.log(NET.active ? 'Персонаж сохранён на сервере.' : 'Персонаж сохранён.', 'good');
   };
 
-  G.startMultiplayer = async function (host, port, password, name) {
-    await NET.connect(host, port, password, name);
-    let data = null;
-    try { data = JSON.parse(localStorage.getItem(mpKey()) || 'null'); } catch (e) { data = null; }
+  G.startMultiplayer = async function (host, port, password, name, charPass) {
+    // ключ персонажа: пароль персонажа (вход с любого компьютера) или секрет этого компьютера
+    const lk = `mp_key_${host}:${port}_${name.toLowerCase()}`;
+    let key = charPass ? 'p:' + charPass : null;
+    if (!key) { try { key = localStorage.getItem(lk); } catch (e) { /* */ } }
+    if (!key) { key = 'k:' + Math.random().toString(36).slice(2) + Date.now().toString(36); try { localStorage.setItem(lk, key); } catch (e) { /* */ } }
+    await NET.connect(host, port, password, name, key);
+    let data = NET.char;
+    if (!data) { try { data = JSON.parse(localStorage.getItem(mpKey()) || 'null'); } catch (e) { data = null; } }
     const begin = () => {
       G.player.id = NET.myId();
       G.player.name = NET.name;
@@ -320,6 +337,9 @@
       document.getElementById('log-box').innerHTML = '';
       G.log(`Вы на сервере «${NET.serverName}» (${NET.server}) как «${NET.name}». Игроков онлайн: ${NET.players.length}. Enter — чат, «/о текст» — чат отряда.`, 'good');
       if (NET.motd) G.log(NET.motd, 'warn');
+      if (NET.serverTime != null) G.time = NET.serverTime;
+      if (NET.char) G.log('Персонаж загружен с сервера.', 'sys');
+      setTimeout(() => G.saveMP(true), 1500);
       try {
         const rec = JSON.parse(localStorage.getItem('mp_recent') || '[]').filter(s => s.host + ':' + s.port !== NET.server);
         rec.unshift({ host: NET.server.split(':')[0], port: +NET.server.split(':')[1], name: NET.serverName });

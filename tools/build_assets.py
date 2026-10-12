@@ -302,6 +302,43 @@ def build_rat(manifest):
                             "fw": CW, "fh": CH, "ax": AX, "ay": AY, "frames": counts}
 
 
+def build_wolf(manifest):
+    """Лист волка: 7 рядов по 6 кадров (Ю, ЮВ, В, ЮВ-2, С, ЮЗ, З) → 8 направлений движка (S, SE, E, NE, N, NW, W, SW)."""
+    src = Image.open(os.path.join(ROOT, "мутантный_волк.png")).convert("RGBA")
+    a = np.array(src)
+    mask = a[:, :, 3] > 100
+    lab, _ = ndimage.label(mask)
+    objs = []
+    for i, sl in enumerate(ndimage.find_objects(lab), start=1):
+        if sl is None or (lab[sl] == i).sum() < 1500:
+            continue
+        objs.append((sl, i))
+    # 7 равных полос по высоте; фигура — в полосу своей середины
+    band = src.height / 7
+    rows = [[] for _ in range(7)]
+    for sl, i in objs:
+        mid = (sl[0].start + sl[0].stop) / 2
+        rows[min(6, int(mid // band))].append((sl[1].start, sl[1].stop, sl[0].start, sl[0].stop, i))
+    for r in rows:
+        r.sort()
+    src_rows = [0, 1, 2, 4, 4, 4, 6, 5]  # какие ряды исходника идут в S, SE, E, NE, N, NW, W, SW
+    CW, CH, AX, AY, SC = 120, 92, 60, 86, 0.43
+    ncol = max(len(r) for r in rows)
+    sheet = Image.new("RGBA", (CW * ncol, CH * 8), (0, 0, 0, 0))
+    counts = []
+    for out_r, sr in enumerate(src_rows):
+        frames = rows[sr]
+        counts.append(len(frames))
+        for c, (x0, x1, y0, y1, i) in enumerate(frames):
+            fr = a.copy(); fr[lab != i, 3] = 0
+            piece = Image.fromarray(fr[y0:y1, x0:x1])
+            piece = piece.resize((max(1, round(piece.width * SC)), max(1, round(piece.height * SC))), Image.LANCZOS)
+            sheet.alpha_composite(piece, (c * CW + AX - piece.width // 2, out_r * CH + AY - piece.height))
+    sheet.save(os.path.join(OUT, "chars", "wolf.png"))
+    manifest["char_wolf"] = {"src": "assets/chars/wolf.png", "w": sheet.width, "h": sheet.height,
+                             "fw": CW, "fh": CH, "ax": AX, "ay": AY, "frames": counts, "rows_found": len(rows)}
+
+
 def build_portrait(manifest):
     src = Image.open(os.path.join(ROOT, "Пиксельный лист солдата в противогазе.png")).convert("RGBA")
     face = src.crop((40, 0, 160, 120)).resize((120, 120), Image.LANCZOS)
@@ -353,6 +390,7 @@ def main():
         print(name, im.size)
     build_soldier(manifest)
     build_rat(manifest)
+    build_wolf(manifest)
     build_portrait(manifest)
     build_ground(manifest)
     with open(os.path.join(ROOT, "game", "js", "manifest.js"), "w", encoding="utf-8") as f:
