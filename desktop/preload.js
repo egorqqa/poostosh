@@ -7,4 +7,7 @@ contextBridge.exposeInMainWorld('desktop', {
   stopServer: () => ipcRenderer.invoke('server-stop'),
   serverStatus: () => ipcRenderer.invoke('server-status'),
   quit: () => ipcRenderer.invoke('quit'),
+  canAutoUpdate: true,
+  installUpdate: url => ipcRenderer.invoke('update-install', url),
+  onUpdateProgress: cb => ipcRenderer.on('update-progress', (e, d) => cb(d)),
 });

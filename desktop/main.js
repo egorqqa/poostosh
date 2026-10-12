@@ -48,3 +48,9 @@ ipcMain.handle('server-start', (e, opts) => { try { return startServer(opts || {
 ipcMain.handle('server-stop', () => { if (server) { server.close(); server = null; } return { ok: true }; });
 ipcMain.handle('server-status', () => ({ running: !!server, port: server ? server.port : null }));
 ipcMain.handle('quit', () => app.quit());
+ipcMain.handle('update-install', async (e, url) => {
+  const { installUpdate } = require('./updater.js');
+  const send = d => { if (!e.sender.isDestroyed()) e.sender.send('update-progress', d); };
+  try { await installUpdate(url, send); return { ok: true }; }
+  catch (err) { return { ok: false, error: String(err.message || err) }; }
+});

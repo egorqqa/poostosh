@@ -489,6 +489,7 @@ window.UI = (function () {
     }, { full: true });
   };
   U.openUpdate = function (info) {
+    const auto = !!(window.desktop && window.desktop.canAutoUpdate && /\.zip$/i.test(info.url));
     const back = () => U.openTitle(G.hasSave(), U._onNew, U._onLoad);
     U.openModal('update', `<div class="modal" style="width:540px">
       <h2>Обновление ${info.tag}</h2>
@@ -496,11 +497,31 @@ window.UI = (function () {
 Новая версия: ${info.tag}
 
 ${(info.notes || '').replace(/</g, '&lt;')}</div>
-      <div class="muted" style="font-size:12px;margin-bottom:10px">Скачайте архив, распакуйте его поверх старой папки (или в новую) и запустите Poostosh.exe. Сохранения не пострадают.</div>
-      <div class="cols" style="justify-content:flex-end"><button id="u-back">Назад</button><button id="u-page">Страница релиза</button><button class="primary" id="u-dl">Скачать</button></div></div>`, root => {
+      <div class="muted" id="u-hint" style="font-size:12px;margin-bottom:10px">${auto ? 'Игра скачает обновление, установит его и перезапустится сама. Сохранения не пострадают.' : 'Скачайте архив, распакуйте его поверх старой папки и запустите Poostosh.exe. Сохранения не пострадают.'}</div>
+      <div id="u-prog" class="hidden" style="margin-bottom:10px"><div class="bar" style="height:14px"><i id="u-bar" style="width:0%;background:var(--amber)"></i></div><div id="u-st" class="warn" style="font-size:12px;margin-top:4px"></div></div>
+      <div class="cols" id="u-btns" style="justify-content:flex-end"><button id="u-back">Назад</button><button id="u-page">Страница релиза</button><button class="primary" id="u-dl">${auto ? 'Обновить' : 'Скачать'}</button></div></div>`, root => {
       root.querySelector('#u-back').onclick = back;
       root.querySelector('#u-page').onclick = () => UPD.open(info.page);
-      root.querySelector('#u-dl').onclick = () => UPD.open(info.url);
+      const st = root.querySelector('#u-st'), bar = root.querySelector('#u-bar');
+      root.querySelector('#u-dl').onclick = async () => {
+        if (!auto) { UPD.open(info.url); return; }
+        root.querySelector('#u-btns').classList.add('hidden');
+        root.querySelector('#u-prog').classList.remove('hidden');
+        st.textContent = 'Подключение...';
+        window.desktop.onUpdateProgress(d => {
+          if (d.stage === 'download') {
+            const mb = x => (x / 1048576).toFixed(1);
+            bar.style.width = d.total ? Math.round(d.got / d.total * 100) + '%' : '50%';
+            st.textContent = `Загрузка: ${mb(d.got)} из ${d.total ? mb(d.total) : '?'} МБ`;
+          } else if (d.stage === 'extract') { bar.style.width = '100%'; st.textContent = 'Распаковка...'; }
+          else if (d.stage === 'restart') st.textContent = 'Установка и перезапуск игры...';
+        });
+        const r = await window.desktop.installUpdate(info.url);
+        if (!r.ok) {
+          st.innerHTML = `<span class="bad">Ошибка: ${r.error}</span>`;
+          root.querySelector('#u-btns').classList.remove('hidden');
+        }
+      };
     }, { full: true });
   };
 
