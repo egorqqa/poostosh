@@ -66,6 +66,7 @@ window.DATA = (function () {
     elder: 'sepia(0.4) hue-rotate(20deg) brightness(1.05)',
     bum: 'grayscale(0.6) brightness(0.8) sepia(0.3)',
     wild: 'hue-rotate(60deg) saturate(1.4) brightness(0.8)',
+    remote: 'sepia(0.35) hue-rotate(190deg) saturate(1.7) brightness(1.15)',
   };
 
   // ---- шаблоны NPC ----

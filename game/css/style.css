@@ -49,6 +49,13 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); font
 #log-box div { margin-bottom: 2px; }
 #log-box .l-warn { color: var(--amber); } #log-box .l-bad { color: var(--red); } #log-box .l-good { color: #b6ff9f; }
 #log-box .l-sys { color: #8fb88a; font-style: italic; }
+#log-box .l-chat { color: #8fd0ff; }
+#chat-input { margin-top: 4px; font-family: var(--font); font-size: 13px; background: #050a05; color: #8fd0ff; border: 1px solid var(--green-dim); padding: 3px 6px; outline: none; position: relative; z-index: 2; }
+.modal label { display: block; font-size: 12px; color: var(--green-dim); margin: 6px 0 2px; }
+.modal input[type=text], .modal input[type=password], .modal input[type=number] { width: 100%; font-family: var(--font); font-size: 14px; background: #050a05; color: var(--green);
+  border: 1px solid var(--green-dim); padding: 5px 7px; border-radius: 3px; outline: none; }
+.modal input:focus { border-color: var(--amber); }
+.tag.online { color: #8fd0ff; }
 #dialog-box { display: flex; flex-direction: column; height: 100%; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--green-dim) transparent; }
 .dlg-head { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
 #dlg-portrait { width: 38px; height: 38px; border: 1px solid var(--green-dim); image-rendering: pixelated; background: #000; }

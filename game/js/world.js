@@ -65,12 +65,12 @@ window.WORLD_API = (function () {
       for (const so of saved.objects) Object.assign(L.objects[so.uid], so);
       L.actors = saved.actors;
     } else {
-      L.actors = def.npcs.map(([tpl, x, y, o]) => R.makeNpc(tpl, x, y, o || {}));
+      L.actors = def.npcs.map(([tpl, x, y, o], i) => { const a = R.makeNpc(tpl, x, y, o || {}); a.id = `${id}_${i}`; return a; });
     }
     const p = G.player;
     const e = opts.at || def.entry;
     p.x = e.x; p.y = e.y;
-    L.actors = L.actors.filter(a => !a.isPlayer);
+    L.actors = L.actors.filter(a => !a.isPlayer && !a.isRemote);
     L.actors.unshift(p);
     for (const a of L.actors) { a.rx = a.x; a.ry = a.y; a.path = []; a.moving = false; a.walkPhase = 0; a.aimT = 0; a.hitFlash = 0; a.bubble = null; a.alerted = false; }
     buildGrids(L);
@@ -87,24 +87,52 @@ window.WORLD_API = (function () {
     UI.refresh();
   };
 
-  W.saveLocationState = function (G) {
+  W.serializeLocation = function (G) {
     const L = G.loc;
-    if (!L || L.def.temp) return;
-    G.locStates[L.id] = {
+    return {
       objects: L.objects.filter(o => o.container).map(o => ({ uid: o.uid, inv: o.inv, lock: o.lock, caps: o.caps, jammed: o.jammed })),
-      actors: L.actors.filter(a => !a.isPlayer && !a.gone).map(a => {
+      actors: L.actors.filter(a => !a.isPlayer && !a.isRemote && !a.gone).map(a => {
         const c = { ...a };
-        delete c.path; delete c.onArrive; delete c.bubble;
+        delete c.path; delete c.onArrive; delete c.stepCb; delete c.bubble;
         return c;
       }),
     };
   };
+  W.saveLocationState = function (G) {
+    const L = G.loc;
+    if (!L || L.def.temp) return;
+    G.locStates[L.id] = W.serializeLocation(G);
+  };
+
+  // переход в локацию (в сетевой игре — с получением состояния от сервера)
+  W.goLocation = async function (G, id, opts = {}) {
+    if (!NET.active) { W.loadLocation(G, id, opts); return; }
+    const res = await NET.enter(id);
+    if (res.state) G.locStates[id] = res.state; else delete G.locStates[id];
+    NET.isAuth = !!res.authority;
+    W.loadLocation(G, id, opts);
+    for (const pl of res.players || []) if (pl.state) NET.applyPstate(pl.id, pl.name, pl.state);
+    // не появляться на клетке другого игрока
+    const p = G.player, L = G.loc;
+    if (L.actors.some(a => a.isRemote && a.x === p.x && a.y === p.y)) {
+      for (let r = 1; r < 5; r++) {
+        const cells = [];
+        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r) cells.push([p.x + dx, p.y + dy]);
+        const c = cells.find(([x, y]) => ENG.passable(L, x, y, p) && !W.isExit(L, x, y));
+        if (c) { p.x = p.rx = c[0]; p.y = p.ry = c[1]; break; }
+      }
+    }
+  };
 
   W.leaveToWorld = function (G) {
     if (G.combat) { G.log('Нельзя уйти во время боя!', 'bad'); return; }
-    W.saveLocationState(G);
+    if (NET.active) {
+      const st = NET.isAuth && !G.loc.def.temp ? W.serializeLocation(G) : null;
+      NET.leave(G.loc.id, st);
+    } else W.saveLocationState(G);
     G.loc = null;
     WMAP.enter(G);
+    if (G.saveMP) G.saveMP(true);
   };
 
   // ---------- движение ----------
@@ -126,6 +154,7 @@ window.WORLD_API = (function () {
   function speedOf(G, a) {
     if (G.combat) return 5;
     if (a.isPlayer) return G.sneaking ? 2.4 : 4.4;
+    if (a.isRemote) return a.sneaking ? 2.6 : 4.8;
     return a.hurry ? 4 : 2.2;
   }
 
@@ -165,9 +194,11 @@ window.WORLD_API = (function () {
         if (!a.path.length) a.stepCb = () => finishPath(a);
       }
     }
-    if (!G.combat && G.mode !== 'dialog' && !UI.modalOpen()) {
+    if (!G.combat && NET.sim()) {
       updateWander(G, dt);
       updateDetection(G, dt);
+    } else if (!G.combat) {
+      G.risk = Math.max(0, ...L.actors.filter(a => a.hostile && !a.dead && !a.gone && !a.isRemote).map(a => W.sneakRisk(G, a, G.player)));
     }
     if (G.grace > 0) G.grace -= dt;
     // камера
@@ -215,40 +246,56 @@ window.WORLD_API = (function () {
 
   // ---------- скрытность ----------
   W.detectRadius = a => a.stats.per * 2 + 2 + (a.sentry ? 4 : 0);
-  W.sneakRisk = function (G, a) {
-    const p = G.player, d = ENG.dist(a, p), R0 = W.detectRadius(a);
-    if (d > R0 || !ENG.los(G.loc, a.x, a.y, p.x, p.y)) return 0;
-    if (!G.sneaking) return 100;
-    return R.clamp(Math.round((8 + a.stats.per * 4 - R.skill(p, 'sneak') * 0.45 + (R0 - d) * 4) * 0.7), 2, 95);
+  W.sneakRisk = function (G, a, pl = G.player) {
+    if (!pl || pl.dead) return 0;
+    const d = ENG.dist(a, pl), R0 = W.detectRadius(a);
+    if (d > R0 || !ENG.los(G.loc, a.x, a.y, pl.x, pl.y)) return 0;
+    const sneaking = pl.isRemote ? pl.sneaking : G.sneaking;
+    if (!sneaking) return 100;
+    return R.clamp(Math.round((8 + a.stats.per * 4 - R.skill(pl, 'sneak') * 0.45 + (R0 - d) * 4) * 0.7), 2, 95);
   };
 
   function updateDetection(G, dt) {
     G.detectT -= dt;
     if (G.detectT > 0) return;
     G.detectT = 1;
-    const L = G.loc, p = G.player;
+    const L = G.loc;
+    const pls = [G.player, ...L.actors.filter(a => a.isRemote && !a.dead)];
     let maxRisk = 0;
-    for (const a of L.actors) {
-      if (a.isPlayer || a.dead || a.gone || !a.hostile || a.leaving) continue;
-      const risk = W.sneakRisk(G, a);
-      maxRisk = Math.max(maxRisk, risk);
-      if (risk && G.grace <= 0 && Math.random() * 100 < risk) {
-        a.alerted = true;
-        a.bubble = { text: '!', t: 1.5, color: '#ff5a3c' };
-        G.log(`${a.name} замечает вас!`, 'bad');
-        onDetected(G, a);
-        return;
+    for (const pl of pls) {
+      const local = pl === G.player;
+      if (local && (G.mode === 'dialog' || UI.modalOpen())) continue;
+      const graced = local ? G.grace > 0 : pl.graceUntil > Date.now();
+      for (const a of L.actors) {
+        if (a.isPlayer || a.isRemote || a.dead || a.gone || !a.hostile || a.leaving) continue;
+        const risk = W.sneakRisk(G, a, pl);
+        if (local) maxRisk = Math.max(maxRisk, risk);
+        if (risk && !graced && Math.random() * 100 < risk) {
+          a.alerted = true;
+          a.bubble = { text: '!', t: 1.5, color: '#ff5a3c' };
+          G.log(local ? `${a.name} замечает вас!` : `${a.name} замечает: ${pl.name}!`, 'bad');
+          onDetected(G, a, pl);
+          return;
+        }
       }
     }
     G.risk = maxRisk;
   }
 
-  function onDetected(G, spotter) {
+  function onDetected(G, spotter, pl) {
     const boss = G.loc.actors.find(a => a.tpl === 'klyk' && !a.dead);
-    if (spotter.faction === 'raiders' && boss && !G.flags.klykTalked) {
-      boss.bubble = { text: 'Стоять!', t: 2.5, color: '#ff5a3c' };
-      W.startDialog(G, boss);
-      return;
+    if (spotter.faction === 'raiders' && boss) {
+      if (pl.isRemote && !pl.klykTalked) {
+        pl.klykTalked = true; pl.graceUntil = Date.now() + 25000;
+        boss.bubble = { text: 'Стоять!', t: 2.5, color: '#ff5a3c' };
+        NET.event(pl.pid, { kind: 'dialog', npc: boss.id });
+        return;
+      }
+      if (!pl.isRemote && !G.flags.klykTalked) {
+        boss.bubble = { text: 'Стоять!', t: 2.5, color: '#ff5a3c' };
+        W.startDialog(G, boss);
+        return;
+      }
     }
     COMBAT.start(G, spotter, false);
   }
@@ -271,7 +318,7 @@ window.WORLD_API = (function () {
   W.crime = function (G, victim, text) {
     const L = G.loc;
     const angry = L.actors.filter(a => !a.dead && !a.gone && !a.isPlayer && (a === victim || (a.guard && a.faction === victim.faction)));
-    for (const a of angry) { a.hostile = true; a.alerted = true; }
+    for (const a of angry) { a.hostile = true; a.alerted = true; NET.syncEnt(a); }
     victim.bubble = { text: text || 'Вор!', t: 2.5, color: '#ff5a3c' };
     G.log(`${victim.name}: «${text || 'Держи вора!'}»`, 'bad');
     COMBAT.start(G, victim, false);
@@ -371,6 +418,11 @@ window.WORLD_API = (function () {
       return;
     }
     // обычный режим
+    if (a && a.isRemote) {
+      if (a.dead) G.log(`${a.name} тяжело ранен.`, 'warn');
+      else G.log(`Игрок ${a.name}, уровень ${a.level || 1}. Чат — клавиша Enter.`, 'sys');
+      return;
+    }
     if (a) {
       if (a.dead) { goThen(G, a, () => UI.openLoot(a)); return; }
       if (a.hostile) { COMBAT.playerAttack(G, a); return; }
@@ -429,11 +481,13 @@ window.WORLD_API = (function () {
       G.log(`Взлом: успех (${res.chance}%). Замок открыт.`, 'good');
       ENG.floater(p.x, p.y, 'Открыто!', '#9dff8a');
       G.giveXP(10 + Math.floor(diff / 3));
+      NET.syncObj(o);
       W.openContainer(G, o);
     } else {
       G.log(`Взлом: неудача (${res.chance}%).`, 'warn');
       if (res.crit) { o.jammed = G.time + 60; G.log('Критическая неудача! Замок заклинило на час.', 'bad'); }
       if (picks && Math.random() < 0.3) { R.removeItem(p, 'lockpicks', 1); G.log('Отмычка сломалась.', 'bad'); }
+      if (res.crit) NET.syncObj(o);
     }
     UI.refresh();
   };
@@ -452,16 +506,17 @@ window.WORLD_API = (function () {
     const n = itemId === 'caps' ? npc.caps : itemId.startsWith('ammo') || itemId === 'shells' ? stack.n : 1;
     const chance = W.stealChance(G, npc, itemId, itemId === 'caps' ? n : n);
     const res = R.check(chance, p.stats.luck);
-    npc.stealTries++;
+    npc.stealTries = (npc.stealTries || 0) + 1;
     if (res.ok) {
       if (itemId === 'caps') { p.caps += npc.caps; G.log(`Украдено: ${npc.caps} крышек.`, 'good'); npc.caps = 0; }
       else { R.removeItem(npc, itemId, n); R.addItem(p, itemId, n); G.log(`Украдено: ${ITEMS[itemId].name}${n > 1 ? ' ×' + n : ''} (${res.chance}%).`, 'good'); }
       G.giveXP(10);
+      NET.syncEnt(npc);
       return true;
     }
     G.log(`Кража не удалась (${res.chance}%). ${npc.name} заметил!`, 'bad');
     UI.closeModal();
-    if (npc.hostile) { npc.alerted = true; COMBAT.start(G, npc, false); }
+    if (npc.hostile) { npc.alerted = true; NET.syncEnt(npc); COMBAT.start(G, npc, false); }
     else W.crime(G, npc, 'Ах ты крыса! Вор!');
     return false;
   };
@@ -568,13 +623,13 @@ window.WORLD_API = (function () {
       G.flags.klykDeal = true;
       raidersCalm(G, true);
     },
-    grace(G) { G.grace = 10; },
+    grace(G) { G.grace = 10; if (NET.active && !NET.isAuth) NET.req({ act: 'grace' }); },
   };
   W.ACTIONS = ACTIONS;
 
   function giveMeds(G) {
     const locker = G.loc.objects.find(o => o.inv.some(s => s.id === 'meds'));
-    if (locker) R.removeItem(locker, 'meds', 1);
+    if (locker) { R.removeItem(locker, 'meds', 1); NET.syncObj(locker); }
     R.addItem(G.player, 'meds', 1);
     G.log('Получено: Ящик медикаментов.', 'good');
   }
@@ -583,6 +638,7 @@ window.WORLD_API = (function () {
       if (a.faction !== 'raiders' || a.dead) continue;
       a.hostile = false; a.alerted = false;
       if (leave) { a.leaving = true; a.wander = 0; }
+      NET.syncEnt(a);
     }
     if (leave) G.log('Рейдеры собирают пожитки и уходят с блокпоста.', 'good');
   }

@@ -107,6 +107,7 @@ window.UI = (function () {
     if (G.combat) tags.push(`<span class="tag combat">БОЙ · раунд ${G.combat.round}${G.combat.isPlayerTurn() ? ' · ваш ход' : ' · ход: ' + (G.combat.current ? G.combat.current.name : '…')}</span>`);
     if (G.sneaking) tags.push(`<span class="tag sneak">СКРЫТНО${G.risk ? ' · риск ' + G.risk + '%/с' : ''}</span>`);
     if (R.overloaded(p)) tags.push('<span class="tag danger">ПЕРЕГРУЗ</span>');
+    if (NET.active) tags.push(`<span class="tag online" data-tip="${NET.players.map(x => x.name + (x.loc ? '' : ' (карта)')).join('\n')}">ОНЛАЙН: ${NET.players.length}${NET.isAuth && G.scene === 'local' ? ' · ведущий' : ''}</span>`);
     if (p.freePts > 0) tags.push(`<span class="tag sneak">Очки навыков: ${p.freePts}</span>`);
     $('#status-tags').innerHTML = tags.join('');
     if (modalRefresh) modalRefresh();
@@ -164,6 +165,7 @@ window.UI = (function () {
   // ---------- модальные окна ----------
   let currentModal = null;
   U.modalOpen = () => !!currentModal;
+  U.current = () => currentModal;
   U.openModal = function (name, html, mount, opts = {}) {
     const root = $('#modal-root');
     root.className = opts.full ? 'full' : '';
@@ -291,12 +293,14 @@ window.UI = (function () {
         if (r.dataset.caps) { p.caps += src.caps; src.caps = 0; }
         else if (r.dataset.id) { const s = src.inv.find(i => i.id === r.dataset.id); R.removeItem(src, s.id, s.n); R.addItem(p, s.id, s.n); }
         else if (r.dataset.mine) { const s = p.inv.find(i => i.id === r.dataset.mine); if (ITEMS[s.id].type === 'quest') return; R.removeItem(p, s.id, s.n); R.addItem(src, s.id, s.n); }
+        NET.touch(src);
         U.refresh();
       });
       root.querySelector('#l-all').onclick = () => {
         const p = G.player;
         p.caps += src.caps || 0; src.caps = 0;
         for (const s of src.inv.slice()) { R.removeItem(src, s.id, s.n); R.addItem(p, s.id, s.n); }
+        NET.touch(src);
         U.closeModal();
       };
       modalRefresh = draw;
@@ -365,6 +369,7 @@ window.UI = (function () {
           p.caps += price; npc.caps -= price; R.removeItem(p, id, n); R.addItem(npc, id, n);
           G.log(`Продано: ${ITEMS[id].name}${n > 1 ? ' ×' + n : ''} за ${price}¢.`, 'sys');
         }
+        NET.syncEnt(npc);
         U.refresh();
       });
       modalRefresh = draw;
@@ -462,6 +467,7 @@ window.UI = (function () {
       <h1>ПУСТОШЬ</h1><div class="sub">РЖАВЫЙ РУЧЕЙ · ДЕМО</div>
       <button class="primary" id="t-new">Новая игра</button>
       <button id="t-load" ${hasSave ? '' : 'disabled'}>Загрузить</button>
+      <button id="t-mp">Сетевая игра</button>
       ${window.desktop ? '<button id="t-quit">Выход</button>' : ''}
       <div class="muted" style="margin-top:22px;font-size:12px;line-height:1.6">ЛКМ — идти / действие · ПКМ — отменить режим · колесо — масштаб<br>
       A атака · S красться · K кража · L взлом · X осмотр · H лечить · R перезарядка<br>I инвентарь · C персонаж · M карта · Пробел — конец хода · F5/F9 — сохранить/загрузить</div>
@@ -469,6 +475,7 @@ window.UI = (function () {
     <div class="version-box"><button id="t-upd" class="upd hidden" data-tip="Доступно обновление">!</button><span>${window.GAME_VERSION}</span></div>`, root => {
       root.querySelector('#t-new').onclick = onNew;
       root.querySelector('#t-load').onclick = onLoad;
+      root.querySelector('#t-mp').onclick = () => U.openMultiplayer();
       const q = root.querySelector('#t-quit');
       if (q) q.onclick = () => window.desktop.quit();
       const upd = root.querySelector('#t-upd');
@@ -495,6 +502,79 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
       root.querySelector('#u-page').onclick = () => UPD.open(info.page);
       root.querySelector('#u-dl').onclick = () => UPD.open(info.url);
     }, { full: true });
+  };
+
+  U.openMultiplayer = function () {
+    let last = {};
+    try { last = JSON.parse(localStorage.getItem('mp_last') || '{}'); } catch (e) { /* */ }
+    const servedByGame = location.protocol.startsWith('http') && location.port && location.port !== '8123';
+    const host = last.host || (servedByGame ? location.hostname : '127.0.0.1');
+    const port = last.port || (servedByGame ? location.port : '7777');
+    const back = () => U.openTitle(G.hasSave(), U._onNew, U._onLoad);
+    U.openModal('mp', `<div class="modal" style="width:min(720px,96vw)">
+      <h2>Сетевая игра <button class="close" id="mp-back">✕</button></h2>
+      <div class="cols">
+        <div class="screen" style="flex:1">
+          <div class="warn">Подключиться к серверу</div>
+          <label>Адрес сервера (IP)</label><input type="text" id="mp-host" value="${host}">
+          <label>Порт</label><input type="number" id="mp-port" value="${port}">
+          <label>Пароль</label><input type="password" id="mp-pass" value="">
+          <label>Имя персонажа</label><input type="text" id="mp-name" maxlength="18" value="${last.name || 'Странник'}">
+          <div style="margin-top:10px"><button class="primary" id="mp-join">Подключиться</button></div>
+        </div>
+        <div class="screen" style="flex:1">
+          <div class="warn">Создать сервер на этом компьютере</div>
+          ${window.desktop ? `<label>Порт</label><input type="number" id="sv-port" value="${last.svPort || 7777}">
+          <label>Пароль для входа</label><input type="text" id="sv-pass" value="">
+          <div style="margin-top:10px"><button class="primary" id="sv-start">Запустить и войти</button></div>
+          <div class="muted" style="font-size:12px;margin-top:10px;line-height:1.5">Друзья подключаются по вашему IP и паролю. В локальной сети — по адресу ниже, через интернет — откройте порт на роутере. Отдельный сервер без игры: «Сервер.bat» в папке игры.</div>
+          <div id="sv-addr" class="good" style="margin-top:6px"></div>`
+          : `<div class="muted" style="font-size:12px;line-height:1.6;margin-top:6px">Сервер запускается из Windows-версии игры (кнопка здесь или «Сервер.bat»), либо командой<br><b>node server/server.js --port 7777 --password пароль</b></div>`}
+        </div>
+      </div>
+      <div id="mp-status" class="warn" style="margin-top:8px;min-height:18px"></div>
+    </div>`, root => {
+      const st = root.querySelector('#mp-status');
+      root.querySelector('#mp-back').onclick = back;
+      const join = async (h, pt, pw, nm) => {
+        st.textContent = 'Подключение...';
+        try { localStorage.setItem('mp_last', JSON.stringify({ ...last, host: h, port: pt, name: nm, svPort: root.querySelector('#sv-port') ? root.querySelector('#sv-port').value : last.svPort })); } catch (e) { /* */ }
+        try { await G.startMultiplayer(h, pt, pw, nm); }
+        catch (e) { st.textContent = 'Ошибка: ' + e; }
+      };
+      root.querySelector('#mp-join').onclick = () => join(root.querySelector('#mp-host').value.trim(), +root.querySelector('#mp-port').value || 7777, root.querySelector('#mp-pass').value, root.querySelector('#mp-name').value.trim() || 'Странник');
+      const sv = root.querySelector('#sv-start');
+      if (sv) sv.onclick = async () => {
+        const pt = +root.querySelector('#sv-port').value || 7777, pw = root.querySelector('#sv-pass').value;
+        st.textContent = 'Запуск сервера...';
+        const r = await window.desktop.startServer({ port: pt, password: pw });
+        if (!r || !r.ok) { st.textContent = 'Не удалось запустить сервер: ' + (r && r.error); return; }
+        root.querySelector('#sv-addr').innerHTML = 'Адрес для друзей: ' + (r.addresses || []).map(a => `<b>${a}:${r.port}</b>`).join(', ');
+        setTimeout(() => join('127.0.0.1', r.port, pw, root.querySelector('#mp-name').value.trim() || 'Странник'), 600);
+      };
+    }, { full: true });
+  };
+
+  U.openRespawn = function () {
+    U.openModal('dead', `<div class="title-screen"><h1 style="color:#ff5a3c">ВЫ ПОГИБЛИ</h1><div class="sub">Пустошь забирает своё... но не насовсем.</div>
+      <button class="primary" id="r-go">Очнуться в Ржавом Ручье</button></div>`, root => {
+      root.querySelector('#r-go').onclick = () => { U.closeModal(); G.respawn(); };
+    }, { full: true });
+  };
+
+  U.openDisconnected = function () {
+    U.openModal('dead', `<div class="title-screen"><h1 style="font-size:32px">СВЯЗЬ ПОТЕРЯНА</h1><div class="sub">Соединение с сервером разорвано. Персонаж сохранён.</div>
+      <button class="primary" id="d-menu">В главное меню</button></div>`, root => {
+      root.querySelector('#d-menu').onclick = () => location.reload();
+    }, { full: true });
+  };
+
+  U.openChat = function () {
+    const inp = $('#chat-input');
+    if (U.hideDialog && !$('#dialog-box').classList.contains('hidden')) return;
+    inp.classList.remove('hidden');
+    inp.value = '';
+    inp.focus();
   };
 
   U.openDead = function (onLoad, onNew) {

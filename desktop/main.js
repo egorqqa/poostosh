@@ -7,22 +7,28 @@ const arg = (name, def) => { const i = args.indexOf('--' + name); return i >= 0 
 
 let server = null;
 function startServer(opts) {
-  if (server) return { ok: true, port: server.port, already: true };
+  if (server) return { ok: true, port: server.port, addresses: server.addresses, already: true };
   const { createServer } = require('../server/server.js');
   server = createServer({ port: +opts.port || 7777, password: opts.password || '', dataDir: app.getPath('userData'), log: console.log });
-  return { ok: true, port: server.port };
+  return { ok: true, port: server.port, addresses: server.addresses };
 }
 
 // Выделенный сервер без окна:  Poostosh.exe --server --port 7777 --password 123
 if (args.includes('--server')) {
-  app.whenReady().then(() => startServer({ port: arg('port', 7777), password: arg('password', '') }));
-  app.on('window-all-closed', e => e.preventDefault());
+  app.whenReady().then(() => {
+    const port = +arg('port', 7777);
+    startServer({ port, password: arg('password', '') });
+    const win = new BrowserWindow({ width: 820, height: 560, title: 'Сервер «Пустошь»', autoHideMenuBar: true, icon: path.join(__dirname, 'icon.ico'), backgroundColor: '#0d0b08' });
+    win.setMenu(null);
+    setTimeout(() => win.loadURL(`http://127.0.0.1:${port}/server`), 400);
+  });
+  app.on('window-all-closed', () => { if (server) server.close(); app.quit(); });
 } else {
   app.whenReady().then(() => {
     const win = new BrowserWindow({
       width: 1366, height: 820, minWidth: 1024, minHeight: 640, backgroundColor: '#000000',
       title: 'Пустошь', autoHideMenuBar: true, icon: path.join(__dirname, 'icon.ico'),
-      webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true },
+      webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, backgroundThrottling: false },
     });
     win.setMenu(null);
     win.maximize();

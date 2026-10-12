@@ -288,17 +288,17 @@ window.ENG = (function () {
     ctx.font = '12px Consolas, monospace';
     for (const a of actors) {
       if (a.isPlayer) continue;
-      const show = (hov && hov.actor === a) || (G.combat && a.hostile);
+      const show = (hov && hov.actor === a) || (G.combat && a.hostile) || a.isRemote;
       if (!show && !a.bubble) continue;
       const c = { x: a.rx * HW - a.ry * HW, y: (a.rx + a.ry) * HH };
       const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
       let label = a.name;
-      if (G.combat && a.hostile) label += `  ${a.hp}/${R.maxHP(a)}`;
+      if (G.combat && (a.hostile || a.isRemote)) label += `  ${Math.max(0, a.hp)}/${R.maxHP(a)}`;
       if (show) {
         ctx.fillStyle = 'rgba(0,0,0,.65)';
         const w = ctx.measureText(label).width + 8;
         ctx.fillRect(sx - w / 2, sy - 104, w, 16);
-        ctx.fillStyle = a.hostile ? '#ff6a4a' : '#9dff8a';
+        ctx.fillStyle = a.isRemote ? '#8fd0ff' : a.hostile ? '#ff6a4a' : '#9dff8a';
         ctx.fillText(label, sx, sy - 92);
       }
       if (a.bubble) {

@@ -87,7 +87,7 @@ window.WMAP = (function () {
 
   M.enterSite = function (G, id) {
     M.leave();
-    WORLD_API.loadLocation(G, id);
+    return WORLD_API.goLocation(G, id);
   };
 
   M.rest = function (G) {
@@ -155,22 +155,21 @@ window.WMAP = (function () {
     const who = kind === 'raiders' ? 'группу рейдеров' : 'стаю одичалых';
     const spotChance = R.clamp(Math.round(R.skill(p, 'survival') * 0.6 + p.stats.per * 4), 5, 95);
     const spotted = Math.random() * 100 < spotChance;
-    const seed = 'wild_' + Date.now();
-    const go = () => { UI.closeModal(); M.leave(); WORLD_API.loadLocation(G, seed, { kind }); };
+    const seed = 'wild_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+    const go = () => { UI.closeModal(); M.leave(); return WORLD_API.goLocation(G, seed, { kind }); };
     if (spotted) {
       UI.openModal('enc', `<div class="modal" style="width:480px"><h2>Случайная встреча</h2>
         <div class="screen" style="margin-bottom:10px">Благодаря Выживанию (${spotChance}%) вы заранее замечаете впереди ${who}. Они вас пока не видят.</div>
         <div class="cols" style="justify-content:flex-end"><button id="e-avoid">Обойти стороной</button><button class="primary" id="e-go">Подобраться (скрытно)</button></div></div>`, root => {
         root.querySelector('#e-avoid').onclick = () => { UI.closeModal(); G.log('Вы обходите опасность стороной.', 'good'); G.giveXP(15); G.passTime(60); };
-        root.querySelector('#e-go').onclick = () => { go(); G.sneaking = true; G.log('Вы подбираетесь, пригнувшись.', 'sys'); UI.refresh(); };
+        root.querySelector('#e-go').onclick = () => go().then(() => { G.sneaking = true; G.log('Вы подбираетесь, пригнувшись.', 'sys'); UI.refresh(); });
       });
     } else {
       UI.openModal('enc', `<div class="modal" style="width:480px"><h2>Засада!</h2>
         <div class="screen" style="margin-bottom:10px">Вы наткнулись на ${who}. Поздно прятаться...</div>
         <div class="cols" style="justify-content:flex-end"><button class="primary" id="e-go">К бою</button></div></div>`, root => {
         root.querySelector('#e-go').onclick = () => {
-          go();
-          setTimeout(() => { const f = G.loc.actors.find(a => a.hostile && !a.dead); if (f) { for (const a of G.loc.actors) if (a.hostile) a.alerted = true; COMBAT.start(G, f, false); } }, 400);
+          go().then(() => setTimeout(() => { const f = G.loc.actors.find(a => a.hostile && !a.dead); if (f) { for (const a of G.loc.actors) if (a.hostile) a.alerted = true; COMBAT.start(G, f, false); } }, 400));
         };
       });
     }

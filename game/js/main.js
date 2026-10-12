@@ -15,7 +15,7 @@
   G.maxHP = a => R.maxHP(a);
   G.hasItem = id => R.count(G.player, id) > 0;
   G.addItem = (a, id, n) => R.addItem(a, id, n);
-  G.takeFrom = (a, id, n) => R.removeItem(a, id, n);
+  G.takeFrom = (a, id, n) => { const ok = R.removeItem(a, id, n); NET.touch(a); return ok; };
   G.findNpc = tpl => G.loc && G.loc.actors.find(a => a.tpl === tpl && !a.dead);
 
   G.passTime = function (min) {
@@ -114,11 +114,72 @@
   G.gameOver = function () {
     G.player.dead = true;
     G.log('Вы погибли.', 'bad');
+    if (NET.active) { setTimeout(() => UI.openRespawn(), 1200); return; }
     setTimeout(() => UI.openDead(() => G.load(), () => location.reload()), 1200);
+  };
+
+  // ---------- сетевая игра ----------
+  const mpKey = () => `mp_${NET.server}_${NET.name}`;
+  G.saveMP = function (silent) {
+    if (!NET.server || !G.player || G.scene === 'menu') return;
+    const p = { ...G.player };
+    delete p.path; delete p.onArrive; delete p.stepCb;
+    const data = { player: p, quests: G.quests, flags: G.flags, time: G.time, world: G.world };
+    try { localStorage.setItem(mpKey(), JSON.stringify(data)); if (!silent) G.log('Персонаж сохранён.', 'good'); } catch (e) { /* */ }
+  };
+
+  G.startMultiplayer = async function (host, port, password, name) {
+    await NET.connect(host, port, password, name);
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(mpKey()) || 'null'); } catch (e) { data = null; }
+    const begin = () => {
+      G.player.id = NET.myId();
+      G.player.name = NET.name;
+      G.player.dead = false;
+      if (G.player.hp <= 0) G.player.hp = Math.ceil(R.maxHP(G.player) / 2);
+      document.getElementById('log-box').innerHTML = '';
+      G.log(`Вы на сервере ${NET.server} как «${NET.name}». Игроков онлайн: ${NET.players.length}. Enter — чат.`, 'good');
+      if (NET.serverVersion !== window.GAME_VERSION) G.log(`Внимание: версия сервера ${NET.serverVersion}, у вас ${window.GAME_VERSION}.`, 'warn');
+      G.world.c = DATA.WORLD.start.x; G.world.r = DATA.WORLD.start.y;
+      WORLD_API.goLocation(G, 'camp');
+    };
+    UI.closeModal();
+    if (data && data.player) {
+      Object.assign(G, { player: data.player, quests: data.quests, flags: data.flags, time: data.time, world: data.world, locStates: {}, combat: null, dialog: null, mode: 'play' });
+      begin();
+    } else {
+      UI.openCharacter(true, p => {
+        G.player = p;
+        G.locStates = {}; G.quests = { meds: 0 }; G.flags = {}; G.time = 8 * 60;
+        G.world = WMAP.initState();
+        begin();
+      });
+      const nm = document.querySelector('#c-name');
+      if (nm) { nm.value = NET.name; nm.disabled = true; }
+    }
+  };
+
+  G.respawn = function () {
+    const p = G.player;
+    p.dead = false;
+    p.hp = Math.ceil(R.maxHP(p) / 2);
+    G.combat = null;
+    if (G.loc) NET.leave(G.loc.id, NET.isAuth && !G.loc.def.temp ? WORLD_API.serializeLocation(G) : null);
+    G.loc = null;
+    G.world.c = DATA.WORLD.start.x; G.world.r = DATA.WORLD.start.y; G.world.path = [];
+    G.log('Вы приходите в себя у старой заправки.', 'sys');
+    WORLD_API.goLocation(G, 'camp');
+  };
+
+  G.onDisconnect = function () {
+    G.saveMP(true);
+    G.combat = null;
+    UI.openDisconnected();
   };
 
   // ---------- сохранение ----------
   G.save = function () {
+    if (NET.active) { G.saveMP(false); return; }
     if (G.combat) { G.log('Нельзя сохраняться в бою.', 'warn'); return; }
     if (G.scene === 'local') WORLD_API.saveLocationState(G);
     const p = { ...G.player };
@@ -130,6 +191,7 @@
   };
   G.hasSave = function () { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } };
   G.load = function () {
+    if (NET.active) { G.hint('В сетевой игре загрузка недоступна'); return; }
     let data;
     try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { data = null; }
     if (!data) { G.hint('Сохранений нет'); return; }
@@ -153,7 +215,7 @@
       document.getElementById('log-box').innerHTML = '';
       G.log(`${p.name}, вы выходите из пустоши к поселению у старой заправки.`, 'sys');
       G.log('Подсказка: поговорите со старостой Михалычем (клик по NPC).', 'sys');
-      WORLD_API.loadLocation(G, 'camp');
+      WORLD_API.goLocation(G, 'camp');
     });
   }
 
@@ -179,8 +241,15 @@
       ENG.zoom = Math.max(0.55, Math.min(1.8, ENG.zoom * (e.deltaY < 0 ? 1.1 : 0.9)));
     }, { passive: true });
 
+    const chat = document.getElementById('chat-input');
+    chat.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { const t = chat.value.trim(); if (t) NET.chat(t); chat.value = ''; chat.classList.add('hidden'); chat.blur(); }
+      if (e.key === 'Escape') { chat.classList.add('hidden'); chat.blur(); }
+    });
     addEventListener('keydown', e => {
       if (e.target.tagName === 'INPUT') return;
+      if (e.key === 'Enter' && NET.active && G.scene !== 'menu' && G.mode !== 'dialog' && !UI.modalOpen()) { e.preventDefault(); UI.openChat(); return; }
       const k = e.key.toLowerCase();
       if (e.key === 'F5') { e.preventDefault(); if (G.player) G.save(); return; }
       if (e.key === 'F9') { e.preventDefault(); G.load(); return; }
@@ -191,7 +260,7 @@
         if (n >= 1 && n <= 9) WORLD_API.dialogChoose(G, n - 1);
         return;
       }
-      if (e.key === 'Escape') { if (UI.modalOpen()) { if (!['create', 'title', 'dead', 'enc'].includes(currentModalName())) UI.closeModal(); } else UI.setMode('move'); return; }
+      if (e.key === 'Escape') { if (UI.modalOpen()) { if (!['create', 'title', 'dead', 'enc', 'mp', 'update'].includes(UI.current())) UI.closeModal(); } else UI.setMode('move'); return; }
       const map = { '1': 'move', a: 'attack', ф: 'attack', s: 'sneak', ы: 'sneak', k: 'steal', л: 'steal', l: 'lockpick', д: 'lockpick', x: 'look', ч: 'look', h: 'heal', р: 'heal', r: 'reload', к: 'reload', i: 'inventory', ш: 'inventory', c: 'character', с: 'character', m: 'map', ь: 'map' };
       if (k === ' ') { e.preventDefault(); if (G.combat) COMBAT.endPlayerTurn(G); return; }
       if (map[k]) {
@@ -200,7 +269,6 @@
       }
     });
   }
-  function currentModalName() { const r = document.getElementById('modal-root'); return r.firstElementChild && r.firstElementChild.classList.contains('title-screen') ? 'title' : r.querySelector('#c-go') ? 'create' : ''; }
 
   function updateHover() {
     if (G.scene !== 'local' || !G.loc) { G.ui.hover = null; return; }
@@ -232,7 +300,9 @@
 
   // ---------- цикл ----------
   let last = performance.now(), clockAcc = 0;
+  let lastFrameAt = 0;
   function frame(now) {
+    lastFrameAt = performance.now();
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     const t = now / 1000;
@@ -254,6 +324,13 @@
     }
     requestAnimationFrame(frame);
   }
+  // свёрнутое окно: продолжаем симуляцию (важно для ведущего в сетевой игре)
+  setInterval(() => {
+    if (performance.now() - lastFrameAt < 250) return;
+    last = performance.now();
+    if (G.scene === 'local' && G.loc) { WORLD_API.update(G, 0.1); ENG.updateFx(0.1); }
+    else if (G.scene === 'world') WMAP.update(G, 0.1);
+  }, 100);
 
   // ---------- старт ----------
   async function boot() {

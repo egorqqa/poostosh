@@ -1,25 +1,38 @@
-// Пошаговый бой с очками действия
+// Пошаговый бой с очками действия.
+// В сетевой игре бой ведёт «ведущий» клиент локации; остальные шлют ему запросы (NET.req).
 window.COMBAT = (function () {
   const { ITEMS } = DATA;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const C = {};
+  const net = () => window.NET && NET.active;
+  const isAuth = () => !net() || NET.isAuth;
+  const isPC = a => !!(a && (a.isPlayer || a.isRemote));
 
+  function players(G) { return G.loc.actors.filter(a => isPC(a) && !a.dead && !a.gone); }
+  function nearestPC(G, a) {
+    let best = null, bd = 1e9;
+    for (const p of players(G)) { const d = ENG.dist(a, p); if (d < bd) { bd = d; best = p; } }
+    return { p: best, d: bd };
+  }
   function involved(G, a, initiator) {
-    if (a.dead || a.gone || a.isPlayer || !a.hostile) return false;
-    return a.alerted || ENG.dist(a, G.player) <= 16 || (initiator && a.faction === initiator.faction && ENG.dist(a, G.player) <= 24);
+    if (a.dead || a.gone || isPC(a) || !a.hostile) return false;
+    const d = nearestPC(G, a).d;
+    return a.alerted || d <= 16 || (initiator && a.faction === initiator.faction && d <= 24);
   }
 
-  C.start = function (G, initiator, playerFirst) {
+  // first: персонаж, который ходит первым (true — локальный игрок)
+  C.start = function (G, initiator, first) {
+    if (!isAuth()) { NET.req({ act: 'combat', npc: initiator ? initiator.id : null, first: !!first }); return; }
+    if (first === true) first = G.player;
     const L = G.loc;
     if (G.combat) { C.join(G); return; }
-    G.player.path = [];
-    for (const a of L.actors) a.path = a.isPlayer ? [] : a.path;
-    const list = [G.player, ...L.actors.filter(a => involved(G, a, initiator))];
-    for (const a of list) if (!a.isPlayer) { a.path = []; }
+    for (const a of L.actors) a.path = [];
+    const list = [...players(G), ...L.actors.filter(a => involved(G, a, initiator))];
     list.forEach(a => a.seq = R.sequence(a) + R.rnd(0, 4));
     list.sort((a, b) => b.seq - a.seq);
-    if (playerFirst) { list.splice(list.indexOf(G.player), 1); list.unshift(G.player); }
-    const cb = {
+    if (first && list.includes(first)) { list.splice(list.indexOf(first), 1); list.unshift(first); }
+    for (const a of list) if (!isPC(a)) a.alerted = true;
+    G.combat = {
       list, idx: -1, round: 1, current: null, busy: false,
       isPlayerTurn() { return this.current === G.player; },
       spend(n) {
@@ -28,7 +41,6 @@ window.COMBAT = (function () {
         G.player.ap -= n; UI.refresh(); return true;
       },
     };
-    G.combat = cb;
     G.sneaking = false;
     G.log('=== БОЙ! ===', 'warn');
     UI.setMode('move');
@@ -38,38 +50,54 @@ window.COMBAT = (function () {
 
   C.join = function (G) {
     const cb = G.combat;
-    for (const a of G.loc.actors) if (!cb.list.includes(a) && involved(G, a)) { a.alerted = true; cb.list.push(a); }
+    if (!cb || cb.mirror) return;
+    for (const a of G.loc.actors) {
+      if (cb.list.includes(a)) continue;
+      if (involved(G, a) || (isPC(a) && !a.dead && !a.gone)) { if (!isPC(a)) a.alerted = true; cb.list.push(a); }
+    }
   };
 
   function hostilesLeft(G) {
-    return G.combat.list.filter(a => !a.isPlayer && !a.dead && !a.gone && a.hostile);
+    return G.combat.list.filter(a => !isPC(a) && !a.dead && !a.gone && a.hostile);
   }
 
   C.end = function (G, msg) {
     if (!G.combat) return;
+    clearTimeout(G.combat.remoteTimer);
     G.combat = null;
     G.player.ap = R.maxAP(G.player);
     G.log(msg || 'Бой окончен.', 'warn');
+    if (net()) NET.forceSnap();
     UI.setMode('move');
     UI.refresh();
   };
 
   C.nextTurn = async function (G) {
     const cb = G.combat;
-    if (!cb) return;
-    if (G.player.dead) return;
+    if (!cb || cb.mirror) return;
+    if (G.player.dead && !net()) return;
     C.join(G);
     const foes = hostilesLeft(G);
     if (!foes.length) { C.end(G, 'Бой окончен. Врагов не осталось.'); return; }
+    if (!cb.list.some(a => isPC(a) && !a.dead && !a.gone && G.loc.actors.includes(a))) { C.end(G, 'Бой окончен.'); return; }
     cb.idx++;
     if (cb.idx >= cb.list.length) { cb.idx = 0; cb.round++; }
     const a = cb.list[cb.idx];
-    if (a.dead || a.gone || (!a.isPlayer && !a.hostile)) return C.nextTurn(G);
+    if (a.dead || a.gone || (!isPC(a) && !a.hostile) || !G.loc.actors.includes(a) && a !== G.player) return C.nextTurn(G);
     cb.current = a;
     a.ap = R.maxAP(a);
+    if (net()) NET.forceSnap();
     if (a.isPlayer) {
-      if (foes.every(f => ENG.dist(f, a) > 22)) { C.end(G, 'Вы оторвались от преследования.'); return; }
+      if (!net() && foes.every(f => ENG.dist(f, a) > 22)) { C.end(G, 'Вы оторвались от преследования.'); return; }
       cb.busy = false;
+      UI.refresh();
+      return;
+    }
+    if (a.isRemote) {
+      cb.busy = false;
+      NET.event(a.pid, { kind: 'turn', ap: a.ap });
+      clearTimeout(cb.remoteTimer);
+      cb.remoteTimer = setTimeout(() => { if (G.combat === cb && cb.current === a) C.endTurnOf(G, a); }, 45000);
       UI.refresh();
       return;
     }
@@ -77,16 +105,25 @@ window.COMBAT = (function () {
     UI.refresh();
     await sleep(250);
     try { await ai(G, a); } catch (e) { console.error(e); }
-    if (!G.combat) return;
+    if (G.combat !== cb) return;
     await sleep(200);
+    C.nextTurn(G);
+  };
+
+  C.endTurnOf = function (G, a) {
+    const cb = G.combat;
+    if (!cb || cb.mirror || cb.current !== a) return;
+    if (a.isPlayer && cb.busy) return;
+    clearTimeout(cb.remoteTimer);
+    cb.busy = true;
     C.nextTurn(G);
   };
 
   C.endPlayerTurn = function (G) {
     const cb = G.combat;
     if (!cb || !cb.isPlayerTurn() || cb.busy) return;
-    cb.busy = true;
-    C.nextTurn(G);
+    if (cb.mirror) { cb.busy = true; NET.req({ act: 'end' }); return; }
+    C.endTurnOf(G, G.player);
   };
 
   // ---------- расчёты ----------
@@ -97,11 +134,30 @@ window.COMBAT = (function () {
     if (!w.melee && !ENG.los(G.loc, att.x, att.y, def.x, def.y)) return 0;
     let ch = R.skill(att, w.melee ? 'melee' : 'guns') + 15 - R.AC(def);
     if (!w.melee) ch -= Math.max(0, d - att.stats.per + 1) * 3;
-    if (!def.alerted && !def.isPlayer) ch += 20;
+    if (!def.alerted && !isPC(def)) ch += 20;
     return R.clamp(Math.round(ch), 5, 95);
   };
 
-  function unawareCrit(def) { return !def.alerted && !def.isPlayer ? 30 : 0; }
+  // отображение атаки (локально и у других игроков)
+  C.showAttack = function (G, ev) {
+    if (ev.type === 'log') { G.log(ev.text, ev.cls); return; }
+    const att = NET.resolve ? NET.resolve(ev.att) : null, def = NET.resolve ? NET.resolve(ev.def) : null;
+    if (!att || !def) return;
+    const me = G.player;
+    att.dir = ENG.dirFromDelta(def.x - att.x, def.y - att.y);
+    att.aimT = 0.45;
+    if (ev.melee) ENG.swing(att, def); else ENG.tracer(att, def, ev.hit);
+    const an = att === me ? 'Вы' : att.name;
+    if (ev.hit) {
+      def.hitFlash = 0.15;
+      ENG.floater(def.x, def.y, (ev.crit ? 'КРИТ! ' : '') + '-' + ev.dmg, ev.crit ? '#ffcf40' : '#ff5a3c');
+      G.log(`${an} ${att === me ? 'попадаете' : 'попадает'} ${def === me ? 'в вас' : 'в: ' + def.name}${ev.sneak ? ' (из скрытности)' : ''}${ev.crit ? ' — критическое!' : ''} −${ev.dmg} ОЗ (${ev.chance}%).`, def === me ? 'bad' : att === me ? 'good' : 'sys');
+    } else {
+      ENG.floater(def.x, def.y, 'Мимо', '#d9cfb5');
+      G.log(`${an} ${att === me ? 'промахиваетесь' : 'промахивается'} (${ev.chance}%).`, 'sys');
+    }
+    if (ev.killed && def !== me) G.log(`${def.name} убит.`, 'warn');
+  };
 
   async function attack(G, att, def) {
     const w = R.weaponOf(att);
@@ -110,34 +166,36 @@ window.COMBAT = (function () {
     att.dir = ENG.dirFromDelta(def.x - att.x, def.y - att.y);
     att.aimT = 0.45;
     await sleep(180);
-    const sneakAttack = !def.alerted && !def.isPlayer;
-    const roll = R.rnd(1, 100);
-    const hit = roll <= chance;
-    if (!w.melee) { att.loaded--; ENG.tracer(att, def, hit); } else ENG.swing(att, def);
-    G.sound && G.sound(w.melee ? 'swing' : 'shot');
+    const sneak = !def.alerted && !isPC(def);
+    const hit = R.rnd(1, 100) <= chance;
+    if (!w.melee) {
+      att.loaded--;
+      if (att.isRemote) NET.event(att.pid, { kind: 'ammo' });
+    }
+    const ev = { type: 'attack', att: att.id, def: def.id, hit, chance, melee: !!w.melee, sneak, dmg: 0, crit: false, killed: false };
     if (hit) {
-      const critCh = (att.isPlayer ? R.critChance(att) : Math.floor(R.critChance(att) / 2)) + (w.crit || 0) + unawareCrit(def);
+      const critCh = (isPC(att) ? R.critChance(att) : Math.floor(R.critChance(att) / 2)) + (w.crit || 0) + (sneak ? 30 : 0);
       const crit = R.rnd(1, 100) <= critCh;
       let dmg = R.rnd(w.dmg[0], w.dmg[1]) + (w.melee ? R.meleeBonus(att) : 0);
       const dt = crit ? Math.floor(R.DT(def) / 2) : R.DT(def);
-      if (crit) dmg = Math.round(dmg * (sneakAttack ? 2.5 : 1.5));
+      if (crit) dmg = Math.round(dmg * (sneak ? 2.5 : 1.5));
       dmg = Math.max(1, Math.round((dmg - dt) * (1 - R.DR(def) / 100)));
       def.hp -= dmg;
-      def.hitFlash = 0.15;
-      ENG.floater(def.x, def.y, (crit ? 'КРИТ! ' : '') + '-' + dmg, crit ? '#ffcf40' : '#ff5a3c');
-      G.log(`${att.isPlayer ? 'Вы попадаете' : att.name + ' попадает'} ${def.isPlayer ? 'в вас' : 'в: ' + def.name}${sneakAttack ? ' (из скрытности)' : ''}${crit ? ' — критическое!' : ''} −${dmg} ОЗ (${chance}%).`, def.isPlayer ? 'bad' : 'good');
-      if (def.hp <= 0) kill(G, def, att);
-    } else {
-      ENG.floater(def.x, def.y, 'Мимо', '#d9cfb5');
-      G.log(`${att.isPlayer ? 'Вы промахиваетесь' : att.name + ' промахивается'} (${chance}%).`, 'sys');
+      ev.dmg = dmg; ev.crit = crit;
+      if (def.isRemote) { def.hpLock = Date.now() + 1500; NET.event(def.pid, { kind: 'hit', dmg }); }
+      if (def.hp <= 0) ev.killed = true;
     }
+    C.showAttack(G, ev);
+    if (net()) NET.fx(ev);
+    if (ev.killed) kill(G, def, att);
     // атакованный и его союзники становятся враждебными
-    if (att.isPlayer && !def.hostile && !def.dead) {
+    if (isPC(att) && !isPC(def) && !def.hostile && !def.dead) {
       def.hostile = true;
-      for (const a of G.loc.actors) if (!a.dead && !a.isPlayer && (a.guard && a.faction === def.faction)) { a.hostile = true; a.alerted = true; }
+      for (const a of G.loc.actors) if (!a.dead && !isPC(a) && a.guard && a.faction === def.faction) { a.hostile = true; a.alerted = true; NET.syncEnt(a); }
+      NET.syncEnt(def);
       C.join(G);
     }
-    for (const a of G.loc.actors) if (!a.dead && a.hostile && ENG.dist(a, att) < 18) a.alerted = true;
+    for (const a of G.loc.actors) if (!a.dead && !isPC(a) && a.hostile && ENG.dist(a, att) < 18) a.alerted = true;
     def.alerted = true;
     UI.refresh();
     await sleep(380);
@@ -149,6 +207,7 @@ window.COMBAT = (function () {
     a.moving = false;
     a.path = [];
     if (a.isPlayer) { G.gameOver(); return; }
+    if (a.isRemote) { NET.event(a.pid, { kind: 'died' }); return; }
     // оружие и броня падают в лут
     if (a.weapon) {
       R.addItem(a, a.weapon, 1);
@@ -157,9 +216,10 @@ window.COMBAT = (function () {
       a.weapon = null;
     }
     if (a.armor) { R.addItem(a, a.armor, 1); a.armor = null; }
-    G.log(`${a.name} убит.`, 'warn');
     if (by && by.isPlayer) G.giveXP(a.xpValue || 25);
+    if (by && by.isRemote) NET.event(by.pid, { kind: 'xp', n: a.xpValue || 25 });
     if (a.tpl === 'klyk') G.flags.klykDead = true;
+    NET.syncEnt(a);
   }
   C.kill = kill;
 
@@ -184,78 +244,109 @@ window.COMBAT = (function () {
     reload(G, p);
     G.log(`Перезарядка: ${p.loaded}/${w.mag}.`, 'sys');
     UI.refresh();
-    autoEnd(G);
+    autoEnd(G, p);
   };
 
-  // ---------- действия игрока ----------
+  // ---------- действия ----------
   function stepTo(G, a, cell) {
     return new Promise(r => WORLD_API.moveTo(G, a, [cell], r));
   }
 
-  C.playerWalk = async function (G, path, cb) {
-    const c = G.combat, p = G.player;
-    if (!c || !c.isPlayerTurn() || c.busy) return;
-    if (R.overloaded(p)) { G.log('Перегруз! Двигаться невозможно.', 'bad'); return; }
-    const steps = path.slice(0, p.ap);
-    if (!steps.length) { G.hint('Не хватает ОД'); return; }
+  // передвижение участника боя (на стороне ведущего)
+  C.actorWalk = async function (G, a, path, cb, noAutoEnd) {
+    const c = G.combat;
+    if (!c || c.mirror || c.current !== a || c.busy) return;
+    if (a.isPlayer && R.overloaded(a)) { G.log('Перегруз! Двигаться невозможно.', 'bad'); return; }
+    const steps = path.slice(0, a.ap);
+    if (!steps.length) { if (a.isPlayer) G.hint('Не хватает ОД'); return; }
     c.busy = true;
     for (const cell of steps) {
-      if (!ENG.passable(G.loc, cell.x, cell.y, p)) break;
-      await stepTo(G, p, cell);
-      p.ap--;
+      if (Math.max(Math.abs(cell.x - a.x), Math.abs(cell.y - a.y)) !== 1 || !ENG.passable(G.loc, cell.x, cell.y, a)) break;
+      await stepTo(G, a, cell);
+      a.ap--;
       UI.refresh();
-      if (!G.combat) break;
+      if (G.combat !== c) return;
     }
-    if (!G.combat) return;
     c.busy = false;
     if (cb) cb();
-    autoEnd(G);
+    if (!noAutoEnd) autoEnd(G, a);
+  };
+
+  C.playerWalk = function (G, path, cb) {
+    const c = G.combat, p = G.player;
+    if (!c || !c.isPlayerTurn() || c.busy) return;
+    if (c.mirror) {
+      if (R.overloaded(p)) { G.log('Перегруз! Двигаться невозможно.', 'bad'); return; }
+      const steps = path.slice(0, p.ap);
+      if (!steps.length) { G.hint('Не хватает ОД'); return; }
+      c.busy = true; c.onAck = cb || null;
+      NET.req({ act: 'move', path: steps });
+      return;
+    }
+    return C.actorWalk(G, p, path, cb);
+  };
+
+  // атака участником боя; возвращает строку-ошибку или undefined
+  C.actorAttack = async function (G, a, target) {
+    if (!G.combat) C.start(G, target, a);
+    const c = G.combat;
+    if (!c || c.mirror || c.current !== a || c.busy) return;
+    const w = R.weaponOf(a);
+    if (!w.melee && w.mag && a.loaded <= 0) return 'Магазин пуст.';
+    const d = ENG.dist(a, target);
+    if (w.melee && d > 1) {
+      const path = ENG.findPath(G.loc, a.x, a.y, target.x, target.y, { adjacent: true, ignore: a });
+      if (!path) return 'Не подойти.';
+      if (path.length + w.ap > a.ap) return `Нужно ${path.length + w.ap} ОД (подойти и ударить).`;
+      await C.actorWalk(G, a, path, null, true);
+      if (G.combat !== c) return;
+    } else if (d > w.range) return `Слишком далеко: дальность ${w.range}, до цели ${d}.`;
+    if (!w.melee && !ENG.los(G.loc, a.x, a.y, target.x, target.y)) return 'Цель вне линии огня.';
+    if (a.ap < w.ap) return `Не хватает ОД: нужно ${w.ap}.`;
+    c.busy = true;
+    await attack(G, a, target);
+    if (G.combat !== c) return;
+    c.busy = false;
+    if (!hostilesLeft(G).length) { C.end(G, 'Победа! Врагов не осталось.'); return; }
+    autoEnd(G, a);
   };
 
   C.playerAttack = async function (G, target) {
     const p = G.player;
-    if (!G.combat) {
-      const sneak = !target.alerted;
-      if (sneak && G.sneaking) G.log('Атака из скрытности!', 'good');
-      C.start(G, target, true);
-    }
-    const c = G.combat;
-    if (!c || !c.isPlayerTurn() || c.busy) return;
     const w = R.weaponOf(p);
+    if (G.combat && !G.combat.isPlayerTurn()) return;
+    if (G.combat && G.combat.busy) return;
     if (!w.melee && w.mag && p.loaded <= 0) {
-      if (R.count(p, w.ammo)) { G.log('Магазин пуст — перезарядка (2 ОД).', 'warn'); C.reload(G); }
+      if (R.count(p, w.ammo)) { G.log('Магазин пуст — перезарядка (2 ОД).', 'warn'); if (G.combat) C.reload(G); else { reload(G, p); UI.refresh(); } }
       else G.log('Нет патронов! Смените оружие (инвентарь) или бейте кулаками.', 'bad');
       return;
     }
-    const d = ENG.dist(p, target);
-    if (w.melee && d > 1) {
-      const path = ENG.findPath(G.loc, p.x, p.y, target.x, target.y, { adjacent: true });
-      if (!path) { G.hint('Не подойти'); return; }
-      if (path.length + w.ap > p.ap) { G.log(`Нужно ${path.length + w.ap} ОД (подойти и ударить).`, 'warn'); return; }
-      await C.playerWalk(G, path);
-      if (!G.combat) return;
-    } else if (d > w.range) { G.log(`Слишком далеко: дальность ${w.range}, до цели ${d}.`, 'warn'); return; }
-    if (!w.melee && !ENG.los(G.loc, p.x, p.y, target.x, target.y)) { G.log('Цель вне линии огня.', 'warn'); return; }
-    if (p.ap < w.ap) { G.log(`Не хватает ОД: нужно ${w.ap}.`, 'warn'); return; }
-    c.busy = true;
-    await attack(G, p, target);
-    if (!G.combat) return;
-    c.busy = false;
-    if (!hostilesLeft(G).length) { C.end(G, 'Победа! Врагов не осталось.'); return; }
-    autoEnd(G);
+    if (!G.combat && !target.alerted && G.sneaking) G.log('Атака из скрытности!', 'good');
+    if (!isAuth()) {
+      if (G.combat) { G.combat.busy = true; }
+      NET.req({ act: 'attack', target: target.id });
+      return;
+    }
+    const err = await C.actorAttack(G, p, target);
+    if (err) G.log(err, 'warn');
   };
 
-  function autoEnd(G) {
+  function autoEnd(G, a = G.player) {
     const c = G.combat;
-    if (c && c.isPlayerTurn() && !c.busy && G.player.ap <= 0) setTimeout(() => C.endPlayerTurn(G), 350);
+    if (!c || c.mirror) {
+      if (c && c.mirror && c.isPlayerTurn() && !c.busy && G.player.ap <= 0) setTimeout(() => C.endPlayerTurn(G), 350);
+      return;
+    }
+    if (c.current === a && !c.busy && a.ap <= 0) setTimeout(() => C.endTurnOf(G, a), 350);
   }
   C.autoEnd = autoEnd;
 
   // ---------- ИИ ----------
   async function ai(G, a) {
-    const p = G.player;
     let guard = 30;
-    while (a.ap > 0 && guard-- > 0 && !p.dead && !a.dead && G.combat) {
+    while (a.ap > 0 && guard-- > 0 && !a.dead && G.combat) {
+      const { p } = nearestPC(G, a);
+      if (!p) break;
       const w = R.weaponOf(a);
       if (a.hp < R.maxHP(a) * 0.35 && R.count(a, 'medkit') && a.ap >= 2) {
         R.removeItem(a, 'medkit', 1);
@@ -264,17 +355,18 @@ window.COMBAT = (function () {
         a.ap -= 2;
         ENG.floater(a.x, a.y, '+' + h, '#9dff8a');
         G.log(`${a.name} использует аптечку.`, 'sys');
+        if (net()) NET.fx({ type: 'log', text: `${a.name} использует аптечку.`, cls: 'sys' });
         await sleep(400);
         continue;
       }
       if (!w.melee && w.mag && a.loaded <= 0) {
-        if (R.count(a, w.ammo) && a.ap >= 2) { reload(G, a); a.ap -= 2; G.log(`${a.name} перезаряжается.`, 'sys'); await sleep(300); continue; }
+        if (R.count(a, w.ammo) && a.ap >= 2) { reload(G, a); a.ap -= 2; await sleep(300); continue; }
         R.addItem(a, a.weapon, 1); a.weapon = null; continue; // кулаки
       }
       const d = ENG.dist(a, p);
       const canHit = d <= w.range && (w.melee || ENG.los(G.loc, a.x, a.y, p.x, p.y));
       if (canHit) {
-        if (a.ap >= w.ap) { await attack(G, a, p); continue; }
+        if (a.ap >= w.ap) { await attack(G, a, p); if (p.isPlayer && p.dead) break; continue; }
         break;
       }
       const path = ENG.findPath(G.loc, a.x, a.y, p.x, p.y, { adjacent: true, ignore: a, maxLen: 60 });

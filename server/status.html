@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Сервер «Пустошь»</title>
+<style>
+  body { margin: 0; background: #0d0b08; color: #7dfc6a; font: 13px Consolas, monospace; }
+  header { padding: 10px 14px; background: linear-gradient(#3b362c, #1a1712); border-bottom: 2px solid #5d5240; color: #f0b43c; font-weight: bold; letter-spacing: 2px; display: flex; justify-content: space-between; }
+  main { display: grid; grid-template-columns: 260px 1fr; gap: 10px; padding: 10px; height: calc(100vh - 62px); box-sizing: border-box; }
+  .box { background: #0d150c; border: 1px solid #3e8a34; border-radius: 4px; padding: 8px; overflow: auto; }
+  h3 { margin: 0 0 6px; color: #f0b43c; font-size: 13px; }
+  .muted { color: #3e8a34; }
+  #log div { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header><span>СЕРВЕР «ПУСТОШЬ»</span><span id="ver"></span></header>
+<main>
+  <div class="box">
+    <h3>Подключение</h3><div id="addr"></div>
+    <h3 style="margin-top:12px">Игроки</h3><div id="players"></div>
+    <h3 style="margin-top:12px">Работает</h3><div id="up"></div>
+  </div>
+  <div class="box" id="log"></div>
+</main>
+<script>
+  async function tick() {
+    try {
+      const i = await (await fetch('/info')).json();
+      document.getElementById('ver').textContent = i.version + (i.locked ? ' · с паролем' : ' · без пароля');
+      document.getElementById('addr').innerHTML = i.addresses.concat(['127.0.0.1']).map(a => `<div>${a}:${i.port}</div>`).join('') + '<div class="muted" style="margin-top:6px">Для игры через интернет откройте порт на роутере.</div>';
+      document.getElementById('players').innerHTML = i.players.length ? i.players.map(p => `<div>${p.name} <span class="muted">${p.loc || 'карта мира'}</span></div>`).join('') : '<div class="muted">никого</div>';
+      const s = i.uptime; document.getElementById('up').textContent = `${Math.floor(s / 3600)} ч ${Math.floor(s / 60) % 60} мин`;
+      const log = document.getElementById('log');
+      const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 5;
+      log.innerHTML = i.log.map(l => `<div>${l.replace(/</g, '&lt;')}</div>`).join('');
+      if (atBottom) log.scrollTop = log.scrollHeight;
+    } catch (e) { document.getElementById('ver').textContent = 'нет связи'; }
+  }
+  tick(); setInterval(tick, 2000);
+</script>
+</body>
+</html>
