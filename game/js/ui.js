@@ -7,7 +7,7 @@ window.UI = (function () {
   let modalRefresh = null;
 
   const ACTIONS = [
-    { id: 'move', name: 'Ходить', icon: 'walk', key: '1' },
+    { id: 'move', name: 'Ходить', icon: 'walk', key: 'Q' },
     { id: 'attack', name: 'Атака', icon: 'attack', key: 'A' },
     { id: 'steal', name: 'Кража', icon: 'steal', key: 'K' },
     { id: 'lockpick', name: 'Взлом', icon: 'lockpick', key: 'L' },
@@ -26,11 +26,13 @@ window.UI = (function () {
     G = game;
     const box = $('#actions');
     box.innerHTML = ACTIONS.map(a => `<div class="act" data-act="${a.id}" data-tip="${a.name} [${a.key}]"><span class="key">${a.key}</span>${ICONS.ACTION[a.icon]}<span>${a.name}</span></div>`).join('');
-    box.addEventListener('click', e => { const el = e.target.closest('.act'); if (el) U.action(el.dataset.act); });
+    box.addEventListener('click', e => { const el = e.target.closest('.act'); if (el) { SND.play('ui'); U.action(el.dataset.act); } });
+    $('#quick-slots').addEventListener('click', e => { const el = e.target.closest('.qs'); if (el) G.useQuick(+el.dataset.i); });
+    $('#btn-sound').addEventListener('click', () => { SND.set('mute', !SND.opts.mute); U.refresh(); });
     $('#weapon-box').addEventListener('click', () => U.action('attack'));
     $('#weapon-box').addEventListener('contextmenu', e => { e.preventDefault(); U.action('reload'); });
     $('#btn-endturn').addEventListener('click', () => COMBAT.endPlayerTurn(G));
-    $('#dlg-options').addEventListener('click', e => { const li = e.target.closest('li'); if (li && !li.classList.contains('disabled')) WORLD_API.dialogChoose(G, +li.dataset.i); });
+    $('#dlg-options').addEventListener('click', e => { const li = e.target.closest('li'); if (li && !li.classList.contains('disabled')) { SND.play('ui'); WORLD_API.dialogChoose(G, +li.dataset.i); } });
     // подсказки
     const tip = $('#tooltip');
     document.addEventListener('mousemove', e => {
@@ -93,6 +95,12 @@ window.UI = (function () {
     const chance = G.ui.hover && G.ui.hover.actor && !G.ui.hover.actor.dead && G.loc ? COMBAT.hitChance(G, p, G.ui.hover.actor) : null;
     $('#wpn-info').innerHTML = `<span>ОД ${w.ap} · урон ${w.dmg[0]}–${w.dmg[1]}${w.melee ? '' : ' · дальн. ' + w.range}</span><span>${w.mag ? `${p.loaded}/${w.mag} · ${R.count(p, w.ammo)}` : ''}${chance != null && G.ui.mode === 'attack' ? ` · ${chance}%` : ''}</span>`;
     $('#weapon-box').classList.toggle('active', G.ui.mode === 'attack');
+    const qs = G.quickSlots ? G.quickSlots() : [];
+    $('#quick-slots').innerHTML = qs.map((id, i) => {
+      const n = id ? R.count(p, id) : 0;
+      return `<div class="qs ${n ? '' : 'empty'}" data-i="${i}" data-tip="${id ? ITEMS[id].name + ' [' + (i + 1) + ']' : 'Пустой слот — назначьте в инвентаре'}"><span class="k">${i + 1}</span>${id ? itemIcon(id) : ''}<span class="n">${id ? n : ''}</span></div>`;
+    }).join('');
+    $('#btn-sound').textContent = SND.opts.mute ? '🔇' : '🔊';
     $('#btn-endturn').classList.toggle('hidden', !(G.combat && G.combat.isPlayerTurn()));
     document.querySelectorAll('.act').forEach(el => {
       const id = el.dataset.act;
@@ -134,6 +142,7 @@ window.UI = (function () {
 
   // ---------- диалог ----------
   U.showDialog = function (npc, text, opts) {
+    if (!G.dialog || G.dialog._shown !== npc) { SND.play('dialog'); if (G.dialog) G.dialog._shown = npc; }
     $('#log-box').classList.add('hidden');
     $('#dialog-box').classList.remove('hidden');
     const port = $('#dlg-portrait');
@@ -219,6 +228,7 @@ window.UI = (function () {
   // ---------- инвентарь ----------
   U.openInventory = function () {
     let sel = null;
+    TUT.mark('panel');
     U.openModal('inventory', `<div class="modal" style="width:780px;height:min(560px,100%)">
       <h2>Инвентарь <button class="close" data-close>✕ [I]</button></h2>
       <div class="cols" style="flex:1;min-height:0">
@@ -245,7 +255,7 @@ window.UI = (function () {
         const btns = [];
         if (it) {
           if (it.type === 'weapon' || it.type === 'armor') btns.push('<button class="primary" data-b="equip">Надеть / взять в руку</button>');
-          if (it.type === 'aid') btns.push('<button class="primary" data-b="use">Использовать</button>');
+          if (it.type === 'aid') { btns.push('<button class="primary" data-b="use">Использовать</button>'); btns.push('<button data-b="q0">→1</button><button data-b="q1">→2</button><button data-b="q2">→3</button>'); }
           if (it.type !== 'quest') btns.push('<button data-b="drop">Выбросить</button>');
         }
         root.querySelector('#inv-btns').innerHTML = btns.join('');
@@ -254,6 +264,7 @@ window.UI = (function () {
         if (!sel) return;
         if (b === 'equip') G.equip(sel);
         if (b === 'use') G.useItem(sel);
+        if (b && b[0] === 'q') { G.quickSlots()[+b[1]] = sel; G.log(`${ITEMS[sel].name} — в быстрый слот ${+b[1] + 1}.`, 'sys'); }
         if (b === 'drop') { const s = G.player.inv.find(i => i.id === sel); if (s) { R.removeItem(G.player, sel, s.n); G.log(`Выброшено: ${ITEMS[sel].name}.`, 'sys'); } }
         if (!G.player.inv.find(i => i.id === sel)) sel = null;
         U.refresh();
@@ -302,6 +313,7 @@ window.UI = (function () {
         const r = e.target.closest('.item');
         if (!r) return;
         const p = G.player;
+        SND.play('pickup');
         if (r.dataset.caps) { p.caps += src.caps; src.caps = 0; }
         else if (r.dataset.id) { const s = src.inv.find(i => i.id === r.dataset.id); R.removeItem(src, s.id, s.n); R.addItem(p, s.id, s.n); }
         else if (r.dataset.mine) { const s = p.inv.find(i => i.id === r.dataset.mine); if (ITEMS[s.id].type === 'quest') return; R.removeItem(p, s.id, s.n); R.addItem(src, s.id, s.n); }
@@ -373,12 +385,12 @@ window.UI = (function () {
         if (r.dataset.buy) {
           const id = r.dataset.buy, n = pack(id, R.count(npc, id)), price = buyP(id) * n;
           if (p.caps < price) { G.hint('Не хватает крышек'); return; }
-          p.caps -= price; npc.caps += price; R.removeItem(npc, id, n); R.addItem(p, id, n);
+          p.caps -= price; npc.caps += price; R.removeItem(npc, id, n); R.addItem(p, id, n); SND.play('cash');
           G.log(`Куплено: ${ITEMS[id].name}${n > 1 ? ' ×' + n : ''} за ${price}¢.`, 'sys');
         } else if (r.dataset.sell) {
           const id = r.dataset.sell, n = pack(id, R.count(p, id)), price = sellP(id) * n;
           if (npc.caps < price) { G.hint('У торговца нет столько крышек'); return; }
-          p.caps += price; npc.caps -= price; R.removeItem(p, id, n); R.addItem(npc, id, n);
+          p.caps += price; npc.caps -= price; R.removeItem(p, id, n); R.addItem(npc, id, n); SND.play('cash');
           G.log(`Продано: ${ITEMS[id].name}${n > 1 ? ' ×' + n : ''} за ${price}¢.`, 'sys');
         }
         NET.syncEnt(npc);
@@ -391,6 +403,7 @@ window.UI = (function () {
 
   // ---------- персонаж / создание ----------
   U.openCharacter = function (create, onDone) {
+    if (!create) TUT.mark('panel');
     const p = create ? R.newPlayer('Странник', { str: 5, per: 5, end: 5, cha: 5, int: 5, agi: 5, luck: 5 }, []) : G.player;
     let pool = create ? 5 : 0;
     let desc = create ? 'Распределите 5 очков между характеристиками и отметьте 3 профильных навыка (+20%, и каждое очко навыка даёт +2%).' : '';
@@ -488,14 +501,17 @@ window.UI = (function () {
       <button class="primary" id="t-new">Новая игра</button>
       <button id="t-load" ${hasSave ? '' : 'disabled'}>Загрузить</button>
       <button id="t-mp">Сетевая игра</button>
+      <button id="t-set">Настройки</button>
       ${window.desktop ? '<button id="t-quit">Выход</button>' : ''}
-      <div class="muted" style="margin-top:22px;font-size:12px;line-height:1.6">ЛКМ — идти / действие · ПКМ — отменить режим · колесо — масштаб<br>
-      A атака · S красться · K кража · L взлом · X осмотр · H лечить · R перезарядка<br>I инвентарь · C персонаж · M карта · Пробел — конец хода · F5/F9 — сохранить/загрузить</div>
+      <div class="muted" style="margin-top:22px;font-size:12px;line-height:1.6">ЛКМ — идти / действие · ПКМ — отменить режим · колесо — масштаб · 1–3 — быстрые слоты<br>
+      Q ходить · A атака · S красться · K кража · L взлом · X осмотр · H лечить · R перезарядка<br>I инвентарь · C персонаж · M карта · N мини-карта · Пробел — конец хода · F5/F9 — сохранить/загрузить</div>
     </div>
     <div class="version-box"><button id="t-upd" class="upd hidden" data-tip="Доступно обновление">!</button><span>${window.GAME_VERSION}</span></div>`, root => {
       root.querySelector('#t-new').onclick = onNew;
       root.querySelector('#t-load').onclick = onLoad;
       root.querySelector('#t-mp').onclick = () => U.openMultiplayer();
+      root.querySelector('#t-set').onclick = () => U.openSettings();
+      SND.setScene('menu');
       const q = root.querySelector('#t-quit');
       if (q) q.onclick = () => window.desktop.quit();
       const upd = root.querySelector('#t-upd');
@@ -593,6 +609,29 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
         root.querySelector('#sv-addr').innerHTML = 'Адрес для друзей: ' + (r.addresses || []).map(a => `<b>${a}:${r.port}</b>`).join(', ');
         setTimeout(() => join('127.0.0.1', r.port, pw, root.querySelector('#mp-name').value.trim() || 'Странник'), 600);
       };
+    }, { full: true });
+  };
+
+  U.openSettings = function () {
+    const back = () => U.openTitle(G.hasSave(), U._onNew, U._onLoad);
+    const pct = v => Math.round(v * 100);
+    U.openModal('settings', `<div class="modal" style="width:min(520px,94vw)">
+      <h2>Настройки <button class="close" id="s-back">✕</button></h2>
+      <div class="screen">
+        <div class="settings-row"><span>Звуки</span><input type="range" id="s-sfx" min="0" max="100" value="${pct(SND.opts.sfx)}"><b id="s-sfx-v">${pct(SND.opts.sfx)}</b></div>
+        <div class="settings-row"><span>Музыка</span><input type="range" id="s-music" min="0" max="100" value="${pct(SND.opts.music)}"><b id="s-music-v">${pct(SND.opts.music)}</b></div>
+        <div class="settings-row"><span>Без звука</span><input type="checkbox" id="s-mute" ${SND.opts.mute ? 'checked' : ''}><span></span></div>
+        <div class="settings-row"><span>Подсказки</span><input type="checkbox" id="s-tips" ${TUT.enabled() ? 'checked' : ''}><span></span></div>
+        <div class="settings-row"><span>Мини-карта</span><input type="checkbox" id="s-mini" ${MINI.visible ? 'checked' : ''}><span></span></div>
+        <div class="muted" style="font-size:12px">Подсказки начинаются заново в новой игре. Кнопка 🔊 в правом верхнем углу быстро выключает звук.</div>
+      </div>
+      <div style="text-align:right;margin-top:10px"><button class="primary" id="s-ok">Готово</button></div></div>`, root => {
+      root.querySelector('#s-back').onclick = back;
+      root.querySelector('#s-ok').onclick = back;
+      for (const k of ['sfx', 'music']) root.querySelector('#s-' + k).oninput = e => { SND.set(k, e.target.value / 100); root.querySelector(`#s-${k}-v`).textContent = e.target.value; if (k === 'sfx') SND.play('pickup'); };
+      root.querySelector('#s-mute').onchange = e => SND.set('mute', e.target.checked);
+      root.querySelector('#s-tips').onchange = e => TUT.setEnabled(e.target.checked);
+      root.querySelector('#s-mini').onchange = e => { if (MINI.visible !== e.target.checked) MINI.toggle(); };
     }, { full: true });
   };
 

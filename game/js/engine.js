@@ -336,6 +336,20 @@ window.ENG = (function () {
       ctx.fillStyle = o.container || (o.interact && (o.interact.search || o.interact.check)) ? '#f0c060' : '#c8f5bd';
       ctx.fillText(label, r.x + r.w / 2, ly);
     }
+    // стрелка-подсказка обучения
+    const ta = window.TUT && TUT.arrow();
+    if (ta) {
+      let tx = null, ty = null;
+      if (ta.npc) { const n = L.actors.find(a => a.tpl === ta.npc && !a.dead); if (n) { tx = (n.rx - n.ry) * HW; ty = (n.rx + n.ry) * HH + HH - 125; } }
+      if (ta.exit && L.def.exits) { const r = L.def.exits[0]; const c = iso((r.x0 + r.x1 + 1) / 2, (r.y0 + r.y1 + 1) / 2); tx = c.x; ty = c.y - 70; }
+      if (tx != null) {
+        const b = Math.sin(t * 5) * 6;
+        ctx.save(); ctx.translate(tx, ty + b);
+        ctx.fillStyle = '#7dfc6a'; ctx.strokeStyle = '#0a2a08'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(-11, -18); ctx.lineTo(11, -18); ctx.lineTo(11, -2); ctx.lineTo(20, -2); ctx.lineTo(0, 16); ctx.lineTo(-20, -2); ctx.lineTo(-11, -2); ctx.closePath();
+        ctx.stroke(); ctx.fill(); ctx.restore();
+      }
+    }
     // подписи над NPC
     ctx.font = '12px Consolas, monospace';
     for (const a of actors) {

@@ -179,6 +179,7 @@ window.NET = (function () {
       if (!G.combat || !G.combat.mirror) {
         G.combat = makeMirror(); G.sneaking = false;
         G.log('=== БОЙ! ===', 'warn');
+        SND.setCombat(true); TUT.mark('combat');
         UI.setMode('move');
       }
       const cur = N.resolve(m.c.cur);
@@ -192,6 +193,7 @@ window.NET = (function () {
       G.combat = null;
       G.player.ap = R.maxAP(G.player);
       G.log('Бой окончен.', 'warn');
+      SND.setCombat(false);
     }
     UI.refresh();
   }

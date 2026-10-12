@@ -65,6 +65,8 @@ window.WMAP = (function () {
     ENG.cam.x = W.px; ENG.cam.y = W.py;
     UI.setMode('move');
     G.log('Вы выходите на просторы пустоши.', 'sys');
+    SND.setScene('world'); SND.setCombat(false);
+    TUT.mark('world');
     showPanel(G);
     UI.refresh();
   };

@@ -13,8 +13,10 @@
   <div id="topbar">
     <div id="loc-name"></div>
     <div id="status-tags"></div>
-    <div id="clock"></div>
+    <div id="topright"><button id="btn-sound" data-tip="Звук: вкл/выкл (настройки — в главном меню)"></button><div id="clock"></div></div>
   </div>
+  <canvas id="minimap" class="hidden" data-tip="Мини-карта (N). Клик — идти туда"></canvas>
+  <div id="tut-box" class="hidden"></div>
   <div id="float-hint"></div>
 
   <!-- Нижний интерфейс -->
@@ -42,6 +44,7 @@
         <div class="vit"><span>ОД</span><b id="ap-val"></b></div>
         <button id="btn-endturn" class="hidden">Конец хода</button>
       </div>
+      <div id="quick-slots"></div>
     </div>
 
     <div id="hud-right" class="panel">
@@ -54,6 +57,7 @@
 </div>
 
 <script src="js/version.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/manifest.js"></script>
 <script src="js/updater.js"></script>
 <script src="js/icons.js"></script>
@@ -65,6 +69,8 @@
 <script src="js/combat.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/worldmap.js"></script>
+<script src="js/tutorial.js"></script>
+<script src="js/minimap.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

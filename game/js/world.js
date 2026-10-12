@@ -98,6 +98,8 @@ window.WORLD_API = (function () {
     const c = ENG.tileCenter(p.x, p.y);
     ENG.cam.x = c.x; ENG.cam.y = c.y - 40;
     G.log(`— ${def.name} —`, 'sys');
+    SND.setScene(LOCATIONS[id] ? id : 'wild');
+    TUT.mark('location');
     if (def.desc) G.log(def.desc, 'sys');
     UI.refresh();
   };
@@ -177,6 +179,7 @@ window.WORLD_API = (function () {
     const path = ENG.findPath(G.loc, p.x, p.y, tx, ty, opts);
     if (!path) { G.hint('Туда не пройти'); return false; }
     W.moveTo(G, p, path, opts.onArrive);
+    TUT.mark('moved');
     return true;
   };
 
@@ -202,7 +205,8 @@ window.WORLD_API = (function () {
         a.walkPhase = (a.walkPhase + dt * (G.sneaking && a.isPlayer ? 0.9 : 1.6)) % 1;
         if (d <= step) {
           a.rx = tx; a.ry = ty; a.moving = false;
-          if (a.isPlayer) onPlayerStep(G);
+          if (a.isPlayer) { SND.play('step', { sneak: G.sneaking }); onPlayerStep(G); }
+          else if (G.combat || ENG.dist(a, G.player) < 8) SND.at('step', a.x, a.y, { sneak: true });
           if (a.stepCb) { const cb = a.stepCb; a.stepCb = null; cb(); }
         } else { a.rx += dx / d * step; a.ry += dy / d * step; }
       }
@@ -304,6 +308,7 @@ window.WORLD_API = (function () {
           a.alerted = true;
           a.bubble = { text: '!', t: 1.5, color: '#ff5a3c' };
           G.log(local ? `${a.name} замечает вас!` : `${a.name} замечает: ${pl.name}!`, 'bad');
+          if (local) SND.play('alert');
           onDetected(G, a, pl);
           return;
         }
@@ -525,6 +530,7 @@ window.WORLD_API = (function () {
     if (G.flags[k]) return 'Здесь вы уже всё перерыли.';
     G.flags[k] = true;
     G.passTime(10);
+    SND.play('search');
     const got = rollLoot(G, s);
     if (s.questItem && G.q(s.questItem.quest) === 1 && !G.hasItem(s.questItem.item)) {
       R.addItem(G.player, s.questItem.item, 1);
@@ -534,6 +540,7 @@ window.WORLD_API = (function () {
     UI.refresh();
     if (!got.length) { G.log(`Обыск: ${it.name} — ничего полезного.`, 'sys'); return 'Вы тщательно всё перерыли, но ничего полезного не нашлось.'; }
     G.log(`Найдено: ${got.join(', ')}.`, 'good');
+    setTimeout(() => SND.play('pickup'), 450);
     return 'Вы находите: ' + got.join(', ') + '.';
   };
 
@@ -556,6 +563,7 @@ window.WORLD_API = (function () {
 
   W.startObjectDialog = function (G, o) {
     const it = o.interact;
+    TUT.mark('object');
     G.player.path = [];
     const build = text => {
       const opts = [{ t: 'Осмотреть' + (G.flags[objKey(G, o, 'look')] ? '' : it.lookXp ? ` <span class="chk">(+${it.lookXp} опыта)</span>` : ''), act: () => node(W.lookObject(G, o)) }];
@@ -581,6 +589,7 @@ window.WORLD_API = (function () {
     o.jammed = 0;
     if (G.combat && !G.combat.spend(3)) { G.log('Нужно 3 ОД.', 'warn'); return; }
     const picks = R.count(p, 'lockpicks') > 0;
+    SND.play('lock_try');
     const chance = R.skill(p, 'lockpick') + (picks ? 20 : 0) - o.lock;
     const res = R.check(chance, p.stats.luck);
     G.passTime(5);
@@ -593,12 +602,14 @@ window.WORLD_API = (function () {
       const diff = o.lock;
       o.lock = 0;
       G.log(`Взлом: успех (${res.chance}%). Замок открыт.`, 'good');
+      SND.play('lock_open');
       ENG.floater(p.x, p.y, 'Открыто!', '#9dff8a');
       G.giveXP(10 + Math.floor(diff / 3));
       NET.syncObj(o);
       W.openContainer(G, o);
     } else {
       G.log(`Взлом: неудача (${res.chance}%).`, 'warn');
+      SND.play('lock_fail');
       if (res.crit) { o.jammed = G.time + 60; G.log('Критическая неудача! Замок заклинило на час.', 'bad'); }
       if (picks && Math.random() < 0.3) { R.removeItem(p, 'lockpicks', 1); G.log('Отмычка сломалась.', 'bad'); }
       if (res.crit) NET.syncObj(o);
@@ -646,6 +657,7 @@ window.WORLD_API = (function () {
     G.player.path = [];
     G.mode = 'dialog';
     G.dialog = { npc, dlg, node: null, seen: {} };
+    TUT.mark('dialog');
     faceTo(npc, G.player);
     W.dialogGo(G, dlg.start(G));
   };
@@ -694,6 +706,7 @@ window.WORLD_API = (function () {
 
   W.endDialog = function (G) {
     G.dialog = null;
+    TUT.mark('dialogClosed');
     if (G.mode === 'dialog') G.mode = 'play';
     UI.hideDialog();
   };

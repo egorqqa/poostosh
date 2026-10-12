@@ -43,6 +43,7 @@ window.COMBAT = (function () {
     };
     G.sneaking = false;
     G.log('=== БОЙ! ===', 'warn');
+    SND.setCombat(true); TUT.mark('combat');
     UI.setMode('move');
     UI.refresh();
     C.nextTurn(G);
@@ -67,6 +68,7 @@ window.COMBAT = (function () {
     G.combat = null;
     G.player.ap = R.maxAP(G.player);
     G.log(msg || 'Бой окончен.', 'warn');
+    SND.setCombat(false);
     if (net()) NET.forceSnap();
     UI.setMode('move');
     UI.refresh();
@@ -170,6 +172,9 @@ window.COMBAT = (function () {
     att.dir = ENG.dirFromDelta(def.x - att.x, def.y - att.y);
     att.aimT = 0.45;
     if (ev.melee) ENG.swing(att, def); else ENG.tracer(att, def, ev.hit);
+    const w = DATA.ITEMS[att.weapon || 'fists'];
+    if (ev.melee) SND.at('swing', att.x, att.y); else SND.at('shot', att.x, att.y, { weapon: w.icon === 'ak' ? 'ak' : w.icon });
+    setTimeout(() => ev.hit ? SND.at('hit', def.x, def.y) : (!ev.melee && SND.at('miss', def.x, def.y)), ev.melee ? 120 : 160);
     const an = att === me ? 'Вы' : att.name;
     if (ev.hit) {
       def.hitFlash = 0.15;
@@ -266,6 +271,7 @@ window.COMBAT = (function () {
     if (!R.count(p, w.ammo)) { G.log(`Нет патронов: ${ITEMS[w.ammo].name}.`, 'bad'); return; }
     if (G.combat && !G.combat.spend(2)) { G.log('Нужно 2 ОД для перезарядки.', 'warn'); return; }
     reload(G, p);
+    SND.play('reload');
     G.log(`Перезарядка: ${p.loaded}/${w.mag}.`, 'sys');
     UI.refresh();
     autoEnd(G, p);
