@@ -139,7 +139,7 @@ window.UI = (function () {
     const port = $('#dlg-portrait');
     port.src = makePortrait(npc);
     $('#dlg-name').textContent = npc.name;
-    $('#dlg-sub').textContent = npc.trader ? 'торговец' : npc.hostile ? 'враждебен' : npc.faction === 'town' ? 'житель Ручья' : '';
+    $('#dlg-sub').textContent = npc.sprite ? 'объект' : npc.trader ? 'торговец' : npc.hostile ? 'враждебен' : npc.faction === 'town' ? 'житель Ручья' : '';
     $('#dlg-text').textContent = text;
     $('#dlg-options').innerHTML = opts.map((t, i) => `<li data-i="${i}">${t}</li>`).join('');
   };
@@ -150,6 +150,17 @@ window.UI = (function () {
   };
   const portraitCache = {};
   function makePortrait(a) {
+    if (a.sprite) {
+      const k2 = 'spr_' + a.sprite;
+      if (portraitCache[k2]) return portraitCache[k2];
+      const im = ENG.img[a.sprite];
+      const c = document.createElement('canvas');
+      c.width = 64; c.height = 64;
+      const x = c.getContext('2d');
+      x.fillStyle = '#0d150c'; x.fillRect(0, 0, 64, 64);
+      if (im) { const s = Math.min(60 / im.width, 60 / im.height); x.drawImage(im, 32 - im.width * s / 2, 32 - im.height * s / 2, im.width * s, im.height * s); }
+      try { return (portraitCache[k2] = c.toDataURL()); } catch (e) { return ''; }
+    }
     const k = a.tint || 'player';
     if (portraitCache[k]) return portraitCache[k];
     const c = document.createElement('canvas');

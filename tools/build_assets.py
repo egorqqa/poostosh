@@ -17,6 +17,7 @@ SHEETS = {
     "veg": ("age_of_caravans_vegetation_transparent.png", 0.62, True),
     "power": ("Пиксельный набор промышленных электросетей.png", 0.5, False),
     "objects": ("Постапокалиптический изометрический набор объектов.png", 0.62, False),
+    "postind": ("Изометрический набор постиндустриальных объектов.png", 0.85, False),
 }
 
 # имя спрайта: (лист, (x0, y0, x1, y1)) — координаты в исходном листе
@@ -127,6 +128,39 @@ SPRITES = {
     "rocks": ("veg", (950, 900, 1110, 1014)),
     "rocks2": ("veg", (1113, 877, 1256, 989)),
     "rocks_big": ("veg", (1256, 833, 1522, 1011)),
+    # --- постиндустриальный набор ---
+    "brick_factory": ("postind", (14, 22, 503, 395)),
+    "warehouse": ("postind", (485, 48, 977, 337)),
+    "silo": ("postind", (951, 10, 1176, 378)),
+    "tank_horizontal": ("postind", (1182, 81, 1523, 363)),
+    "storage_shed": ("postind", (387, 332, 782, 614)),
+    "water_tower2": ("postind", (797, 298, 946, 637)),
+    "gantry_crane": ("postind", (30, 367, 382, 648)),
+    "office_hq": ("postind", (964, 373, 1319, 679)),
+    "floodlight": ("postind", (1330, 362, 1406, 663)),
+    "power_pole2": ("postind", (1413, 370, 1509, 699)),
+    "bus2": ("postind", (30, 605, 361, 796)),
+    "boxcar": ("postind", (423, 611, 707, 784)),
+    "pipes_stack": ("postind", (710, 634, 898, 746)),
+    "elec_cabinet": ("postind", (892, 636, 1002, 755)),
+    "guard_booth": ("postind", (1028, 674, 1125, 780)),
+    "forklift": ("postind", (1145, 674, 1274, 807)),
+    "grate": ("postind", (1302, 705, 1406, 763)),
+    "wrecked_car": ("postind", (28, 788, 277, 908)),
+    "concrete_blocks": ("postind", (314, 766, 476, 879)),
+    "barrels_crates": ("postind", (494, 760, 698, 865)),
+    "cable_barrel": ("postind", (716, 750, 869, 832)),
+    "pallet_boxes": ("postind", (877, 768, 976, 833)),
+    "sign_quarantine": ("postind", (991, 787, 1123, 928)),
+    "checkpoint2": ("postind", (1157, 810, 1354, 1005)),
+    "fence_mesh": ("postind", (1348, 750, 1511, 885)),
+    "big_pipes": ("postind", (28, 874, 347, 1005)),
+    "jersey_yellow2": ("postind", (447, 875, 574, 964)),
+    "jersey_grey": ("postind", (505, 922, 614, 1004)),
+    "crate_pile": ("postind", (630, 861, 767, 953)),
+    "locker_green": ("postind", (790, 841, 914, 995)),
+    "barriers_red": ("postind", (969, 903, 1145, 1005)),
+    "vent_hatch": ("postind", (1366, 872, 1517, 981)),
 }
 
 _cache = {}

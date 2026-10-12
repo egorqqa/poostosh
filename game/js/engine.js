@@ -323,6 +323,19 @@ window.ENG = (function () {
         ctx.fillText(m, sx, sy);
       }
     }
+    // подпись объекта под курсором
+    if (hov && hov.obj && (hov.obj.name)) {
+      const o = hov.obj, r = E.objectRect(o);
+      const done = o.interact && G.flags[`obj_${L.id}_${o.uid}_search`];
+      const label = o.name + (o.container ? (o.lock ? ' · заперто' : '') : o.interact ? (o.interact.search && !done ? ' · обыскать' : ' · осмотреть') : '');
+      ctx.font = '12px Consolas, monospace';
+      ctx.textAlign = 'center';
+      const w = ctx.measureText(label).width + 10;
+      const ly = Math.max(r.y + 14, r.y + r.h * 0.25);
+      ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(r.x + r.w / 2 - w / 2, ly - 13, w, 17);
+      ctx.fillStyle = o.container || (o.interact && (o.interact.search || o.interact.check)) ? '#f0c060' : '#c8f5bd';
+      ctx.fillText(label, r.x + r.w / 2, ly);
+    }
     // подписи над NPC
     ctx.font = '12px Consolas, monospace';
     for (const a of actors) {

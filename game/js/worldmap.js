@@ -37,6 +37,8 @@ window.WMAP = (function () {
   const key = (c, r) => c + ',' + r;
   const terrainAt = (c, r) => WORLD.rows[r][c];
 
+  const siteState = (G, id) => (G.world.sites[id] = G.world.sites[id] || { known: !!(WORLD.sites.find(s => s.id === id) || {}).known });
+  M.siteState = siteState;
   M.initState = function () {
     const st = { c: WORLD.start.x, r: WORLD.start.y, path: [], revealed: {}, sites: {} };
     for (const s of WORLD.sites) st.sites[s.id] = { known: s.known };
@@ -49,7 +51,7 @@ window.WMAP = (function () {
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       if (hexDist({ c, r }, { c: W.c, r: W.r }) <= rad) W.revealed[key(c, r)] = true;
     }
-    for (const s of WORLD.sites) if (W.revealed[key(s.x, s.y)] && hexDist({ c: s.x, r: s.y }, { c: W.c, r: W.r }) <= 1) W.sites[s.id].known = true;
+    for (const s of WORLD.sites) if (W.revealed[key(s.x, s.y)] && hexDist({ c: s.x, r: s.y }, { c: W.c, r: W.r }) <= 1) siteState(G, s.id).known = true;
   }
 
   M.enter = function (G) {
@@ -68,7 +70,7 @@ window.WMAP = (function () {
   };
   M.leave = function () { if (panel) panel.remove(); panel = null; };
 
-  function siteHere(G) { return WORLD.sites.find(s => s.x === G.world.c && s.y === G.world.r && G.world.sites[s.id].known); }
+  function siteHere(G) { return WORLD.sites.find(s => s.x === G.world.c && s.y === G.world.r && siteState(G, s.id).known); }
 
   function showPanel(G) {
     if (!panel) {
@@ -199,7 +201,7 @@ window.WMAP = (function () {
     // локации
     ctx.textAlign = 'center';
     for (const s of WORLD.sites) {
-      if (!W.sites[s.id].known) continue;
+      if (!siteState(G, s.id).known) continue;
       const p = center(s.x, s.y), im = ENG.img[s.sprite];
       if (im) { const k = Math.min(90 / im.width, 90 / im.height); ctx.drawImage(im, p.x - im.width * k / 2, p.y + 30 - im.height * k, im.width * k, im.height * k); }
       ctx.font = 'bold 13px Consolas, monospace';
@@ -220,7 +222,7 @@ window.WMAP = (function () {
     if (h) {
       const p = center(h.c, h.r);
       hexPath(ctx, p.x, p.y, 1); ctx.strokeStyle = 'rgba(240,200,90,0.9)'; ctx.lineWidth = 2; ctx.stroke();
-      const site = WORLD.sites.find(s => s.x === h.c && s.y === h.r && W.sites[s.id].known);
+      const site = WORLD.sites.find(s => s.x === h.c && s.y === h.r && siteState(G, s.id).known);
       const txt = W.revealed[key(h.c, h.r)] ? (site ? site.name : WORLD.terrain[terrainAt(h.c, h.r)]) + ` · ${hexDist(h, { c: W.c, r: W.r })} гекс.` : 'Неизведано';
       ctx.font = '12px Consolas, monospace';
       const tw = ctx.measureText(txt).width + 10;

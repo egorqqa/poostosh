@@ -500,6 +500,166 @@ window.ASSET_MANIFEST = {
 "w": 165,
 "h": 110
 },
+"brick_factory": {
+"src": "assets/sprites/brick_factory.png",
+"w": 416,
+"h": 317
+},
+"warehouse": {
+"src": "assets/sprites/warehouse.png",
+"w": 418,
+"h": 246
+},
+"silo": {
+"src": "assets/sprites/silo.png",
+"w": 191,
+"h": 313
+},
+"tank_horizontal": {
+"src": "assets/sprites/tank_horizontal.png",
+"w": 290,
+"h": 240
+},
+"storage_shed": {
+"src": "assets/sprites/storage_shed.png",
+"w": 336,
+"h": 240
+},
+"water_tower2": {
+"src": "assets/sprites/water_tower2.png",
+"w": 127,
+"h": 288
+},
+"gantry_crane": {
+"src": "assets/sprites/gantry_crane.png",
+"w": 299,
+"h": 239
+},
+"office_hq": {
+"src": "assets/sprites/office_hq.png",
+"w": 302,
+"h": 260
+},
+"floodlight": {
+"src": "assets/sprites/floodlight.png",
+"w": 65,
+"h": 256
+},
+"power_pole2": {
+"src": "assets/sprites/power_pole2.png",
+"w": 82,
+"h": 280
+},
+"bus2": {
+"src": "assets/sprites/bus2.png",
+"w": 281,
+"h": 162
+},
+"boxcar": {
+"src": "assets/sprites/boxcar.png",
+"w": 241,
+"h": 147
+},
+"pipes_stack": {
+"src": "assets/sprites/pipes_stack.png",
+"w": 160,
+"h": 95
+},
+"elec_cabinet": {
+"src": "assets/sprites/elec_cabinet.png",
+"w": 94,
+"h": 101
+},
+"guard_booth": {
+"src": "assets/sprites/guard_booth.png",
+"w": 82,
+"h": 90
+},
+"forklift": {
+"src": "assets/sprites/forklift.png",
+"w": 110,
+"h": 113
+},
+"grate": {
+"src": "assets/sprites/grate.png",
+"w": 88,
+"h": 49
+},
+"wrecked_car": {
+"src": "assets/sprites/wrecked_car.png",
+"w": 212,
+"h": 102
+},
+"concrete_blocks": {
+"src": "assets/sprites/concrete_blocks.png",
+"w": 138,
+"h": 96
+},
+"barrels_crates": {
+"src": "assets/sprites/barrels_crates.png",
+"w": 173,
+"h": 89
+},
+"cable_barrel": {
+"src": "assets/sprites/cable_barrel.png",
+"w": 130,
+"h": 70
+},
+"pallet_boxes": {
+"src": "assets/sprites/pallet_boxes.png",
+"w": 84,
+"h": 55
+},
+"sign_quarantine": {
+"src": "assets/sprites/sign_quarantine.png",
+"w": 112,
+"h": 120
+},
+"checkpoint2": {
+"src": "assets/sprites/checkpoint2.png",
+"w": 167,
+"h": 166
+},
+"fence_mesh": {
+"src": "assets/sprites/fence_mesh.png",
+"w": 139,
+"h": 115
+},
+"big_pipes": {
+"src": "assets/sprites/big_pipes.png",
+"w": 271,
+"h": 111
+},
+"jersey_yellow2": {
+"src": "assets/sprites/jersey_yellow2.png",
+"w": 108,
+"h": 76
+},
+"jersey_grey": {
+"src": "assets/sprites/jersey_grey.png",
+"w": 93,
+"h": 70
+},
+"crate_pile": {
+"src": "assets/sprites/crate_pile.png",
+"w": 116,
+"h": 78
+},
+"locker_green": {
+"src": "assets/sprites/locker_green.png",
+"w": 105,
+"h": 131
+},
+"barriers_red": {
+"src": "assets/sprites/barriers_red.png",
+"w": 150,
+"h": 87
+},
+"vent_hatch": {
+"src": "assets/sprites/vent_hatch.png",
+"w": 128,
+"h": 93
+},
 "char_soldier": {
 "src": "assets/chars/soldier.png",
 "w": 960,

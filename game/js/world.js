@@ -10,7 +10,8 @@ window.WORLD_API = (function () {
       const auto = Math.max(1, Math.round((im ? im.width : 64) / 64 * 0.7));
       return {
         uid: i, sprite, x, y, fw: o.fw || auto, fh: o.fh || auto, oy: o.oy != null ? o.oy : 4,
-        block: o.block !== false, name: o.name || (o.container ? 'Ящик' : null), desc: o.desc || null,
+        block: o.block !== false, desc: o.desc || null, interact: o.container ? null : DATA.INTERACT[sprite] || null,
+        name: o.name || (o.container ? 'Ящик' : DATA.INTERACT[sprite] ? DATA.INTERACT[sprite].name : null),
         container: !!o.container, lock: o.lock || 0, owner: o.owner || null, caps: o.caps || 0,
         inv: (o.items || []).map(([id, n]) => ({ id, n })), jammed: false,
       };
@@ -39,7 +40,7 @@ window.WORLD_API = (function () {
   // случайная встреча: локация генерируется на лету
   function wildDef(seed, kind) {
     const r = ENG.seeded(seed);
-    const props = ['tree_dead', 'tree_dead2', 'rocks', 'rocks2', 'rocks_big', 'bush_dry', 'stump', 'log', 'log2', 'wrecked_cars', 'bus', 'tires', 'barrels', 'pole', 'tree_small', 'stump_big', 'hedgehog', 'jersey_red'];
+    const props = ['tree_dead', 'tree_dead2', 'rocks', 'rocks2', 'rocks_big', 'bush_dry', 'stump', 'log', 'log2', 'wrecked_cars', 'bus', 'tires', 'barrels', 'pole', 'tree_small', 'stump_big', 'hedgehog', 'jersey_red', 'wrecked_car', 'bus2', 'barrels_crates', 'crate_pile', 'sign_quarantine', 'concrete_blocks'];
     const deco = ['grass1', 'grass2', 'grass3', 'grass4', 'weeds', 'flowers', 'bush_low'];
     const objects = [];
     for (let i = 0; i < 22; i++) {
@@ -421,6 +422,7 @@ window.WORLD_API = (function () {
     const a = hover.actor, o = hover.obj;
 
     if (mode === 'look') {
+      if (!a && o && o.interact) { W.lookObject(G, o); UI.setMode('move'); return; }
       if (a) G.log(a.dead ? `Труп: ${a.name}.` : `${a.name}. ${describeActor(G, a)}`);
       else if (o) G.log(`${o.name || 'Объект'}${o.desc ? '. ' + o.desc : ''}${o.container && o.lock ? ' Заперто.' : ''}`);
       else G.log('Ничего интересного.', 'sys');
@@ -460,6 +462,7 @@ window.WORLD_API = (function () {
       return;
     }
     if (o && o.container) { goThen(G, o, () => W.openContainer(G, o)); return; }
+    if (o && o.interact && !G.combat) { goThen(G, o, () => W.startObjectDialog(G, o)); return; }
     if (tile) {
       if (G.combat && G.combat.canFlee && W.isExit(G.loc, tile.x, tile.y)) { W.leaveToWorld(G); return; }
       if (G.combat) {
@@ -488,6 +491,87 @@ window.WORLD_API = (function () {
       }
     }
     UI.openLoot(o);
+  };
+
+  // ---------- интерактивные объекты: осмотр, обыск, особые действия ----------
+  const objKey = (G, o, what) => `obj_${G.loc.id}_${o.uid}_${what}`;
+  function rollLoot(G, def) {
+    const p = G.player, got = [];
+    const bonus = R.skill(p, 'survival') / 4 + p.stats.luck;
+    for (const [id, a, b, ch] of def.loot || []) {
+      if (R.rnd(1, 100) > Math.min(100, ch + bonus)) continue;
+      const n = R.rnd(a, b);
+      R.addItem(p, id, n);
+      got.push(`${DATA.ITEMS[id].name}${n > 1 ? ' ×' + n : ''}`);
+    }
+    if (def.caps && def.caps[1] > 0) {
+      const c = R.rnd(def.caps[0], def.caps[1]);
+      if (c > 0) { p.caps += c; got.push(`${c} крышек`); }
+    }
+    return got;
+  }
+
+  W.lookObject = function (G, o) {
+    const it = o.interact;
+    const k = objKey(G, o, 'look');
+    G.log(`${it.name}: ${it.look}`, 'sys');
+    if (!G.flags[k]) { G.flags[k] = true; if (it.lookXp) G.giveXP(it.lookXp); }
+    return it.look;
+  };
+
+  W.searchObject = function (G, o) {
+    const it = o.interact, s = it.search;
+    const k = objKey(G, o, 'search');
+    if (G.flags[k]) return 'Здесь вы уже всё перерыли.';
+    G.flags[k] = true;
+    G.passTime(10);
+    const got = rollLoot(G, s);
+    if (s.questItem && G.q(s.questItem.quest) === 1 && !G.hasItem(s.questItem.item)) {
+      R.addItem(G.player, s.questItem.item, 1);
+      got.unshift(DATA.ITEMS[s.questItem.item].name);
+    }
+    G.giveXP(5);
+    UI.refresh();
+    if (!got.length) { G.log(`Обыск: ${it.name} — ничего полезного.`, 'sys'); return 'Вы тщательно всё перерыли, но ничего полезного не нашлось.'; }
+    G.log(`Найдено: ${got.join(', ')}.`, 'good');
+    return 'Вы находите: ' + got.join(', ') + '.';
+  };
+
+  W.checkObject = function (G, o) {
+    const it = o.interact, c = it.check;
+    const k = objKey(G, o, 'check');
+    if (G.flags[k]) return 'Больше здесь ничего не сделать.';
+    const v = c.stat ? G.player.stats[c.stat] : R.skill(G.player, c.skill);
+    const nm = c.stat ? DATA.SPECIAL.find(s => s.id === c.stat).name : DATA.SKILLS.find(s => s.id === c.skill).name;
+    if (v < c.diff) { G.log(`Проверка: ${nm} ${v} против ${c.diff} — провал.`, 'warn'); return `Не выходит. Нужно больше: ${nm} ${c.diff}.`; }
+    G.flags[k] = true;
+    G.passTime(10);
+    G.log(`Проверка: ${nm} ${v} против ${c.diff} — успех.`, 'good');
+    const got = rollLoot(G, c);
+    if (got.length) G.log(`Найдено: ${got.join(', ')}.`, 'good');
+    if (c.xp) G.giveXP(c.xp);
+    UI.refresh();
+    return c.text + (got.length ? ' Найдено: ' + got.join(', ') + '.' : '');
+  };
+
+  W.startObjectDialog = function (G, o) {
+    const it = o.interact;
+    G.player.path = [];
+    const build = text => {
+      const opts = [{ t: 'Осмотреть' + (G.flags[objKey(G, o, 'look')] ? '' : it.lookXp ? ` <span class="chk">(+${it.lookXp} опыта)</span>` : ''), act: () => node(W.lookObject(G, o)) }];
+      if (it.search) opts.push({ t: G.flags[objKey(G, o, 'search')] ? '<span class="muted">Обыскать (уже обыскано)</span>' : 'Обыскать', act: () => node(W.searchObject(G, o)) });
+      if (it.check) {
+        const c = it.check;
+        const nm = c.stat ? DATA.SPECIAL.find(s => s.id === c.stat).name : DATA.SKILLS.find(s => s.id === c.skill).name;
+        opts.push({ t: G.flags[objKey(G, o, 'check')] ? `<span class="muted">${c.label} (сделано)</span>` : `<span class="chk">[${nm} ${c.diff}]</span> ${c.label}`, act: () => node(W.checkObject(G, o)) });
+      }
+      opts.push({ t: 'Отойти', end: true });
+      return { text, opts };
+    };
+    const node = text => { G.dialog.dlg.nodes.main = build(text); W.dialogGo(G, 'main'); };
+    G.mode = 'dialog';
+    G.dialog = { npc: o, dlg: { nodes: { main: build(o.desc || it.look.split('.')[0] + '.') } }, seen: {} };
+    W.dialogGo(G, 'main');
   };
 
   W.lockpick = function (G, o) {
@@ -590,8 +674,10 @@ window.WORLD_API = (function () {
     if (!o) return;
     if (o.once) G.flags['once_' + o.once] = true;
     if (o.act) {
+      const before = G.dialog && G.dialog.node;
       if (typeof o.act === 'function') o.act(G);
       else if (ACTIONS[o.act]) ACTIONS[o.act](G, D.npc);
+      if (!o.end && !o.go && !o.check && G.dialog && G.dialog.node !== before) return;
     }
     if (o.check) {
       const v = o.check.stat ? G.player.stats[o.check.stat] : R.skill(G.player, o.check.skill);

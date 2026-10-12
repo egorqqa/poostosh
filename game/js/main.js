@@ -34,6 +34,7 @@
     for (const [id, n] of items || []) { R.addItem(p, id, n); G.log(`Получено: ${DATA.ITEMS[id].name}${n > 1 ? ' ×' + n : ''}.`, 'good'); }
     if (xp) G.giveXP(xp);
   };
+  G.revealSite = id => { WMAP.siteState(G, id).known = true; G.log('Новая локация отмечена на карте мира.', 'good'); };
   G.marauderDead = () => { const m = G.anyNpc('marauder'); return !!(m && m.dead); };
   G.angerMarauder = function () {
     const m = G.findNpc('marauder');
@@ -51,7 +52,7 @@
     switch (a.tpl) {
       case 'mihalych': return G.quests.meds === 0 ? '!' : G.hasItem('meds') && G.quests.meds < 3 ? '?' : null;
       case 'semyon': return q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
-      case 'boris': return q('tools') === 0 ? '!' : G.hasItem('toolbox') ? '?' : null;
+      case 'boris': return q('tools') === 0 ? '!' : G.hasItem('toolbox') || G.hasItem('battery') ? '?' : q('tools') === 9 && q('battery') === 0 ? '!' : null;
       case 'irina': return q('wounded') === 0 ? '!' : q('wounded') === 2 ? '?' : null;
       case 'lyoha': return q('wounded') === 1 ? '!' : null;
       case 'gvozd': return q('marauder') < 9 && G.marauderDead() ? '?' : q('marauder') === 0 ? '!' : null;
