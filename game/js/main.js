@@ -17,6 +17,48 @@
   G.addItem = (a, id, n) => R.addItem(a, id, n);
   G.takeFrom = (a, id, n) => { const ok = R.removeItem(a, id, n); NET.touch(a); return ok; };
   G.findNpc = tpl => G.loc && G.loc.actors.find(a => a.tpl === tpl && !a.dead);
+  G.anyNpc = tpl => G.loc && G.loc.actors.find(a => a.tpl === tpl);
+  G.q = id => G.quests[id] || 0;
+  G.setQuest = function (id, st) {
+    const prev = G.q(id);
+    G.quests[id] = st;
+    const def = DATA.QUESTS[id];
+    if (def && prev === 0 && st > 0 && st < 9) G.log(`Новое задание: «${def.title}».`, 'good');
+    else if (def && st === 9) G.log(`Задание выполнено: «${def.title}».`, 'good');
+    else if (def && def.steps[st]) G.log(`Задание обновлено: «${def.title}».`, 'good');
+    UI.refresh();
+  };
+  G.reward = function (xp, caps, items) {
+    const p = G.player;
+    if (caps) { p.caps += caps; G.log(`+${caps} крышек.`, 'good'); }
+    for (const [id, n] of items || []) { R.addItem(p, id, n); G.log(`Получено: ${DATA.ITEMS[id].name}${n > 1 ? ' ×' + n : ''}.`, 'good'); }
+    if (xp) G.giveXP(xp);
+  };
+  G.marauderDead = () => { const m = G.anyNpc('marauder'); return !!(m && m.dead); };
+  G.angerMarauder = function () {
+    const m = G.findNpc('marauder');
+    if (m) { m.hostile = true; m.alerted = false; NET.syncEnt(m); }
+  };
+  G.ensureToolbox = function () {
+    if (G.hasItem('toolbox')) return;
+    const box = G.loc && G.loc.objects.find(o => o.sprite === 'crate_long' && o.container);
+    if (box && !box.inv.some(s => s.id === 'toolbox')) { R.addItem(box, 'toolbox', 1); NET.syncObj(box); }
+  };
+  // значок над NPC: «!» — есть задание, «?» — можно сдать
+  G.questMark = function (a) {
+    if (a.dead || a.hostile || a.isRemote) return null;
+    const q = G.q, p = G.player;
+    switch (a.tpl) {
+      case 'mihalych': return G.quests.meds === 0 ? '!' : G.hasItem('meds') && G.quests.meds < 3 ? '?' : null;
+      case 'semyon': return q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
+      case 'boris': return q('tools') === 0 ? '!' : G.hasItem('toolbox') ? '?' : null;
+      case 'irina': return q('wounded') === 0 ? '!' : q('wounded') === 2 ? '?' : null;
+      case 'lyoha': return q('wounded') === 1 ? '!' : null;
+      case 'gvozd': return q('marauder') < 9 && G.marauderDead() ? '?' : q('marauder') === 0 ? '!' : null;
+      case 'tihon': return q('ration') < 9 && G.hasItem('food') ? '?' : q('ration') === 0 ? '!' : q('debt') === 1 && !G.flags.tihonDebtPaid ? '!' : null;
+    }
+    return null;
+  };
 
   G.passTime = function (min) {
     const before = Math.floor(G.time / 60);

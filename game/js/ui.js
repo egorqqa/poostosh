@@ -453,11 +453,19 @@ window.UI = (function () {
   };
 
   function questText() {
+    const rows = [];
     const q = G.quests.meds;
-    if (!q) return 'Нет активных заданий. Поговорите с жителями Ржавого Ручья.';
-    if (q >= 3) return '✔ Лекарства для Ручья — выполнено.';
-    if (G.hasItem('meds')) return '► Лекарства для Ручья: верните ящик медикаментов Михалычу.';
-    return '► Лекарства для Ручья: найдите ящик медикаментов на Блокпосту 17 (северо-восток).';
+    if (q >= 3) rows.push('<div class="muted">✔ Лекарства для Ручья</div>');
+    else if (G.hasItem('meds')) rows.push('<div>► <b>Лекарства для Ручья</b>: верните ящик медикаментов Михалычу.</div>');
+    else if (q) rows.push('<div>► <b>Лекарства для Ручья</b>: найдите ящик медикаментов на Блокпосту 17 (северо-восток).</div>');
+    for (const [id, d] of Object.entries(DATA.QUESTS)) {
+      const st = G.q(id);
+      if (!st) continue;
+      if (st >= 9) rows.push(`<div class="muted">✔ ${d.title}</div>`);
+      else rows.push(`<div>► <b>${d.title}</b>: ${d.steps[st] || d.steps[1]}</div>`);
+    }
+    rows.sort((a, b) => a.includes('✔') - b.includes('✔'));
+    return rows.join('') || 'Нет заданий. Ищите жителей со значком «!» над головой.';
   }
 
   // ---------- заставка / смерть ----------

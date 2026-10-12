@@ -30,7 +30,11 @@ window.WORLD_API = (function () {
     }
   }
 
-  W.isExit = (L, x, y) => L && (x <= 0 || y <= 0 || x >= L.w - 1 || y >= L.h - 1);
+  W.isExit = (L, x, y) => {
+    if (!L) return false;
+    if (L.def.exits) return L.def.exits.some(r => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1);
+    return x <= 0 || y <= 0 || x >= L.w - 1 || y >= L.h - 1;
+  };
 
   // случайная встреча: локация генерируется на лету
   function wildDef(seed, kind) {
@@ -52,7 +56,7 @@ window.WORLD_API = (function () {
       const tpl = kind === 'raiders' ? (r() < 0.5 ? 'raider' : 'raider_melee') : (r() < 0.4 ? 'wild_gun' : 'wild');
       npcs.push([tpl, 12 + Math.floor(r() * 10), 6 + Math.floor(r() * 8), { wander: 3 }]);
     }
-    return { name: 'Пустошь', w: 34, h: 34, ground: ['dirt_tracks', 'overgrown_grassland', 'rubble_ground', 'cracked_road'], groundW: [3, 3, 1, 1], base: '#5b4c35', entry: { x: 17, y: 30 }, objects, npcs, temp: true, desc: 'Безымянный клочок пустоши.' };
+    return { name: 'Пустошь', w: 34, h: 34, exits: [{ x0: 12, y0: 32, x1: 22, y1: 33 }], ground: ['dirt_tracks', 'overgrown_grassland', 'rubble_ground', 'cracked_road'], groundW: [3, 3, 1, 1], base: '#5b4c35', entry: { x: 17, y: 30 }, objects, npcs, temp: true, desc: 'Безымянный клочок пустоши.' };
   }
 
   W.loadLocation = function (G, id, opts = {}) {
@@ -64,6 +68,11 @@ window.WORLD_API = (function () {
     if (saved) {
       for (const so of saved.objects) Object.assign(L.objects[so.uid], so);
       L.actors = saved.actors;
+      // NPC, добавленные в новых версиях игры
+      def.npcs.forEach(([tpl, x, y, o], i) => {
+        const nid = `${id}_${i}`;
+        if (!L.actors.some(a => a.id === nid)) { const a = R.makeNpc(tpl, x, y, o || {}); a.id = nid; L.actors.push(a); }
+      });
     } else {
       L.actors = def.npcs.map(([tpl, x, y, o], i) => { const a = R.makeNpc(tpl, x, y, o || {}); a.id = `${id}_${i}`; return a; });
     }
@@ -547,7 +556,7 @@ window.WORLD_API = (function () {
     UI.showDialog(D.npc, node.text, opts.map(o => {
       let t = o.t;
       if (o.check) {
-        const sk = DATA.SKILLS.find(s => s.id === o.check.skill);
+        const sk = o.check.stat ? DATA.SPECIAL.find(s => s.id === o.check.stat) : DATA.SKILLS.find(s => s.id === o.check.skill);
         t = `<span class="chk">[${sk.name} ${o.check.diff}]</span> ` + t;
       }
       return t;
@@ -565,9 +574,9 @@ window.WORLD_API = (function () {
       else if (ACTIONS[o.act]) ACTIONS[o.act](G, D.npc);
     }
     if (o.check) {
-      const v = R.skill(G.player, o.check.skill);
+      const v = o.check.stat ? G.player.stats[o.check.stat] : R.skill(G.player, o.check.skill);
       const ok = v >= o.check.diff;
-      const sk = DATA.SKILLS.find(s => s.id === o.check.skill);
+      const sk = o.check.stat ? DATA.SPECIAL.find(s => s.id === o.check.stat) : DATA.SKILLS.find(s => s.id === o.check.skill);
       G.log(`Проверка: ${sk.name} ${v} против ${o.check.diff} — ${ok ? 'успех' : 'провал'}.`, ok ? 'good' : 'warn');
       if (ok) G.giveXP(20);
       if (G.dialog) W.dialogGo(G, ok ? o.ok : o.fail);
@@ -608,6 +617,7 @@ window.WORLD_API = (function () {
     },
     fight(G, npc) {
       W.endDialog(G);
+      if (!npc.hostile) { npc.hostile = true; NET.syncEnt(npc); }
       for (const a of G.loc.actors) if (a.faction === npc.faction && !a.dead) a.alerted = true;
       COMBAT.start(G, npc, true);
     },

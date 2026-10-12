@@ -51,6 +51,7 @@ window.DATA = (function () {
     lockpicks: { name: 'Отмычки', type: 'misc', icon: 'lockpicks', weight: 0.2, value: 35, desc: '+20% к Взлому, пока лежат в инвентаре. Могут сломаться при неудаче.' },
     junk: { name: 'Хлам', type: 'misc', icon: 'junk', weight: 1, value: 6, desc: 'Пружины, гайки, провода. Торговцы берут.' },
     holotape: { name: 'Голодиск', type: 'misc', icon: 'holotape', weight: 0.1, value: 50, desc: 'Довоенная запись. Кому-то может быть интересна.' },
+    toolbox: { name: 'Ящик с инструментами', type: 'quest', icon: 'junk', weight: 4, value: 0, desc: 'Инструменты механика Бориса. Нужно вернуть владельцу.' },
     meds: { name: 'Ящик медикаментов', type: 'quest', icon: 'meds', weight: 5, value: 0, desc: 'Медикаменты каравана Ржавого Ручья. Нужно вернуть Михалычу.' },
     token: { name: 'Жетон рейдера', type: 'misc', icon: 'token', weight: 0.1, value: 15, desc: 'Знак банды Клыка.' },
   };
@@ -66,6 +67,7 @@ window.DATA = (function () {
     elder: 'sepia(0.4) hue-rotate(20deg) brightness(1.05)',
     bum: 'grayscale(0.6) brightness(0.8) sepia(0.3)',
     wild: 'hue-rotate(60deg) saturate(1.4) brightness(0.8)',
+    mech: 'sepia(0.6) hue-rotate(-15deg) saturate(1.4) brightness(0.95)',
     remote: 'sepia(0.35) hue-rotate(190deg) saturate(1.7) brightness(1.15)',
   };
 
@@ -88,9 +90,18 @@ window.DATA = (function () {
     guard2: { name: 'Часовой Ручья', tint: 'guard', faction: 'town', dialog: 'guard2', guard: true,
       stats: { str: 6, per: 6, end: 6, cha: 4, int: 4, agi: 6, luck: 5 }, hp: 40,
       inv: [['ammo9', 16]], caps: 15, weapon: 'pistol', armor: 'jacket', skills: { guns: 60 } },
+    boris: { name: 'Механик Борис', tint: 'mech', faction: 'town', dialog: 'boris',
+      stats: { str: 7, per: 5, end: 6, cha: 4, int: 7, agi: 5, luck: 5 }, hp: 35,
+      inv: [['junk', 4], ['water', 1]], caps: 30, weapon: 'pipe' },
+    lyoha: { name: 'Раненый Лёха', tint: 'guard', faction: 'town', dialog: 'lyoha',
+      stats: { str: 6, per: 6, end: 5, cha: 5, int: 4, agi: 5, luck: 4 }, hp: 30,
+      inv: [['ammo9', 6]], caps: 10 },
+    marauder: { name: 'Мародёр', tint: 'raider', faction: 'bandit', dialog: 'marauder',
+      stats: { str: 6, per: 4, end: 5, cha: 2, int: 3, agi: 5, luck: 4 }, hp: 22,
+      inv: [['water', 2], ['junk', 2], ['food', 1]], caps: 18, weapon: 'knife', armor: 'jacket', skills: { melee: 50 }, xp: 40 },
     tihon: { name: 'Бродяга Тихон', tint: 'bum', faction: 'town', dialog: 'tihon',
       stats: { str: 4, per: 4, end: 4, cha: 3, int: 5, agi: 6, luck: 7 }, hp: 18,
-      inv: [['lockpicks', 1], ['junk', 3], ['food', 1]], caps: 7 },
+      inv: [['lockpicks', 1], ['junk', 3]], caps: 22 },
     raider: { name: 'Рейдер', tint: 'raider', faction: 'raiders', hostile: true,
       stats: { str: 6, per: 5, end: 5, cha: 3, int: 4, agi: 6, luck: 4 }, hp: 28,
       inv: [['ammo9', 10], ['token', 1]], caps: 12, weapon: 'pistol', armor: 'jacket', skills: { guns: 45, melee: 55 }, xp: 50 },
@@ -153,10 +164,16 @@ window.DATA = (function () {
         hello: { text: 'Барыга Сёма. Покупаю, продаю, вопросов не задаю. Только не воруй, ага? Гвоздь у нас нервный.',
           opts: [
             { t: 'Покажи товар.', act: 'trade', end: true },
+            { t: 'Для меня найдётся работа?', if: g => g.q('debt') === 0, go: 'debt' },
+            { t: 'Вот твои 15 крышек от Тихона.', if: g => g.q('debt') === 1 && g.player.caps >= 15, go: 'debt_done' },
             { t: 'Что слышно в округе?', go: 'rumor' },
             { t: 'Сделаешь скидку новому другу?', check: { skill: 'speech', diff: 35 }, ok: 'disc_ok', fail: 'disc_fail', once: 'sem_disc' },
             { t: 'Пока.', end: true },
           ] },
+        debt: { text: 'Работа? Хе. Тихон, бродяга наш, должен мне 15 крышек уже месяц. Мне за ним бегать не по чину. Выбьешь долг — заплачу сверху. Как выбьешь — мне без разницы.',
+          opts: [{ t: 'Займусь.', act: g => g.setQuest('debt', 1), end: true }, { t: 'Не моё дело.', end: true }] },
+        debt_done: { text: 'Вот это разговор! Держи свою долю. И заходи — для толковых людей у меня всегда найдётся товар.', onEnter: g => { g.player.caps -= 15; g.setQuest('debt', 9); g.reward(60, 25, [['bandage', 1]]); },
+          opts: [{ t: 'Бывай.', end: true }] },
         rumor: { text: 'Говорят, у Тихона-бродяги отмычки водятся. А рейдеры Клыка держат склад на блокпосту — шкаф с замком такой, что без отмычек и не суйся.',
           opts: [{ t: 'Спасибо.', go: 'hello' }] },
         disc_ok: { text: 'Хе... Язык у тебя подвешен. Ладно, тебе — скидка.', onEnter: g => { g.flags.semDiscount = 0.15; },
@@ -171,13 +188,52 @@ window.DATA = (function () {
           opts: [
             { t: 'Подлатай меня. [30 крышек]', if: g => g.player.hp < g.maxHP(g.player), act: 'healPaid', go: 'healed' },
             { t: 'Хочу купить лекарства.', act: 'trade', end: true },
+            { t: 'Тебе нужна помощь?', if: g => g.q('wounded') === 0, go: 'wounded' },
+            { t: 'Лёха в порядке, я его перевязал.', if: g => g.q('wounded') === 2, go: 'wounded_done' },
             { t: 'Поделишься знаниями? Я тоже немного лекарь.', check: { skill: 'medic', diff: 35 }, ok: 'teach_ok', fail: 'teach_fail', once: 'iri_teach' },
             { t: 'Пока.', end: true },
           ] },
+        wounded: { text: 'Нужна. Лёха, часовой, ночью поймал осколок в ногу. Сидит у палатки, а у меня руки до него не доходят. Перевяжи его — или хотя бы отдай аптечку. Я в долгу не останусь.',
+          opts: [{ t: 'Сейчас займусь.', act: g => g.setQuest('wounded', 1), end: true }, { t: 'Позже.', end: true }] },
+        wounded_done: { text: 'Видела, видела. Аккуратно сделано. Держи — пригодится. И заходи, если сама понадоблюсь.', onEnter: g => { g.setQuest('wounded', 9); g.reward(60, 0, [['bandage', 2], ['medkit', 1]]); },
+          opts: [{ t: 'Спасибо, док.', end: true }] },
         healed: { text: 'Готово. И постарайся больше не ловить пули лицом.', opts: [{ t: 'Спасибо, док.', end: true }] },
         teach_ok: { text: 'Хм, руки у тебя правильные. Смотри: жгут вот так, и шов — вот так. (+5 к Медицине)', onEnter: g => { g.player.skillBonus.medic = (g.player.skillBonus.medic || 0) + 5; g.giveXP(25); },
           opts: [{ t: 'Понял, спасибо.', go: 'hello' }] },
         teach_fail: { text: 'Ты бинт от портянки не отличишь. Приходи, когда подучишься.', opts: [{ t: '...', go: 'hello' }] },
+      },
+    },
+    lyoha: {
+      start: g => g.q('wounded') >= 2 ? 'fine' : 'hello',
+      nodes: {
+        hello: { text: 'Ох... Нога, зараза... Осколок вроде вынули, а кровь всё идёт. Док занята. Слушай, может, поможешь?',
+          opts: [
+            { t: 'Сейчас перевяжу. Держись.', check: { skill: 'medic', diff: 30 }, ok: 'healed', fail: 'hurt' },
+            { t: 'Держи аптечку.', if: g => g.hasItem('medkit'), act: g => g.takeFrom(g.player, 'medkit', 1), go: 'healed' },
+            { t: 'Держи бинт.', if: g => g.hasItem('bandage'), act: g => g.takeFrom(g.player, 'bandage', 1), go: 'healed' },
+            { t: 'Потерпи, найду что-нибудь.', end: true },
+          ] },
+        healed: { text: 'Ух... отпустило. Спасибо, друг. Скажи доку, что я жив — она волнуется, хоть и не показывает.', onEnter: g => { if (g.q('wounded') < 2) { g.setQuest('wounded', 2); g.giveXP(30); } },
+          opts: [{ t: 'Поправляйся.', end: true }] },
+        hurt: { text: 'А-а-ай! Ты что делаешь?! Не так туго! ...Может, лучше аптечку найдёшь, а? Или подучишься у дока.', opts: [{ t: 'Извини.', end: true }] },
+        fine: { text: 'Нога как новая. Ну, почти. Спасибо тебе ещё раз.', opts: [{ t: 'Береги себя.', end: true }] },
+      },
+    },
+    boris: {
+      start: () => 'hello',
+      nodes: {
+        hello: { text: 'Борис, механик. Если что сломалось — неси. Только без инструментов я как без рук...',
+          opts: [
+            { t: 'Что случилось с инструментами?', if: g => g.q('tools') === 0, go: 'tools' },
+            { t: 'Вот твой ящик с инструментами.', if: g => g.hasItem('toolbox'), go: 'tools_done' },
+            { t: 'Где мне взять отмычки?', if: g => g.q('tools') === 1 && !g.hasItem('toolbox'), go: 'picks' },
+            { t: 'Бывай.', end: true },
+          ] },
+        tools: { text: 'Ключ от ящика посеял, а ящик — вон он, у гаража, под замком. Ломать жалко — замок хороший. Вскроешь аккуратно и принесёшь инструменты — заплачу.',
+          opts: [{ t: 'Попробую вскрыть.', act: g => { g.setQuest('tools', 1); g.ensureToolbox(); }, end: true }, { t: 'Не умею я с замками.', end: true }] },
+        picks: { text: 'У Тихона спроси — он вечно с отмычками ходит. Или у Сёмы купи. С отмычками любой замок сговорчивее.', opts: [{ t: 'Понял.', end: true }] },
+        tools_done: { text: 'Родные мои! Ключи, плоскогубцы, тестер... Держи, заслужил. И вот — пару патронов, нашёл в кабине.', onEnter: g => { g.takeFrom(g.player, 'toolbox', 1); g.setQuest('tools', 9); g.reward(70, 50, [['ammo9', 12]]); },
+          opts: [{ t: 'Обращайся.', end: true }] },
       },
     },
     gvozd: {
@@ -186,9 +242,15 @@ window.DATA = (function () {
         hello: { text: 'Стой. Оружие в лагере не доставать, у Сёмы не воровать. Нарушишь — пристрелю. Понял?',
           opts: [
             { t: 'Понял.', end: true },
+            { t: 'Работа для меня найдётся?', if: g => g.q('marauder') === 0 && !g.marauderDead(), go: 'job' },
+            { t: 'С мародёром за водокачкой покончено.', if: g => g.q('marauder') < 9 && g.marauderDead(), go: 'job_done' },
             { t: 'Ты ходил на блокпост к рейдерам?', go: 'post' },
             { t: 'Говорят, ты знаешь, как подобраться к блокпосту незаметно.', if: g => g.quests.meds >= 1, check: { skill: 'speech', diff: 30 }, ok: 'path_ok', fail: 'path_fail', once: 'gv_path' },
           ] },
+        job: { text: 'Найдётся. За водокачкой, в углу у ограды, засел мародёр. Ворует воду, на людей бросается. Мои люди на постах, отлучиться не могут. Разберись — 40 крышек твои. Подкрадёшься тихо — меньше дырок в тебе будет.',
+          opts: [{ t: 'Разберусь.', act: g => { g.setQuest('marauder', 1); g.angerMarauder(); }, end: true }, { t: 'Не сейчас.', end: true }] },
+        job_done: { text: 'Слышал выстрелы. Значит, не зря на тебя поставил. Держи крышки. Будет ещё работа — найду.', onEnter: g => { g.setQuest('marauder', 9); g.reward(80, 40, []); },
+          opts: [{ t: 'Обращайся.', end: true }] },
         post: { text: 'Ходил. Человек восемь, у главаря автомат. На вышке часовой, но он больше спит. Лезть в лоб — самоубийство.',
           opts: [{ t: 'Ясно.', go: 'hello' }] },
         path_ok: { text: 'Ладно, слушай. С запада, вдоль мешков, часовые не смотрят. Иди тихо, пригнувшись — и шкаф у штаба твой. Отмычки возьми, замок там тугой.', onEnter: g => { g.giveXP(20); g.flags.sneakHint = true; },
@@ -200,15 +262,32 @@ window.DATA = (function () {
       start: () => 'hello',
       nodes: { hello: { text: 'Проходи, не задерживайся. В лагере тихо — и пусть так и остаётся.', opts: [{ t: 'Ага.', end: true }] } },
     },
+    marauder: {
+      start: () => 'hello',
+      nodes: { hello: { text: 'Чего уставился? Иди, куда шёл, пока цел.', opts: [{ t: '[Уйти]', end: true }, { t: '[Атаковать]', act: 'fight', end: true }] } },
+    },
     tihon: {
       start: () => 'hello',
       nodes: {
-        hello: { text: 'Э-э... добрый человек... крышечки не найдётся? Хоть одной?',
+        hello: { text: 'Э-э... добрый человек... крышечки не найдётся? Хоть одной? Или пожрать чего... третий день на воде.', onEnter: g => { if (g.q('ration') === 0) g.setQuest('ration', 1); },
           opts: [
+            { t: 'Держи консервы.', if: g => g.q('ration') < 9 && g.hasItem('food'), act: g => g.takeFrom(g.player, 'food', 1), go: 'fed' },
+            { t: 'Сёма говорит, ты ему 15 крышек должен.', if: g => g.q('debt') === 1 && !g.flags.tihonDebtPaid, go: 'debt' },
             { t: 'Держи 5 крышек.', if: g => g.player.caps >= 5 && !g.flags.tihonPaid, act: g => { g.player.caps -= 5; g.flags.tihonPaid = true; }, go: 'thanks' },
             { t: 'Говорят, у тебя отмычки есть. Поделись.', check: { skill: 'speech', diff: 25 }, ok: 'picks_ok', fail: 'picks_fail', once: 'tih_picks' },
             { t: 'Отвали.', end: true },
           ] },
+        fed: { text: 'Ох... тушёнка... Спасибо, век не забуду! Слушай, секрет за секрет: в гараже ящик Бориса — замок там простой, если отмычкой вверх поддеть.', onEnter: g => { g.setQuest('ration', 9); g.reward(30, 0, []); g.flags.toolsHint = true; },
+          opts: [{ t: 'Учту.', end: true }] },
+        debt: { text: 'Сёма?! Да я ему... я отдам, честно! Потом! Нету у меня сейчас!',
+          opts: [
+            { t: 'Отдашь сейчас, или Гвоздь узнает, кто таскает воду из бочек.', check: { skill: 'speech', diff: 30 }, ok: 'debt_ok', fail: 'debt_fail' },
+            { t: '[Схватить за ворот] Деньги. Быстро.', check: { stat: 'str', diff: 6 }, ok: 'debt_ok', fail: 'debt_fail' },
+            { t: 'Ладно, живи пока.', end: true },
+          ] },
+        debt_ok: { text: 'Всё, всё! На, подавись... Тут ровно пятнадцать. Последние!', onEnter: g => { g.flags.tihonDebtPaid = true; g.player.caps += 15; g.log('Получено: 15 крышек. Отнесите их Сёме.', 'good'); g.giveXP(20); },
+          opts: [{ t: 'Вот и славно.', end: true }] },
+        debt_fail: { text: 'Не дам! Не дам и всё! Хоть режь! (Может, они у него в карманах? Кража...)', opts: [{ t: 'Ну-ну.', end: true }] },
         thanks: { text: 'Ох, спасибо! Слушай... в гараже ящик с инструментами стоит, запертый. Никто его уже год не открывал. Я бы глянул на твоём месте.',
           opts: [{ t: 'Учту.', end: true }] },
         picks_ok: { text: 'Эх, ладно... для хорошего человека не жалко. Только не говори Сёме, где взял.', onEnter: g => { const t = g.findNpc('tihon'); if (t && g.takeFrom(t, 'lockpicks', 1)) { g.addItem(g.player, 'lockpicks', 1); g.log('Получено: Отмычки', 'good'); } g.giveXP(15); },
@@ -245,11 +324,12 @@ window.DATA = (function () {
       name: 'Ржавый Ручей', w: 44, h: 44, ground: ['dirt_tracks', 'rubble_ground', 'broken_pavement', 'cracked_road', 'overgrown_grassland'],
       groundW: [3, 2, 2, 1, 2], base: '#5a4a34',
       entry: { x: 22, y: 40 },
+      exits: [{ x0: 17, y0: 42, x1: 27, y1: 43 }],
       desc: 'Поселение у старой заправки. Здесь торгуют, лечат и прячутся от пустоши.',
       objects: [
         ['gas_station', 6, 6, { fw: 6, fh: 6, oy: 10, name: 'Старая заправка', desc: 'Ржавые колонки давно пусты. Под навесом прячутся от кислотного дождя.' }],
         ['garage', 25, 4, { fw: 7, fh: 5, oy: 14, name: 'Гараж', desc: 'Мастерская Ручья. Пахнет маслом и ржавчиной.' }],
-        ['crate_long', 27, 11, { name: 'Ящик с инструментами', container: true, lock: 40, items: [['junk', 3], ['shotgun', 1], ['shells', 10], ['lockpicks', 1]], desc: 'Тяжёлый ящик с навесным замком.' }],
+        ['crate_long', 27, 11, { name: 'Ящик с инструментами', container: true, lock: 35, items: [['toolbox', 1], ['junk', 3], ['shotgun', 1], ['shells', 10], ['lockpicks', 1]], desc: 'Тяжёлый ящик с навесным замком. Принадлежит механику Борису.' }],
         ['tires', 32, 10, {}],
         ['truck', 18, 9, { fw: 3, fh: 5, oy: 8, name: 'Грузовик', desc: 'Колёса сняты, кузов пуст. Кто-то спит в кабине.' }],
         ['shop_big', 12, 17, { fw: 7, fh: 5, oy: 8, name: 'Лавка Сёмы', desc: 'Вывеска гласит что-то нечитаемое. Товары разложены на прилавке.' }],
@@ -277,12 +357,14 @@ window.DATA = (function () {
       npcs: [
         ['semyon', 16, 23, { dir: 0 }], ['irina', 31, 22, {}], ['mihalych', 34, 34, {}],
         ['gvozd', 21, 37, {}], ['guard2', 6, 15, { wander: 4 }], ['tihon', 13, 33, { wander: 3 }],
+        ['boris', 31, 11, {}], ['lyoha', 26, 23, {}], ['marauder', 42, 26, {}],
       ],
     },
     post: {
       name: 'Блокпост 17', w: 46, h: 46, ground: ['ruined_concrete_yard', 'broken_pavement', 'cracked_road', 'rubble_ground', 'dirt_tracks'],
       groundW: [3, 3, 1, 2, 1], base: '#4c4a40',
       entry: { x: 4, y: 41 },
+      exits: [{ x0: 0, y0: 43, x1: 9, y1: 45 }],
       desc: 'Заброшенная военная часть. Теперь логово банды Клыка.',
       objects: [
         ['mil_hq', 18, 5, { fw: 9, fh: 7, oy: 10, name: 'Штаб', desc: 'Бетонный штаб с радаром на крыше. Двери заварены изнутри.' }],
@@ -343,5 +425,14 @@ window.DATA = (function () {
     start: { x: 4, y: 8 },
   };
 
-  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES };
+  // ---- задания (0 — не взято, 1..8 — этапы, 9 — выполнено) ----
+  const QUESTS = {
+    debt: { title: 'Долг Тихона', giver: 'semyon', steps: { 1: 'Выбейте из бродяги Тихона 15 крышек долга (Красноречие, Сила или Кража) и отнесите их Сёме.' } },
+    tools: { title: 'Инструменты Бориса', giver: 'boris', steps: { 1: 'Вскройте ящик с инструментами у гаража (Взлом) и принесите их механику Борису.' } },
+    wounded: { title: 'Раненый часовой', giver: 'irina', steps: { 1: 'Помогите Лёхе у медпункта: перевяжите (Медицина) или отдайте аптечку/бинт.', 2: 'Расскажите доку Ирине, что Лёха в порядке.' } },
+    marauder: { title: 'Мародёр у водокачки', giver: 'gvozd', steps: { 1: 'Разберитесь с мародёром за водонапорной башней. Подкрасться — проще.', 2: 'Доложите Гвоздю.' } },
+    ration: { title: 'Сухпаёк для Тихона', giver: 'tihon', steps: { 1: 'Принесите бродяге Тихону консервы (у Сёмы или в мешках у навеса).' } },
+  };
+
+  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS };
 })();

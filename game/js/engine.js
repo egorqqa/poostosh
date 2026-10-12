@@ -223,6 +223,14 @@ window.ENG = (function () {
 
     ctx.drawImage(L.ground.canvas, -L.ground.ox, -L.ground.oy);
 
+    // зона выхода
+    const pulse = 0.5 + 0.5 * Math.sin(t * 3);
+    if (L.def.exits) {
+      for (const r of L.def.exits) for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
+        if (x < 0 || y < 0 || x >= L.w || y >= L.h) continue;
+        diamond(ctx, x, y, `rgba(110,255,110,${0.25 + 0.2 * pulse})`, `rgba(70,230,80,${0.16 + 0.1 * pulse})`);
+      }
+    }
     // выход с карты
     const p = G.player;
     if (E.mouse.tile && G.mode !== 'dialog') {
@@ -284,6 +292,37 @@ window.ENG = (function () {
     }
     ctx.globalAlpha = 1;
 
+    // подпись зоны выхода
+    if (L.def.exits) {
+      ctx.font = 'bold 18px Consolas, monospace';
+      ctx.textAlign = 'center';
+      for (const r of L.def.exits) {
+        const c = iso((r.x0 + r.x1 + 1) / 2, (r.y0 + r.y1 + 1) / 2);
+        const label = '▼ ВЫХОД ▼';
+        const w = ctx.measureText(label).width + 16;
+        ctx.fillStyle = 'rgba(5,20,5,0.75)';
+        ctx.fillRect(c.x - w / 2, c.y - 44, w, 26);
+        ctx.strokeStyle = `rgba(120,255,120,${0.6 + 0.4 * pulse})`;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(c.x - w / 2, c.y - 44, w, 26);
+        ctx.fillStyle = '#8dff7a';
+        ctx.fillText(label, c.x, c.y - 25);
+      }
+    }
+    // значки заданий
+    if (G.questMark) {
+      ctx.font = 'bold 22px Consolas, monospace';
+      ctx.textAlign = 'center';
+      for (const a of actors) {
+        const m = G.questMark(a);
+        if (!m) continue;
+        const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH - 100 + Math.sin(t * 4 + a.x) * 3;
+        ctx.lineWidth = 4; ctx.strokeStyle = '#1a1206';
+        ctx.strokeText(m, sx, sy);
+        ctx.fillStyle = m === '?' ? '#8dff7a' : '#ffd040';
+        ctx.fillText(m, sx, sy);
+      }
+    }
     // подписи над NPC
     ctx.font = '12px Consolas, monospace';
     for (const a of actors) {
