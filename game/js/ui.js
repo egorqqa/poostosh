@@ -98,13 +98,14 @@ window.UI = (function () {
       const id = el.dataset.act;
       el.classList.toggle('on', id === G.ui.mode || (id === 'sneak' && G.sneaking));
       const localOnly = ['move', 'attack', 'steal', 'lockpick', 'look', 'sneak', 'reload'].includes(id);
-      el.classList.toggle('disabled', (localOnly && G.scene !== 'local') || (id === 'map' && !!G.combat) || (id === 'sneak' && !!G.combat));
+      el.classList.toggle('disabled', (localOnly && G.scene !== 'local') || (id === 'map' && !!G.combat && !G.combat.canFlee) || (id === 'sneak' && !!G.combat));
     });
     // верхняя строка
     $('#loc-name').textContent = G.scene === 'world' ? 'Карта мира' : G.loc ? G.loc.def.name : '';
     $('#clock').textContent = G.clockText();
     const tags = [];
     if (G.combat) tags.push(`<span class="tag combat">БОЙ · раунд ${G.combat.round}${G.combat.isPlayerTurn() ? ' · ваш ход' : ' · ход: ' + (G.combat.current ? G.combat.current.name : '…')}</span>`);
+    if (G.combat && G.combat.canFlee) tags.push('<span class="tag sneak">МОЖНО УЙТИ НА КАРТУ</span>');
     if (G.sneaking) tags.push(`<span class="tag sneak">СКРЫТНО${G.risk ? ' · риск ' + G.risk + '%/с' : ''}</span>`);
     if (R.overloaded(p)) tags.push('<span class="tag danger">ПЕРЕГРУЗ</span>');
     if (NET.active) tags.push(`<span class="tag online" data-tip="${NET.players.map(x => x.name + (x.loc ? '' : ' (карта)')).join('\n')}">ОНЛАЙН: ${NET.players.length}${NET.isAuth && G.scene === 'local' ? ' · ведущий' : ''}</span>`);

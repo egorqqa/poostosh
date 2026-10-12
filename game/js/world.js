@@ -83,6 +83,11 @@ window.WORLD_API = (function () {
     L.actors.unshift(p);
     for (const a of L.actors) { a.rx = a.x; a.ry = a.y; a.path = []; a.moving = false; a.walkPhase = 0; a.aimT = 0; a.hitFlash = 0; a.bubble = null; a.alerted = false; }
     buildGrids(L);
+    for (const a of L.actors) {
+      if (a.dead || a.gone || !L.blocked[a.y * L.w + a.x]) continue;
+      const f = W.freeTile(L, a.x, a.y, a);
+      if (f) { a.x = a.rx = f.x; a.y = a.ry = f.y; if (!a.isPlayer) { a.homeX = f.x; a.homeY = f.y; } }
+    }
     ENG.buildGround(L);
     G.loc = L;
     G.scene = 'local';
@@ -107,6 +112,17 @@ window.WORLD_API = (function () {
       }),
     };
   };
+  W.freeTile = function (L, x, y, ignore) {
+    for (let r = 1; r < 12; r++) {
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const nx = x + dx, ny = y + dy;
+        if (ENG.passable(L, nx, ny, ignore) && !W.isExit(L, nx, ny)) return { x: nx, y: ny };
+      }
+    }
+    return null;
+  };
+
   W.saveLocationState = function (G) {
     const L = G.loc;
     if (!L || L.def.temp) return;
@@ -134,7 +150,10 @@ window.WORLD_API = (function () {
   };
 
   W.leaveToWorld = function (G) {
-    if (G.combat) { G.log('Нельзя уйти во время боя!', 'bad'); return; }
+    if (G.combat) {
+      if (!(G.combat.canFlee && G.combat.isPlayerTurn())) { G.log('Нельзя уйти во время боя! Встаньте в зелёную зону выхода и переждите ход врагов без ранений.', 'bad'); return; }
+      if (G.combat.mirror) G.combat = null; else COMBAT.end(G, 'Вы уходите с поля боя.');
+    }
     if (NET.active) {
       const st = NET.isAuth && !G.loc.def.temp ? W.serializeLocation(G) : null;
       NET.leave(G.loc.id, st);
@@ -442,6 +461,7 @@ window.WORLD_API = (function () {
     }
     if (o && o.container) { goThen(G, o, () => W.openContainer(G, o)); return; }
     if (tile) {
+      if (G.combat && G.combat.canFlee && W.isExit(G.loc, tile.x, tile.y)) { W.leaveToWorld(G); return; }
       if (G.combat) {
         const path = ENG.findPath(G.loc, p.x, p.y, tile.x, tile.y);
         if (path) COMBAT.playerWalk(G, path);

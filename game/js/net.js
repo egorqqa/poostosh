@@ -242,13 +242,14 @@ window.NET = (function () {
     const p = G.player;
     switch (m.kind) {
       case 'fx': if (G.loc) COMBAT.showAttack(G, m); break;
-      case 'hit': p.hp = Math.max(0, p.hp - m.dmg); p.hitFlash = 0.15; UI.refresh(); break;
+      case 'hit': p.hp = Math.max(0, p.hp - m.dmg); p.hitFlash = 0.15; p.damagedSinceTurn = true; UI.refresh(); break;
       case 'died': if (!p.dead) G.gameOver(); break;
       case 'xp': G.giveXP(m.n); break;
       case 'ammo': p.loaded = Math.max(0, p.loaded - 1); UI.refresh(); break;
       case 'turn':
         if (!G.combat || !G.combat.mirror) G.combat = makeMirror();
         G.combat.current = p; G.combat.busy = false; p.ap = m.ap;
+        COMBAT.checkFlee(G);
         G.hint('Ваш ход'); UI.refresh();
         break;
       case 'ack': {

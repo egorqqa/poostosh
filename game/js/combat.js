@@ -87,9 +87,13 @@ window.COMBAT = (function () {
     cb.current = a;
     a.ap = R.maxAP(a);
     if (net()) NET.forceSnap();
+    if (isPC(a) && cb.round > 1 && !anyoneSeen(G, foes)) {
+      C.end(G, 'Враги потеряли вас из виду. Бой окончен.');
+      return;
+    }
     if (a.isPlayer) {
-      if (!net() && foes.every(f => ENG.dist(f, a) > 22)) { C.end(G, 'Вы оторвались от преследования.'); return; }
       cb.busy = false;
+      C.checkFlee(G);
       UI.refresh();
       return;
     }
@@ -110,10 +114,29 @@ window.COMBAT = (function () {
     C.nextTurn(G);
   };
 
+  // видит ли хоть один враг хоть одного игрока
+  function anyoneSeen(G, foes) {
+    const pcs = G.combat.list.filter(p => isPC(p) && !p.dead && !p.gone && (p === G.player || G.loc.actors.includes(p)));
+    return foes.some(f => pcs.some(p => ENG.dist(f, p) <= WORLD_API.detectRadius(f) + 4 && ENG.los(G.loc, f.x, f.y, p.x, p.y)));
+  }
+
+  // в начале своего хода: стоит в зоне выхода и не получал урона с конца прошлого хода — можно уйти
+  C.checkFlee = function (G) {
+    const cb = G.combat, p = G.player;
+    cb.canFlee = !!(cb.playerActed && WORLD_API.isExit(G.loc, p.x, p.y) && !p.damagedSinceTurn);
+    if (cb.canFlee) G.log('Вы у выхода, и вас не задело — можно уйти из боя на карту: кнопка «Карта» или клик по зелёной зоне.', 'good');
+  };
+  function playerTurnEnds(G) {
+    const cb = G.combat;
+    G.player.damagedSinceTurn = false;
+    if (cb) { cb.playerActed = true; cb.canFlee = false; }
+  }
+
   C.endTurnOf = function (G, a) {
     const cb = G.combat;
     if (!cb || cb.mirror || cb.current !== a) return;
     if (a.isPlayer && cb.busy) return;
+    if (a.isPlayer) playerTurnEnds(G);
     clearTimeout(cb.remoteTimer);
     cb.busy = true;
     C.nextTurn(G);
@@ -122,7 +145,7 @@ window.COMBAT = (function () {
   C.endPlayerTurn = function (G) {
     const cb = G.combat;
     if (!cb || !cb.isPlayerTurn() || cb.busy) return;
-    if (cb.mirror) { cb.busy = true; NET.req({ act: 'end' }); return; }
+    if (cb.mirror) { playerTurnEnds(G); cb.busy = true; NET.req({ act: 'end' }); return; }
     C.endTurnOf(G, G.player);
   };
 
@@ -183,6 +206,7 @@ window.COMBAT = (function () {
       def.hp -= dmg;
       ev.dmg = dmg; ev.crit = crit;
       if (def.isRemote) { def.hpLock = Date.now() + 1500; NET.event(def.pid, { kind: 'hit', dmg }); }
+      if (def.isPlayer) def.damagedSinceTurn = true;
       if (def.hp <= 0) ev.killed = true;
     }
     C.showAttack(G, ev);
