@@ -125,6 +125,8 @@ window.SND = (function () {
     apartment: { root: 61.7, fifth: 1.498, wind: 0.04, ping: 0.4, pingNotes: [523, 659] },
     podezd: { root: 43.65, fifth: 1.414, wind: 0.08, ping: 0.7, pingNotes: [440, 466] },
     pharmacy_in: { root: 46.2, fifth: 1.414, wind: 0.06, ping: 0.7, pingNotes: [587, 622] },
+    hive: { root: 36.7, fifth: 1.06, wind: 0.2, ping: 1, pingNotes: [311, 330, 349] },
+    fort: { root: 55, fifth: 1.335, wind: 0.3, ping: 0.7, pingNotes: [392, 466] },
     wild: { root: 65.4, fifth: 1.498, wind: 0.3, ping: 0.6, pingNotes: [392, 523] },
     world: { root: 82.4, fifth: 1.498, wind: 0.2, ping: 0.7, pingNotes: [494, 659, 740] },
   };

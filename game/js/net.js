@@ -29,7 +29,7 @@ window.NET = (function () {
           if (m.t === 'error') { fail(m.text || 'Отказано'); return; }
           if (m.t === 'welcome') {
             done = true; clearTimeout(to);
-            Object.assign(N, { ws, active: true, id: m.id, name: m.name, server: `${host}:${port}`, players: m.players, serverVersion: m.version, serverName: m.serverName || 'Пустошь', motd: m.motd || '', char: m.char || null, serverTime: m.time });
+            Object.assign(N, { ws, active: true, id: m.id, name: m.name, server: `${host}:${port}`, players: m.players, serverVersion: m.version, serverName: m.serverName || 'Пустошь', motd: m.motd || '', char: m.char || null, serverTime: m.time, defense: m.defense || {}, invasion: m.invasion || null });
             startTimers();
             resolve(m);
           }
@@ -292,6 +292,8 @@ window.NET = (function () {
       case 'req': handleReq(m); break;
       case 'ev': handleEv(m); break;
       case 'time': if (G.player) G.time = m.time; break;
+      case 'invasion': if (G.player) G.onServerInvasion(m.inv); break;
+      case 'defense': N.defense = m.defense || {}; UI.refresh(); break;
       case 'chat': G.log(m.system ? m.text : `[${m.name}] ${m.text}`, m.system ? 'sys' : 'chat'); break;
     }
   }

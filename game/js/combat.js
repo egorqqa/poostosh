@@ -92,7 +92,7 @@ window.COMBAT = (function () {
     if (!foes.length) { C.end(G, 'Бой окончен. Врагов не осталось.'); return; }
     if (!cb.list.some(a => isPC(a) && !a.dead && !a.gone && G.loc.actors.includes(a))) { C.end(G, 'Бой окончен.'); return; }
     cb.idx++;
-    if (cb.idx >= cb.list.length) { cb.idx = 0; cb.round++; }
+    if (cb.idx >= cb.list.length) { cb.idx = 0; cb.round++; turretsFire(G); if (!G.combat) return; }
     const a = cb.list[cb.idx];
     if (a.dead || a.gone || (!isAlly(a) && !a.hostile) || !G.loc.actors.includes(a) && a !== G.player) return C.nextTurn(G);
     cb.current = a;
@@ -142,6 +142,24 @@ window.COMBAT = (function () {
     const cb = G.combat;
     G.player.damagedSinceTurn = false;
     if (cb) { cb.playerActed = true; cb.canFlee = false; }
+  }
+
+  // турели поселения бьют по нападающим в начале каждого раунда
+  function turretsFire(G) {
+    const t = G.defense ? G.defense(G.loc.id).turrets || 0 : 0;
+    if (!t) return;
+    for (let i = 0; i < t; i++) {
+      const foes = G.loc.actors.filter(a => a.invader && !a.dead && !a.gone);
+      if (!foes.length) break;
+      const f = foes[Math.floor(Math.random() * foes.length)];
+      const dmg = R.rnd(6, 12);
+      f.hp -= dmg; f.hitFlash = 0.15; f.shakeT = 0.25;
+      ENG.floater(f.x, f.y, '-' + dmg, '#ffcf40'); SND.at('shot', f.x, f.y, { weapon: 'ak' });
+      G.log(`Турель поселения попадает в: ${f.name} −${dmg} ОЗ.`, 'good');
+      if (net()) NET.fx({ type: 'log', text: `Турель поселения попадает в: ${f.name} −${dmg} ОЗ.`, cls: 'good' });
+      if (f.hp <= 0) kill(G, f, null);
+    }
+    if (!hostilesLeft(G).length) C.end(G, 'Турели добили последнего врага.');
   }
 
   C.endTurnOf = function (G, a) {
@@ -285,6 +303,7 @@ window.COMBAT = (function () {
     if (a.tpl === 'klyk') G.flags.klykDead = true;
     if (a.tpl === 'marauder') G.flags.marauderKilled = true;
     if (a.tpl === 'mytar') G.openBridge();
+    if (a.tpl === 'rzha' && !G.flags.southDone) G.southEnd('storm');
     if (a.invader && G.loc && !G.loc.actors.some(x => x.invader && !x.dead)) G.invasionCleared();
     if (a.tpl === 'klyk_city') { G.flags.klykCityDead = true; if (G.q('column') >= 1 && G.q('column') < 4) G.setQuest('column', 4); }
     if (a.tpl === 'granit') { G.flags.granitDead = true; if (G.q('column') < 9) G.columnEnd('exposed'); }

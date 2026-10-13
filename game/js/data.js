@@ -186,6 +186,15 @@ window.DATA = (function () {
     klyk_city: { name: 'Клык', tint: 'boss', faction: 'klyk', dialog: 'klyk_city',
       stats: { str: 7, per: 6, end: 8, cha: 5, int: 5, agi: 7, luck: 6 }, hp: 60,
       inv: [['ammo762', 20], ['column_orders', 1], ['token', 1]], caps: 70, weapon: 'ak', armor: 'leather', skills: { guns: 65 }, xp: 150 },
+    hive_queen: { name: 'Матка обращённых', tint: 'infected', faction: 'infected', hostile: true,
+      stats: { str: 10, per: 6, end: 10, cha: 1, int: 2, agi: 6, luck: 5 }, hp: 140,
+      inv: [['medkit', 2], ['samples', 1]], caps: 0, weapon: 'claws', skills: { melee: 80 }, xp: 500 },
+    rem_soldier: { name: 'Боец остатков Колонны', tint: 'guard', faction: 'remnant', dialog: 'rem_soldier', guard: true,
+      stats: { str: 7, per: 6, end: 7, cha: 4, int: 4, agi: 6, luck: 5 }, hp: 48,
+      inv: [['ammo762', 15], ['food', 1]], caps: 20, weapon: 'rifle', armor: 'vest', skills: { guns: 62 }, xp: 110 },
+    rzha: { name: 'Лейтенант Ржа', tint: 'boss', faction: 'remnant', dialog: 'rzha', guard: true,
+      stats: { str: 8, per: 7, end: 8, cha: 6, int: 6, agi: 7, luck: 5 }, hp: 95,
+      inv: [['ammo762', 30], ['medkit', 2]], caps: 180, weapon: 'ak', armor: 'col_armor', skills: { guns: 72 }, xp: 400 },
     lada: { name: 'Инженер Лада', tint: 'doctor', faction: 'prisoner', dialog: 'lada',
       stats: { str: 4, per: 7, end: 5, cha: 6, int: 9, agi: 5, luck: 5 }, hp: 24, inv: [], caps: 0 },
     granit_obs: { name: 'Командор Гранит', tint: 'guard', faction: 'column', dialog: 'granit_obs', guard: true,
@@ -384,6 +393,7 @@ window.DATA = (function () {
           opts: [
             { t: 'Понял.', end: true },
             { t: 'Работа для меня найдётся?', if: g => g.q('marauder') === 0 && !g.marauderDead(), go: 'job' },
+            { t: 'Давай укрепим Ручей: стены, турели.', act: g => { setTimeout(() => UI.openDefense('camp'), 0); }, end: true },
             { t: 'С мародёром за водокачкой покончено.', if: g => g.q('marauder') < 9 && g.marauderDead(), go: 'job_done' },
             { t: 'Ты ходил на блокпост к рейдерам?', go: 'post' },
             { t: 'Говорят, ты знаешь, как подобраться к блокпосту незаметно.', if: g => g.quests.meds >= 1, check: { skill: 'speech', diff: 30 }, ok: 'path_ok', fail: 'path_fail', once: 'gv_path' },
@@ -441,6 +451,8 @@ window.DATA = (function () {
             { t: 'Что слышно в эфире?', if: g => g.q('thread') === 9 && g.q('column') === 0, go: 'column' },
             { t: 'Куда ушла Колонна?', if: g => g.q('column') === 9 && g.q('obs') === 0, go: 'obs' },
             { t: 'Распылитель «З-2» под куполом остановлен.', if: g => g.q('obs') === 4, go: 'obs_done' },
+            { t: 'Что слышно с юга?', if: g => g.q('obs') === 9 && g.q('south') === 0, go: 'south' },
+            { t: 'С угрозой на юге покончено.', if: g => g.q('south') === 3, go: 'south_done' },
             { t: 'Чем помочь с антенной?', if: g => g.q('mast') === 0, go: 'mast' },
             { t: 'Антенна снова работает.', if: g => g.q('mast') === 2, go: 'mast_done' },
             { t: 'Вера говорит, ты служил на Объекте 9. Какой там код?', if: g => g.q('thread') >= 2 && !g.flags.z9code && g.q('mast') !== 2, go: 'code' },
@@ -448,6 +460,13 @@ window.DATA = (function () {
           ] },
         column: { text: g => `Слышно, и недоброе. Какая-то «Стальная Колонна» — военные, броня, порядок — вошла в Старый город на юго-западе. Передают по кругу: «Ищем ${g.klykN()}. Награда тому, кто выдаст». Похоже, ${g.klykN()} увёл у них что-то ценное. А Колонна... они ведь и «З-2» могли скупать — больше некому было.`,
           opts: [{ t: 'Схожу в Старый город.', act: g => { g.setQuest('column', 1); g.revealSite('city'); }, end: true }, { t: 'Не сейчас.', end: true }] },
+        south: { text: g => g.flags.obsDone === 'dark'
+            ? 'Облако с купола ушло на юг. Теперь оттуда идут обращённые — сотнями. Разведка говорит: в руинах южного посёлка у них гнездо, «Улей». Там что-то вроде матки, она их собирает. Без неё они разбредутся.'
+            : 'С юга жалуются караваны: остатки Колонны засели в старом форте на развилке и грабят всех подряд. Командует лейтенант Ржа. Солдаты без командора — опасная штука.',
+          opts: [{ t: 'Иду на юг.', act: g => { g.setQuest('south', 1); g.revealSite(g.flags.obsDone === 'dark' ? 'hive' : 'fort'); }, end: true }, { t: 'Позже.', end: true }] },
+        south_done: { text: g => ({ hive: 'Улей сгорел? Значит, обращённые разбредутся и вымрут. Ты снова спас нас — после того, что сам же и начал. Искупление засчитано.', disband: 'Остатки Колонны пришли к нам и попросились в часовые. Ты превратил бандитов в защитников!', command: 'Говорят, форт теперь твой и бойцы слушают только тебя. Надеюсь, ты знаешь, что делаешь.', storm: 'Форт взят штурмом. Караваны снова ходят на юг. Спасибо тебе.' })[g.flags.southDone] || 'Спасибо тебе.',
+          onEnter: g => { g.setQuest('south', 9); g.reward(700, 350, [['medkit', 2]]); if (g.flags.southDone !== 'command') g.addRep(20, 'юг спокоен'); g.log('КОНЕЦ ГЛАВЫ 5. Пустошь живёт дальше — контракты, вторжения и отряды ждут.', 'warn'); },
+          opts: [{ t: 'Бывай, Кузьма.', end: true }] },
         obs: { text: 'На север, к старой обсерватории. Я ловлю их переговоры: «Купол готов на восемьдесят процентов», «реагент залит». Если они сделали из телескопа распылитель — ветер разнесёт «З-2» по всей пустоши. Каждый станет их солдатом... или чудовищем. Останови их.',
           opts: [{ t: 'Иду на север.', act: g => { g.setQuest('obs', 1); g.revealSite('observatory'); }, end: true }, { t: 'Позже.', end: true }] },
         obs_done: { text: 'Значит, небо над пустошью останется чистым. Ты сделал то, чего не смогли армии до войны. Держи — всё, что у «Рассвета» есть ценного. И знай: здесь тебя будут помнить.',
@@ -494,7 +513,7 @@ window.DATA = (function () {
     },
     rguard: {
       start: () => 'hello',
-      nodes: { hello: { text: g => g.flags.rassvetHero ? 'О, это же ты! Проходи, друг. Слава герою Объекта 9!' : 'Проходи. Оружие держи на ремне — у нас тут люди нервные.', opts: [{ t: 'Ага.', end: true }] } },
+      nodes: { hello: { text: g => g.flags.rassvetHero ? 'О, это же ты! Проходи, друг. Слава герою Объекта 9!' : 'Проходи. Оружие держи на ремне — у нас тут люди нервные.', opts: [{ t: 'Давай укрепим «Рассвет».', act: g => { setTimeout(() => UI.openDefense('rassvet'), 0); }, end: true }, { t: 'Ага.', end: true }] } },
     },
     mytar: {
       start: g => g.flags.bridgeOpen ? 'open' : 'hello',
@@ -618,6 +637,23 @@ window.DATA = (function () {
           ] },
       },
     },
+    rzha: {
+      start: g => g.flags.southDone ? 'after' : 'hello',
+      nodes: {
+        hello: { text: 'Лейтенант Ржа. Колонны больше нет — есть мы, и нам надо жрать. Караваны платят «пошлину». Ты тоже заплатишь — или уйдёшь отсюда без ног.',
+          opts: [
+            { t: 'Я из Колонны и служил Граниту. Теперь командую я.', if: g => g.flags.columnEnd === 'joined', check: { skill: 'speech', diff: 40 }, ok: 'command', fail: 'refuse' },
+            { t: 'Распусти отряд. На «Рассвете» нужны часовые — там вас накормят без грабежа.', check: { skill: 'speech', diff: 60 }, ok: 'disband', fail: 'refuse' },
+            { t: '[Атаковать]', act: 'fight', end: true },
+            { t: 'Ухожу.', end: true },
+          ] },
+        command: { text: 'Боец Гранита... Ладно. Приказывай, командир. Хватит грабить — будем держать дорогу, как положено.', onEnter: g => g.southEnd('command'), opts: [{ t: 'Держите дорогу.', end: true }] },
+        disband: { text: '...Кормят, говоришь? Без грабежа? Чёрт с тобой. Парни, собираемся — идём на «Рассвет».', onEnter: g => g.southEnd('disband'), opts: [{ t: '[Проводить взглядом]', end: true }] },
+        refuse: { text: 'Красиво говоришь. Взять его!', opts: [{ t: '[Бой]', act: 'fight', end: true }] },
+        after: { text: 'Дорога под присмотром.', opts: [{ t: 'Ага.', end: true }] },
+      },
+    },
+    rem_soldier: { start: () => 'hello', nodes: { hello: { text: 'К лейтенанту — в штаб. И руки держи на виду.', opts: [{ t: 'Ага.', end: true }] } } },
     companion: {
       start: () => 'hello',
       nodes: {
@@ -700,6 +736,37 @@ window.DATA = (function () {
   // ---- локации ----
   // объекты: [спрайт, x, y, {fw, fh, oy, block, name, container, lock, items, owner, desc}]
   const LOCATIONS = {
+    hive: {
+      name: 'Улей', w: 44, h: 40, ground: ['rubble_ground', 'overgrown_grassland', 'cracked_road', 'broken_pavement'], groundW: [3, 3, 1, 2], base: '#3d3f2c',
+      entry: { x: 22, y: 36 },
+      exits: [{ x0: 17, y0: 38, x1: 27, y1: 39 }],
+      desc: 'Руины южного посёлка, затянутые жёлтой плёнкой. Здесь гнездятся обращённые. В центре что-то пульсирует.',
+      objects: [
+        ['transformer_rad', 20, 5, { fw: 3, fh: 3, oy: 6, interact: 'hive_core' }],
+        ['city_panel_tower', 4, 3, { fw: 7, fh: 7, oy: 14 }], ['city_rubble', 30, 4, {}], ['city_rubble', 13, 15, {}], ['city_rubble', 34, 20, {}], ['city_rubble', 6, 26, {}],
+        ['bus2', 26, 14, { fw: 5, fh: 3, oy: 6 }], ['wrecked_car', 12, 22, { fw: 3, fh: 2, oy: 4 }], ['wrecked_cars', 33, 30, {}], ['city_dumpsters', 18, 26, {}],
+        ['barrels', 24, 9, {}], ['barrels', 17, 8, {}], ['tree_dead', 2, 18, {}], ['tree_dead2', 40, 10, {}], ['tree_dead', 38, 36, {}], ['tree_dead2', 10, 34, {}],
+        ['bush_dry', 27, 24, { block: false }], ['weeds', 15, 31, { block: false }], ['grass2', 30, 33, { block: false }], ['flowers', 22, 18, { block: false }],
+      ],
+      npcs: [['infected', 14, 10, { wander: 3 }], ['infected', 28, 10, { wander: 3 }], ['infected', 10, 20, { wander: 3 }], ['infected', 31, 24, { wander: 3 }],
+        ['z_soldier', 20, 16, { wander: 2 }], ['z_soldier', 25, 28, { wander: 2 }], ['infected_brute', 16, 30, { wander: 2 }], ['hive_queen', 22, 10, { wander: 1 }]],
+    },
+    fort: {
+      name: 'Южный форт', w: 44, h: 40, ground: ['ruined_concrete_yard', 'dirt_tracks', 'broken_pavement', 'rubble_ground'], groundW: [3, 2, 2, 1], base: '#4a4436',
+      entry: { x: 22, y: 36 },
+      exits: [{ x0: 17, y0: 38, x1: 27, y1: 39 }],
+      desc: 'Старый форт на развилке дорог. Над воротами — шестерня Колонны, перечёркнутая углём. Здесь сидят те, кто от неё остался.',
+      objects: [
+        ['mil_hq', 17, 4, { fw: 9, fh: 7, oy: 10, name: 'Штаб форта' }], ['mil_tower', 5, 6, { fw: 3, fh: 3, oy: 6 }], ['mil_tower', 36, 6, { fw: 3, fh: 3, oy: 6 }],
+        ['mil_hangar', 30, 16, { fw: 8, fh: 6, oy: 8 }], ['mil_tank', 6, 18, { fw: 5, fh: 4, oy: 6 }], ['mil_btr', 20, 20, { fw: 5, fh: 3, oy: 6 }],
+        ['mil_checkpoint', 19, 31, { fw: 4, fh: 3, oy: 6, name: 'Ворота форта' }],
+        ['mil_sandwall', 8, 30, { fw: 4, fh: 1 }], ['mil_sandwall', 30, 30, { fw: 4, fh: 1 }], ['mil_sandwall', 12, 14, { fw: 4, fh: 1 }], ['mil_sandwall', 28, 12, { fw: 4, fh: 1 }],
+        ['mil_crates', 26, 25, { name: 'Награбленное', container: true, lock: 40, items: [['ammo762', 30], ['medkit', 2], ['food', 4], ['water', 3]], caps: 120 }],
+        ['mil_crate_pile', 14, 24, {}], ['barrels', 34, 26, {}], ['mil_lamp', 16, 28, {}], ['mil_lamp', 28, 9, {}],
+        ['tree_dead', 2, 34, {}], ['tree_dead2', 41, 30, {}], ['rocks_big', 39, 2, {}], ['grass4', 10, 36, { block: false }],
+      ],
+      npcs: [['rzha', 22, 13, {}], ['rem_soldier', 20, 28, {}], ['rem_soldier', 25, 28, {}], ['rem_soldier', 9, 12, { wander: 2 }], ['rem_soldier', 34, 12, { wander: 2 }], ['rem_soldier', 28, 22, { wander: 2 }]],
+    },
     pharmacy_in: {
       name: 'Аптека (внутри)', w: 16, h: 13, interior: true, ground: ['ruined_concrete_yard', 'broken_pavement'], groundW: [2, 2], base: '#2a2824',
       wallColor: [150, 150, 136], entry: { x: 8, y: 10 },
@@ -1110,6 +1177,9 @@ window.DATA = (function () {
       'yydsdggsdsyyydgggsvydgdrcc',
       'yyddggmgsdyyysddssvyyddsrx',
       'yyysdgggsyyyyssdsyvyyyssdd',
+      'yyysdddgsyyyrrxdsdvddsrrxd',
+      'yysddgggsdyrrxxcddvdsdrrxc',
+      'yyyysddsyyyysddsyyvyyysddd',
     ],
     terrain: { v: 'Река', y: 'Пустыня', d: 'Пустошь', s: 'Камни', g: 'Пустошь', b: 'Дорога', w: 'Дорога', a: 'Дорога', m: 'Болото', r: 'Руины', x: 'Руины', c: 'Руины', o: 'Руины' },
     encounter: { v: 0, y: 0.10, d: 0.12, s: 0.12, g: 0.12, b: 0.06, w: 0.06, a: 0.06, m: 0.18, r: 0.20, x: 0.20, c: 0.18, o: 0.15 },
@@ -1117,6 +1187,8 @@ window.DATA = (function () {
       { id: 'camp', x: 4, y: 8, name: 'Ржавый Ручей', sprite: 'booth', known: true },
       { id: 'post', x: 13, y: 2, name: 'Блокпост 17', sprite: 'mil_tower', known: false },
       { id: 'zarya', x: 15, y: 9, name: 'Промзона «Заря»', sprite: 'brick_factory', known: false },
+      { id: 'hive', x: 9, y: 13, name: 'Улей', sprite: 'transformer_rad', known: false },
+      { id: 'fort', x: 9, y: 13, name: 'Южный форт', sprite: 'mil_tower', known: false },
       { id: 'observatory', x: 12, y: 0, name: 'Обсерватория', sprite: 'mil_radar', known: false },
       { id: 'city', x: 2, y: 10, name: 'Старый город', sprite: 'city_panel_tower', known: false },
       { id: 'forest', x: 7, y: 2, name: 'Мёртвый лес', sprite: 'tree_spruce', known: false },
@@ -1144,6 +1216,10 @@ window.DATA = (function () {
       3: 'Объект 9: проникните в хранилище (код — у радиста Кузьмы, ключ-карта — у охраны, или Взлом 60) и разберитесь со складом «З-2».',
       4: 'Вернитесь к коменданту Вере на станцию «Рассвет».' } },
     mast: { title: 'Молчащая антенна', giver: 'kuzma', steps: { 1: 'Почините радиомачту «Рассвета»: нужно 3 хлама и Интеллект 6 или Взлом 35.', 2: 'Антенна работает — сообщите радисту Кузьме.' } },
+    south: { title: 'Глава 5: Юг', giver: 'kuzma', steps: {
+      1: 'С юга приходят дурные вести. Отправляйтесь в южные пустоши (юг карты мира) и разберитесь, откуда угроза.',
+      2: 'Источник угрозы найден. Устраните его.',
+      3: 'Вернитесь к радисту Кузьме на «Рассвет».' } },
     obs: { title: 'Обсерватория', giver: 'kuzma', steps: {
       1: 'Колонна ушла на север, к старой обсерватории (север карты). Узнайте, что она там строит.',
       2: 'У обсерватории стоит лагерь Колонны. Найдите пленницу — говорят, они держат учёного.',
@@ -1291,6 +1367,12 @@ window.DATA = (function () {
       actions: [{ label: 'Собрать радио (3 хлама, 1 голодиск, 15 крышек)', act: g => g.buildUpgrade('radioBuilt', [['junk', 3], ['holotape', 1]], 15) }] },
     radio: { name: 'Радиоприёмник', look: 'Ламповый приёмник. Шипит, потом ловит голоса.', lookXp: 0,
       actions: [{ label: 'Слушать новости', act: g => g.radioNews() }] },
+    hive_core: { name: 'Сердце Улья', look: 'Пульсирующий нарост из жёлтой плёнки, оплетающий старый трансформатор. От него тянутся нити по всему посёлку.', lookXp: 15,
+      actions: [{ label: 'Взорвать сердце Улья (взрывчатка)', if: g => !g.flags.southDone, act: g => {
+        if (G.loc.actors.some(a => a.tpl === 'hive_queen' && !a.dead)) return 'Матка рядом — она не подпустит к сердцу. Сначала убейте её.';
+        if (!g.hasItem('explosive')) return 'Нужна взрывчатка (интендант Палыч на «Рассвете»).';
+        R.removeItem(g.player, 'explosive', 1); SND.play('shot', { weapon: 'shotgun' }); g.southEnd('hive');
+        return 'Взрыв разносит нарост в клочья. По всему посёлку обращённые падают на колени и затихают.'; } }] },
     obs_dome: { name: 'Купол обсерватории', look: 'Под куполом гудят насосы. На двери — кодовый замок и знак шестерни.', lookXp: 10,
       enter: { to: 'obs_dome', at: { x: 12, y: 15 }, label: 'Войти под купол', code: 'obsCode', codeMsg: 'Вы набираете 7-7-1-2. Замок щёлкает.', lock: 55, text: 'Дверь заперта. Код знает пленный инженер в лагере (или Взлом 55).' } },
     obs_terminal: { name: 'Журнал купола', look: 'Терминал с графиком запуска.', lookXp: 5,

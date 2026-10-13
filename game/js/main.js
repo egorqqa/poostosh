@@ -218,6 +218,7 @@
   G.siteQuestMark = function (id) {
     const q = G.q, f = G.flags;
     if (G.flags.invasion && !G.flags.invasion.done && G.flags.invasion.loc === id) return '!';
+    if (id === 'hive' || id === 'fort') return q('south') >= 1 && q('south') < 3 ? '!' : q('south') === 9 ? '✔' : null;
     if (id === 'observatory') return q('obs') >= 1 && q('obs') < 4 ? '!' : q('obs') === 9 ? '✔' : null;
     if (id === 'city') return q('column') >= 1 && q('column') < 9 ? '!' : q('column') === 9 ? '✔' : null;
     if (id === 'bridge') return !f.bridgeOpen && q('thread') >= 1 ? '!' : f.bridgeOpen ? '✔' : null;
@@ -247,7 +248,8 @@
       case 'klyk_city': return q('column') === 3 ? '!' : null;
       case 'vera': return q('thread') === 1 ? '!' : q('thread') === 4 && (G.flags.z2Destroyed || G.hasItem('z2_crate')) ? '?' : null;
       case 'lada': return G.flags.ladaFree ? null : '!';
-      case 'kuzma': return q('obs') === 4 ? '?' : q('column') === 9 && q('obs') === 0 ? '!' : q('mast') === 2 ? '?' : q('mast') === 0 || (q('thread') === 9 && q('column') === 0) ? '!' : null;
+      case 'rzha': return q('south') >= 1 && q('south') < 3 && !G.flags.southDone ? '!' : null;
+      case 'kuzma': return q('obs') === 4 || q('south') === 3 ? '?' : q('obs') === 9 && q('south') === 0 ? '!' : q('column') === 9 && q('obs') === 0 ? '!' : q('mast') === 2 ? '?' : q('mast') === 0 || (q('thread') === 9 && q('column') === 0) ? '!' : null;
       case 'palych': return q('thread') >= 2 && q('thread') < 9 && !G.hasItem('explosive') && !G.flags.z2Done && !G.flags.palychExplosive ? '!' : null;
       case 'mitya': return G.hasItem('samples') && !G.flags.mityaCured ? '?' : null;
       case 'mytar': return !G.flags.bridgeOpen && q('thread') >= 1 ? '!' : null;
@@ -300,7 +302,7 @@
   const INV_TARGETS = ['camp', 'rassvet'];
   G.postGame = () => G.q('obs') === 9;
   G.tickInvasions = function () {
-    if (!G.postGame() || NET.active) return;
+    if (NET.active || !G.postGame()) return;
     const f = G.flags;
     if (f.invasion && !f.invasion.done) {
       if (G.time > f.invasion.until) {
@@ -326,6 +328,7 @@
   G.invasionCleared = function () {
     const inv = G.flags.invasion;
     if (!inv || inv.done) return;
+    if (NET.active) { NET.send({ t: 'invdone', id: inv.id }); return; }
     inv.done = 'won';
     const k = inv.n || 1;
     G.log(`Вторжение отбито! «${DATA.LOCATIONS[inv.loc].name}» спасено.`, 'good');
@@ -333,6 +336,53 @@
     if (inv.loc === 'camp') G.addRep(10, 'защита Ручья');
     SND.play('quest');
   };
+  // сетевое вторжение пришло с сервера
+  G.onServerInvasion = function (inv) {
+    const prev = G.flags.invasion;
+    G.flags.invasion = inv;
+    if (!inv) return;
+    const name = DATA.LOCATIONS[inv.loc].name;
+    if (!inv.done && (!prev || prev.id !== inv.id)) {
+      G.log(`⚠ ВТОРЖЕНИЕ НА СЕРВЕРЕ! ${inv.kind === 'column' ? 'Отряд Колонны' : 'Толпа обращённых'} идёт на «${name}». Собирайте отряд! Времени: 24 игровых часа.`, 'bad');
+      WMAP.siteState(G, inv.loc).known = true; if (G.world) G.world.target = inv.loc; SND.play('alert');
+    }
+    if (inv.done === 'won' && !G.flags['invRew_' + inv.id]) {
+      G.flags['invRew_' + inv.id] = true;
+      if (G.loc && G.loc.id === inv.loc) {
+        const k = inv.n || 1;
+        G.log(`Вторжение отбито совместными силами! «${name}» спасено.`, 'good');
+        G.reward(150 + 50 * k, 100 + 30 * k, [['medkit', 1]]); SND.play('quest');
+        if (inv.loc === 'camp') G.addRep(10, 'защита Ручья');
+      } else G.log(`Другие игроки отбили вторжение на «${name}».`, 'sys');
+    }
+    if (inv.done === 'lost' && prev && !prev.done) G.log(`Вторжение на «${name}» не отбито. Поселение разграблено.`, 'bad');
+  };
+
+  // ---------- укрепления поселений ----------
+  G.defense = loc => ((NET.active ? NET.defense : G.flags.defense) || {})[loc] || { walls: 0, turrets: 0 };
+  G.defenseCost = (kind, lvl) => kind === 'walls' ? { junk: 6 * lvl, caps: 50 * lvl, ammo: 0 } : { junk: 8, caps: 80 * lvl, ammo: 20 };
+  G.upgradeDefense = function (loc, kind) {
+    const cur = G.defense(loc)[kind] || 0;
+    if (cur >= 3) return 'Уже максимум.';
+    const c = G.defenseCost(kind, cur + 1), p = G.player;
+    if (R.count(p, 'junk') < c.junk || p.caps < c.caps || R.count(p, 'ammo762') < c.ammo) return `Нужно: ${c.junk} хлама, ${c.caps} крышек${c.ammo ? ', ' + c.ammo + ' патронов 7.62' : ''}.`;
+    R.removeItem(p, 'junk', c.junk); p.caps -= c.caps; if (c.ammo) R.removeItem(p, 'ammo762', c.ammo);
+    if (NET.active) NET.send({ t: 'defense', loc, kind });
+    else { G.flags.defense = G.flags.defense || {}; const d = G.flags.defense[loc] = G.flags.defense[loc] || { walls: 0, turrets: 0 }; d[kind] = cur + 1; }
+    G.giveXP(40); SND.play('reload');
+    if (loc === 'camp') G.addRep(5, 'вклад в оборону');
+    if (G.loc && G.loc.id === loc && !NET.active) { const p0 = { x: p.x, y: p.y }; WORLD_API.saveLocationState(G); WORLD_API.loadLocation(G, loc, { at: p0 }); }
+    return null;
+  };
+
+  // ---------- глава 5 ----------
+  G.southEnd = function (how) {
+    G.flags.southDone = how;
+    if (G.q('south') < 3) G.setQuest('south', 3);
+    G.giveXP(how === 'hive' || how === 'storm' ? 300 : 250);
+    if (how === 'disband' || how === 'command') for (const a of G.loc.actors) if (a.faction === 'remnant' && !a.dead) { a.hostile = false; if (how === 'disband') a.leaving = true; NET.syncEnt(a); }
+  };
+
   // освещённость: 0 — день, 0.62 — глубокая ночь (сумерки 19–21, рассвет 5–7)
   G.darkness = function () {
     const h = (G.time / 60) % 24, N = 0.62;
@@ -488,6 +538,7 @@
       G.log(`Вы на сервере «${NET.serverName}» (${NET.server}) как «${NET.name}». Игроков онлайн: ${NET.players.length}. Enter — чат, «/о текст» — чат отряда.`, 'good');
       if (NET.motd) G.log(NET.motd, 'warn');
       if (NET.serverTime != null) G.time = NET.serverTime;
+      if (NET.invasion) setTimeout(() => G.onServerInvasion(NET.invasion), 500);
       if (NET.char) G.log('Персонаж загружен с сервера.', 'sys');
       setTimeout(() => G.saveMP(true), 1500);
       try {

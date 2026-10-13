@@ -842,7 +842,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
 
   // ---------- журнал заданий ----------
   const SITE_OF = {
-    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', obs: g => ({ 1: 'observatory', 2: 'observatory', 3: 'observatory', 4: 'rassvet' })[g.q('obs')], rats: 'camp', column: g => ({ 1: 'city', 2: 'city', 3: 'city', 4: 'city' })[g.q('column')],
+    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', south: g => ({ 1: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 2: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 3: 'rassvet' })[g.q('south')], obs: g => ({ 1: 'observatory', 2: 'observatory', 3: 'observatory', 4: 'rassvet' })[g.q('obs')], rats: 'camp', column: g => ({ 1: 'city', 2: 'city', 3: 'city', 4: 'city' })[g.q('column')],
     battery: g => g.hasItem('battery') ? 'camp' : 'zarya', zarya: g => ({ 1: 'zarya', 2: 'zarya', 3: 'zarya', 4: 'camp' })[g.q('zarya')],
     thread: g => ({ 1: g.flags.bridgeOpen ? 'rassvet' : 'bridge', 2: 'object9', 3: 'object9', 4: 'rassvet' })[g.q('thread')], mast: 'rassvet',
   };
@@ -888,6 +888,32 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
         const t = e.target.closest('[data-tab]'); if (t) { tab = t.dataset.tab; draw(); return; }
         const g = e.target.closest('[data-tgt]');
         if (g) { G.world.target = G.world.target === g.dataset.tgt ? null : g.dataset.tgt; WMAP.siteState(G, g.dataset.tgt).known = true; G.hint(G.world.target ? 'Цель отмечена на карте мира' : 'Отметка снята'); draw(); }
+      });
+      modalRefresh = draw;
+      draw();
+    });
+  };
+
+  U.openDefense = function (loc) {
+    const name = DATA.LOCATIONS[loc].name;
+    U.openModal('defense', `<div class="modal" style="width:min(560px,94vw)">
+      <h2>Оборона: ${name} <button class="close" data-close>✕</button></h2>
+      <div class="muted" style="margin-bottom:6px">${NET.active ? 'Укрепления общие для всех игроков сервера.' : 'Укрепления помогают отбивать вторжения.'} Стены: на 1 нападающего меньше за уровень. Турели: каждый раунд боя стреляют по нападающим.</div>
+      <div class="screen" id="df-body"></div><div id="df-msg" class="warn" style="margin-top:6px;min-height:16px"></div></div>`, root => {
+      const draw = () => {
+        const d = G.defense(loc);
+        root.querySelector('#df-body').innerHTML = [['walls', 'Стены и заграждения'], ['turrets', 'Пулемётные турели']].map(([k, t]) => {
+          const lvl = d[k] || 0, c = G.defenseCost(k, lvl + 1);
+          return `<div class="item" style="grid-template-columns:1fr auto;cursor:default"><div><div class="nm">${t}: ${'■'.repeat(lvl)}${'□'.repeat(3 - lvl)} (${lvl}/3)</div>
+            <div class="sub">${lvl >= 3 ? 'Максимум' : `Следующий уровень: ${c.junk} хлама, ${c.caps} крышек${c.ammo ? ', ' + c.ammo + ' патронов 7.62' : ''}`}</div></div>
+            <div>${lvl >= 3 ? '' : `<button data-df="${k}">Построить</button>`}</div></div>`;
+        }).join('');
+      };
+      root.addEventListener('click', e => {
+        const b = e.target.closest('[data-df]'); if (!b) return;
+        const r = G.upgradeDefense(loc, b.dataset.df);
+        root.querySelector('#df-msg').textContent = r || 'Построено!';
+        setTimeout(draw, 300); U.refresh();
       });
       modalRefresh = draw;
       draw();

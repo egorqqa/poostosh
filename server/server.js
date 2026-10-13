@@ -27,6 +27,8 @@ function createServer(opts = {}) {
   const serverName = String(opts.name || 'Пустошь').slice(0, 40);
   const motd = String(opts.motd || '').slice(0, 300);
   const maxPlayers = +opts.max || 32;
+  const invFirst = opts.invFirst != null ? +opts.invFirst : 24 * 60;   // минут игрового времени до первого вторжения
+  const invEvery = +opts.invEvery || 48;                                 // в среднем часов между вторжениями (0 — выключить)
   const log = opts.log || console.log;
   const dataFile = opts.dataDir ? path.join(opts.dataDir, 'world.json') : path.join(__dirname, '..', 'data', 'world.json');
   const version = readVersion();
@@ -51,7 +53,25 @@ function createServer(opts = {}) {
     } catch (e) { say('Ошибка сохранения мира:', e.message); }
   };
   // общее игровое время: 1 игровая минута за 2 секунды
-  const clock = setInterval(() => { world.time++; dirty = true; }, 2000);
+  if (!world.defense) world.defense = {};
+  // вторжения на поселения — общие для всех игроков сервера
+  const INV_LOCS = ['camp', 'rassvet'];
+  function tickInvasion() {
+    const online = [...players.values()].some(p => p.ready);
+    const inv = world.invasion;
+    if (inv && !inv.done && world.time > inv.until) { inv.done = 'lost'; dirty = true; toAll({ t: 'invasion', inv }); say('Вторжение не отбито:', inv.loc); }
+    if (!online || (inv && !inv.done)) return;
+    if (!invEvery) return;
+    if (world.nextInv == null) world.nextInv = world.time + invFirst;
+    if (world.time < world.nextInv) return;
+    world.invCount = (world.invCount || 0) + 1;
+    world.invasion = { id: Date.now(), loc: INV_LOCS[Math.floor(Math.random() * INV_LOCS.length)], kind: Math.random() < 0.5 ? 'infected' : 'column', until: world.time + 24 * 60, done: false, n: world.invCount };
+    world.nextInv = world.time + Math.round(invEvery * (0.75 + Math.random() * 0.5) * 60);
+    dirty = true;
+    toAll({ t: 'invasion', inv: world.invasion });
+    say('Вторжение:', world.invasion.kind, '→', world.invasion.loc);
+  }
+  const clock = setInterval(() => { world.time++; dirty = true; if (world.time % 10 === 0) tickInvasion(); }, 2000);
   const clockBroadcast = setInterval(() => toAll({ t: 'time', time: world.time }), 10000);
   const saveTimer = setInterval(saveWorld, 20000);
   const persistent = loc => loc && !String(loc).startsWith('wild');
@@ -130,7 +150,7 @@ function createServer(opts = {}) {
         if (stored && stored.hash !== h) { send(p, { t: 'error', code: 'charpass', text: `Неверный пароль персонажа «${name}». Если это не ваш персонаж — выберите другое имя.` }); setTimeout(() => ws.close(), 100); return; }
         p.name = name; p.nameKey = nameKey; p.charHash = h; p.ready = true;
         clearTimeout(kick);
-        send(p, { t: 'welcome', id: p.id, name, version, players: playerList(), serverName, motd, time: world.time, char: stored ? stored.data : null });
+        send(p, { t: 'welcome', id: p.id, name, version, players: playerList(), serverName, motd, time: world.time, char: stored ? stored.data : null, invasion: world.invasion || null, defense: world.defense });
         toAll({ t: 'players', players: playerList() });
         toAll({ t: 'chat', system: true, text: `${name} заходит на сервер.` }, p.id);
         say('Вошёл:', name, `(${p.ip})`, m.version !== version ? `— версия клиента ${m.version}, сервера ${version}` : '');
@@ -182,6 +202,18 @@ function createServer(opts = {}) {
           break;
         }
         case 'ping': send(p, { t: 'pong', at: m.at }); break;
+        case 'invdone':
+          if (world.invasion && world.invasion.id === m.id && !world.invasion.done) {
+            world.invasion.done = 'won'; dirty = true; toAll({ t: 'invasion', inv: world.invasion }); say('Вторжение отбито:', world.invasion.loc, '—', p.name);
+          }
+          break;
+        case 'defense': {
+          const loc = String(m.loc), kind = m.kind === 'walls' ? 'walls' : 'turrets';
+          if (!INV_LOCS.includes(loc)) break;
+          const d = world.defense[loc] = world.defense[loc] || { walls: 0, turrets: 0 };
+          if ((d[kind] || 0) < 3) { d[kind] = (d[kind] || 0) + 1; dirty = true; toAll({ t: 'defense', defense: world.defense }); say(p.name, 'укрепил', loc, kind, d[kind]); }
+          break;
+        }
         case 'savechar': {
           const js = JSON.stringify(m.data || null);
           if (m.data && js.length < 400000) { chars[p.nameKey] = { hash: p.charHash, name: p.name, saved: Date.now(), data: m.data }; dirtyChars = true; }
@@ -223,6 +255,7 @@ if (require.main === module) {
   const srv = createServer({
     port: arg('port', env.PORT || 7777), password: arg('password', env.PASSWORD || ''), dataDir: arg('data', env.DATA_DIR || null),
     name: arg('name', env.SERVER_NAME || 'Пустошь'), motd: arg('motd', env.MOTD || ''), max: arg('max', env.MAX_PLAYERS || 32),
+    invFirst: arg('inv-first', env.INVASION_FIRST_MIN ?? null), invEvery: arg('inv-every', env.INVASION_EVERY_H || 48),
   });
   const stop = () => { srv.close(); process.exit(0); };
   process.on('SIGINT', stop);

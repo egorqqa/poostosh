@@ -59,6 +59,21 @@ window.WORLD_API = (function () {
     else W.saveLocationState(G);
     G.loc = null;
   }
+  // укрепления: стены и турели поверх обычных объектов
+  function defenseObjects(G, id) {
+    const d = G.defense ? G.defense(id) : { walls: 0, turrets: 0 };
+    const LAY = {
+      camp: { walls: [[['mil_sandwall', 9, 37, { fw: 4, fh: 1 }], ['mil_sandwall', 30, 37, { fw: 4, fh: 1 }]], [['mil_barrier', 14, 36, {}], ['mil_barrier2', 28, 36, {}], ['hedgehog', 6, 36, {}]], [['mil_sandwall', 2, 34, { fw: 4, fh: 1 }], ['mil_sandwall', 36, 34, { fw: 4, fh: 1 }], ['hedgehog', 34, 37, {}]]],
+        turrets: [['mil_mg_bunker', 15, 33, { fw: 3, fh: 2, oy: 6, name: 'Турель' }], ['mil_mg_bunker', 28, 32, { fw: 3, fh: 2, oy: 6, name: 'Турель' }], ['mil_mg_bunker', 5, 30, { fw: 3, fh: 2, oy: 6, name: 'Турель' }]] },
+      rassvet: { walls: [[['mil_sandwall', 8, 33, { fw: 4, fh: 1 }], ['mil_sandwall', 28, 33, { fw: 4, fh: 1 }]], [['mil_barrier', 13, 34, {}], ['mil_barrier2', 26, 34, {}], ['hedgehog', 4, 32, {}]], [['mil_sandwall', 2, 28, { fw: 4, fh: 1 }], ['mil_sandwall', 33, 28, { fw: 4, fh: 1 }], ['hedgehog', 36, 31, {}]]],
+        turrets: [['mil_mg_bunker', 11, 29, { fw: 3, fh: 2, oy: 6, name: 'Турель' }], ['mil_mg_bunker', 27, 29, { fw: 3, fh: 2, oy: 6, name: 'Турель' }], ['mil_mg_bunker', 19, 28, { fw: 3, fh: 2, oy: 6, name: 'Турель' }]] },
+    }[id];
+    if (!LAY) return [];
+    const out = [];
+    for (let i = 0; i < d.walls; i++) out.push(...LAY.walls[i]);
+    for (let i = 0; i < d.turrets; i++) out.push(LAY.turrets[i]);
+    return out;
+  }
   W.isExit = (L, x, y) => {
     if (!L) return false;
     if (L.def.exits) return L.def.exits.some(r => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1);
@@ -91,7 +106,8 @@ window.WORLD_API = (function () {
   }
 
   W.loadLocation = function (G, id, opts = {}) {
-    let def = LOCATIONS[id];
+    let def = LOCATIONS[id] || (id.startsWith('apartment_') ? LOCATIONS.apartment : null);
+    if (def && def.objects) def = { ...def, objects: def.objects.concat(defenseObjects(G, id)) };
     if (!def && id.startsWith('wild')) def = wildDef(id, opts.kind || 'wild');
     const saved = G.locStates[id];
     const L = { id, def, w: def.w, h: def.h, seed: opts.seed || '' };
@@ -139,11 +155,11 @@ window.WORLD_API = (function () {
     SND.setScene(LOCATIONS[id] ? id : 'wild');
     if (id === 'rassvet') { const l = L.actors.find(a => a.tpl === 'lada'); if (l && !G.flags.ladaFree) l.gone = true; }
     const inv = G.flags.invasion;
-    if (inv && !inv.done && inv.loc === id && !NET.active) {
-      const k = Math.min(4, inv.n || 1);
+    if (inv && !inv.done && inv.loc === id) {
+      const k = Math.max(1, Math.min(4, inv.n || 1) + 2 - (G.defense(id).walls || 0)) - 2;
       const tpls = inv.kind === 'column' ? ['col_soldier', 'col_soldier', 'col_soldier', 'col_soldier', 'col_soldier'] : ['infected', 'infected', 'z_soldier', 'infected', 'infected_brute'];
       const ex = L.def.exits[0], cx = Math.round((ex.x0 + ex.x1) / 2), cy = Math.min(ex.y0, ex.y1) - 5;
-      for (let i = 0; i < 2 + k; i++) {
+      for (let i = 0; i < Math.max(1, 2 + k); i++) {
         const a = R.makeNpc(tpls[i % tpls.length], cx, cy, {});
         a.id = 'inv_' + i; a.invader = true; a.hostile = true; a.alerted = true; a.faction = 'invaders';
         a.name = (inv.kind === 'column' ? 'Штурмовик Колонны' : a.name);
@@ -162,6 +178,9 @@ window.WORLD_API = (function () {
         if (a.tpl === 'granit_obs' && G.flags.granitDead) a.name = 'Майор Сталь';
       }
     }
+    if (id === 'fort' && G.flags.southDone) L.actors.forEach(a => { if (a.faction === 'remnant') { if (G.flags.southDone === 'command') a.hostile = false; else a.gone = true; } });
+    if (id === 'hive' && G.flags.southDone) L.actors.forEach(a => { if (a.faction === 'infected') a.gone = true; });
+    if (id === 'rassvet' && G.flags.southDone === 'disband') for (let i = 0; i < 2; i++) { const a = R.makeNpc('rem_soldier', 22 + i * 3, 30, {}); a.id = 'rem_guard_' + i; a.name = 'Бывший боец Колонны'; a.faction = 'rassvet'; a.hostile = false; a.dialog = 'rguard'; Object.assign(a, { rx: a.x, ry: a.y, path: [], moving: false, walkPhase: 0, aimT: 0, hitFlash: 0 }); L.actors.push(a); }
     if (id === 'city') {
       const k = L.actors.find(a => a.tpl === 'klyk_city');
       if (k && G.flags.klykDead) k.name = 'Шрам';
@@ -207,9 +226,11 @@ window.WORLD_API = (function () {
 
   // переход в локацию (в сетевой игре — с получением состояния от сервера)
   W.goLocation = async function (G, id, opts = {}) {
+    if (NET.active && id === 'apartment') id = 'apartment_' + NET.name.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '_'); // своя квартира у каждого игрока
     if (G.world) { G.world.visited = G.world.visited || {}; G.world.visited[id] = true; if (G.world.target === id) G.world.target = null; }
     if (id === 'zarya_lab' && G.q('zarya') >= 1 && G.q('zarya') < 3) G.setQuest('zarya', 3);
     if (id === 'object9' && G.q('thread') === 2) G.setQuest('thread', 3);
+    if ((id === 'hive' || id === 'fort') && G.q('south') === 1) G.setQuest('south', 2);
     if (id === 'city' && G.q('column') === 1) G.setQuest('column', 2);
     if (id === 'observatory' && G.q('obs') === 1) G.setQuest('obs', 2);
     if (!NET.active) { W.loadLocation(G, id, opts); setTimeout(() => G.autosave(), 300); return; }
