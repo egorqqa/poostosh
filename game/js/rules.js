@@ -41,8 +41,9 @@ window.R = (function () {
   const maxAP = a => 5 + Math.floor(a.stats.agi / 2) + (has(a, 'action') ? 1 : 0) - (a.crippled ? 2 : 0);
   const carryMax = a => 15 + 8 * a.stats.str;
   const armorOf = a => a.armor ? ITEMS[a.armor] : null;
-  const AC = a => a.stats.agi + (armorOf(a) ? armorOf(a).ac : 0);
-  const DT = a => (armorOf(a) ? armorOf(a).dt : 0) + (has(a, 'tough') ? 1 : 0);
+  const mods = a => (a.armor && a.armorMods && a.armorMods[a.armor]) || 0;
+  const AC = a => a.stats.agi + (armorOf(a) ? armorOf(a).ac : 0) + 3 * mods(a);
+  const DT = a => (armorOf(a) ? armorOf(a).dt : 0) + (has(a, 'tough') ? 1 : 0) + mods(a);
   const DR = a => armorOf(a) ? armorOf(a).dr : 0;
   const meleeBonus = a => Math.max(1, a.stats.str - 5);
   const sequence = a => 2 * a.stats.per;

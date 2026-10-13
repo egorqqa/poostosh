@@ -65,7 +65,8 @@
       inv: src.inv.map(s => ({ ...s })), caps: 0, weapon: opts.weapon || null, loaded: opts.loaded || 0, waiting: false, wander: 0,
       rx: src.x, ry: src.y, path: [], moving: false, walkPhase: 0, aimT: 0, hitFlash: 0 });
     Object.assign(c.skillOverride, opts.skills || {});
-    c.name = c.name.replace(/^(Раненый|Бродяга) /, '');
+    c.name = c.name.replace(/^(Раненый|Бродяга|Комендант|Инженер) /, '');
+    c.homeLoc = G.loc.id;
     c.baseHP += 10; c.hp = c.baseHP;
     G.companion = c;
     G.loc.actors.push(c);
@@ -128,8 +129,9 @@
     if (G.loc) { const i = G.loc.actors.indexOf(c); if (i >= 0) G.loc.actors.splice(i, 1); }
     // вернуть жителя в лагерь
     const restore = list => { const o = list && list.find(a => a.id === c.originId); if (o) { o.gone = false; o.hp = Math.max(1, c.hp); o.inv = c.inv; o.weapon = c.weapon; o.armor = c.armor; } };
-    if (G.loc && G.loc.id === 'camp') restore(G.loc.actors); else if (G.locStates.camp) restore(G.locStates.camp.actors);
-    G.log(`${c.name} возвращается в Ржавый Ручей.`, 'sys');
+    const home = c.homeLoc || 'camp';
+    if (G.loc && G.loc.id === home) restore(G.loc.actors); else if (G.locStates[home]) restore(G.locStates[home].actors);
+    G.log(`${c.name} возвращается домой: ${DATA.LOCATIONS[home].name}.`, 'sys');
   };
 
   // ---------- репутация Ручья ----------
@@ -215,6 +217,7 @@
   G.onRadio = function () { WMAP.siteState(G, 'bridge').known = true; WMAP.siteState(G, 'rassvet').known = true; };
   G.siteQuestMark = function (id) {
     const q = G.q, f = G.flags;
+    if (G.flags.invasion && !G.flags.invasion.done && G.flags.invasion.loc === id) return '!';
     if (id === 'observatory') return q('obs') >= 1 && q('obs') < 4 ? '!' : q('obs') === 9 ? '✔' : null;
     if (id === 'city') return q('column') >= 1 && q('column') < 9 ? '!' : q('column') === 9 ? '✔' : null;
     if (id === 'bridge') return !f.bridgeOpen && q('thread') >= 1 ? '!' : f.bridgeOpen ? '✔' : null;
@@ -265,6 +268,70 @@
       const p = G.player;
       p.hp = Math.min(R.maxHP(p), p.hp + hours * R.healRate(p));
     }
+    if (hours > 0) G.tickInvasions();
+  };
+
+  // ---------- улучшения квартиры ----------
+  G.buildUpgrade = function (flag, need, caps) {
+    const p = G.player;
+    for (const [id, n] of need) if (R.count(p, id) < n) return `Не хватает: ${DATA.ITEMS[id].name} ×${n}.`;
+    if (p.caps < caps) return `Не хватает крышек: нужно ${caps}.`;
+    need.forEach(([id, n]) => R.removeItem(p, id, n)); p.caps -= caps;
+    G.flags[flag] = true; WORLD_API.refreshGates(G); G.giveXP(30); SND.play('reload');
+    WORLD_API.endDialog(G);
+    G.log('Готово! Новое улучшение в квартире.', 'good');
+    return null;
+  };
+  G.radioNews = function () {
+    const f = G.flags, q = G.q, news = [];
+    const inv = f.invasion;
+    if (inv && !inv.done) news.push(`⚠ СРОЧНО: ${inv.kind === 'column' ? 'отряд Колонны' : 'толпа обращённых'} идёт на «${DATA.LOCATIONS[inv.loc].name}»! Защитники просят помощи. Осталось часов: ${Math.max(0, Math.ceil((inv.until - G.time) / 60))}.`);
+    if (q('obs') === 9) news.push(f.obsDone === 'dark' ? '«...жёлтое облако видели над южными пустошами. Кто вдохнул — уже не человек...»' : '«Говорит «Рассвет»: небо чистое. Колонна рассеяна, караваны снова ходят.»');
+    else if (q('column') === 9) news.push('«...Колонну видели на дороге к северу, у старой обсерватории...»');
+    if (f.bridgeOpen) news.push('«Ржавый мост открыт, мытари больше не дерут втридорога.»');
+    if (G.rep() >= 50) news.push('«В Ржавом Ручье говорят о путнике, который спас поселение. Будто бы живёт в Старом городе.»');
+    news.push(['«Караванщик Яков ищет охрану на юг.»', '«Цены на воду растут: сухой сезон.»', '«В Мёртвом лесу снова воют волки.»', '«Сёма скупает волчьи шкуры и крысиные хвосты.»', '«Доска контрактов у остановки пополнилась.»'][Math.floor(G.time / 360) % 5]);
+    if (!f.radioTip) { f.radioTip = true; R.addItem(G.player, 'ammo762', 10); news.push('(Между новостями — координаты тайника. Вы находите 10 патронов 7.62 в вентиляции.)'); }
+    SND.play('dialog');
+    return news.join(String.fromCharCode(10, 10));
+  };
+
+  // ---------- после финала: вторжения на поселения ----------
+  const INV_TARGETS = ['camp', 'rassvet'];
+  G.postGame = () => G.q('obs') === 9;
+  G.tickInvasions = function () {
+    if (!G.postGame() || NET.active) return;
+    const f = G.flags;
+    if (f.invasion && !f.invasion.done) {
+      if (G.time > f.invasion.until) {
+        const name = DATA.LOCATIONS[f.invasion.loc].name;
+        f.invasion.done = 'lost';
+        G.log(`Вторжение на «${name}» не отбито. Поселение разграблено.`, 'bad');
+        if (f.invasion.loc === 'camp') G.addRep(-10, 'Ручей остался без защиты');
+      }
+      return;
+    }
+    if (f.nextInvasion == null) f.nextInvasion = G.time + 12 * 60;
+    if (G.time < f.nextInvasion) return;
+    const kind = f.obsDone === 'dark' || Math.random() < 0.5 ? 'infected' : 'column';
+    const loc = INV_TARGETS[Math.floor(Math.random() * INV_TARGETS.length)];
+    f.invasion = { loc, kind, until: G.time + 24 * 60, done: false, n: (f.invasionCount || 0) + 1 };
+    f.invasionCount = f.invasion.n;
+    f.nextInvasion = G.time + (36 + Math.floor(Math.random() * 24)) * 60;
+    G.log(`⚠ ВТОРЖЕНИЕ! ${kind === 'column' ? 'Отряд Колонны' : 'Толпа обращённых'} идёт на «${DATA.LOCATIONS[loc].name}». У вас 24 часа, чтобы отбить атаку.`, 'bad');
+    WMAP.siteState(G, loc).known = true;
+    G.world.target = loc;
+    SND.play('alert');
+  };
+  G.invasionCleared = function () {
+    const inv = G.flags.invasion;
+    if (!inv || inv.done) return;
+    inv.done = 'won';
+    const k = inv.n || 1;
+    G.log(`Вторжение отбито! «${DATA.LOCATIONS[inv.loc].name}» спасено.`, 'good');
+    G.reward(150 + 50 * k, 100 + 30 * k, [['medkit', 1]]);
+    if (inv.loc === 'camp') G.addRep(10, 'защита Ручья');
+    SND.play('quest');
   };
   // освещённость: 0 — день, 0.62 — глубокая ночь (сумерки 19–21, рассвет 5–7)
   G.darkness = function () {

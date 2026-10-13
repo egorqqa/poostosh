@@ -218,7 +218,28 @@ window.SOC = (function () {
     { id: 'c_raiders', title: 'Охота на бандитов', target: ['raider', 'raider_melee', 'raider_rifle', 'scav', 'scav_gun', 'toll'], need: 6, xp: 280, caps: 150, where: 'Блокпост 17, Заря, Ржавый мост, пустошь' },
   ];
   S.contract = null; // { id, have, uid }
-  const cdef = id => CONTRACTS.find(c => c.id === id);
+  // ежедневные случайные контракты (после финала — больше и дороже)
+  const RAND = [
+    { t: 'Зачистка гнезда', target: ['rat', 'rat_big'], where: 'подвалы и руины' }, { t: 'Охота на стаю', target: ['wolf', 'wolf_alpha'], where: 'леса и травяные пустоши' },
+    { t: 'Карантин', target: ['infected', 'infected_brute', 'z_soldier', 'z_officer'], where: 'лаборатории, Объект 9' }, { t: 'Мусорщики обнаглели', target: ['scav', 'scav_gun', 'scav_boss'], where: 'промзона «Заря», подъезды' },
+    { t: 'Дорожные бандиты', target: ['raider', 'raider_melee', 'raider_rifle', 'toll'], where: 'дороги и мост' },
+  ];
+  function daily() {
+    if (!window.G || !G.player) return [];
+    const day = Math.floor(G.time / 1440), post = G.postGame && G.postGame();
+    let seed = day * 9301 + 49297;
+    const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+    const list = [];
+    const pool = RAND.slice();
+    for (let i = 0; i < (post ? 3 : 2); i++) {
+      const r = pool.splice(Math.floor(rnd() * pool.length), 1)[0], need = 4 + Math.floor(rnd() * 6), lvl = G.player.level, mult = post ? 1.6 : 1;
+      list.push({ id: `d${day}_${i}`, title: `${r.t} (день ${day + 1})`, target: r.target, need, where: r.where, daily: true,
+        xp: Math.round((40 + 12 * lvl) * need * mult / 2), caps: Math.round((15 + 4 * lvl) * need * mult / 2) });
+    }
+    return list;
+  }
+  const allContracts = () => CONTRACTS.concat(daily(), S.contract && S.contract.def ? [S.contract.def] : []);
+  const cdef = id => allContracts().find(c => c.id === id);
   const members = () => Object.keys(S.party).map(Number);
   function bcast(o) { if (NET.active) for (const pid of members()) send(pid, o); }
 
@@ -230,8 +251,8 @@ window.SOC = (function () {
       <div class="muted" style="margin-bottom:6px">${inParty ? `Вы в отряде (${members().length + 1} чел.): прогресс общий, награда — каждому участнику, +15% за каждого бойца.` : 'Контракт можно выполнять одному или в отряде (сетевая игра): тогда счёт убийств общий.'}</div>
       ${c ? `<div class="screen" style="margin-bottom:8px"><b class="warn">Текущий: ${d.title}</b> — ${c.have}/${d.need}<div class="bar" style="margin-top:4px"><i style="width:${Math.min(100, c.have / d.need * 100)}%;background:var(--amber)"></i></div>
         <div style="margin-top:6px;text-align:right"><button id="ct-drop">Отказаться</button></div></div>` : ''}
-      <div class="screen">${CONTRACTS.map(x => `<div class="item" style="grid-template-columns:1fr auto;cursor:default"><div><div class="nm">${x.title}: убить ${x.need}</div>
-        <div class="sub">Где: ${x.where}. Награда: ${x.xp} опыта и ${x.caps} крышек</div></div>
+      <div class="screen">${allContracts().filter((x, i, a) => a.findIndex(y => y.id === x.id) === i).map(x => `<div class="item" style="grid-template-columns:1fr auto;cursor:default"><div><div class="nm">${x.title}: убить ${x.need}</div>
+        <div class="sub">${x.daily ? '<span class="warn">Сегодня</span> · ' : ''}Где: ${x.where}. Награда: ${x.xp} опыта и ${x.caps} крышек</div></div>
         <div><button ${c ? 'disabled' : ''} data-ct="${x.id}">Взять</button></div></div>`).join('')}</div></div>`, root => {
       root.addEventListener('click', e => {
         const b = e.target.closest('[data-ct]');
@@ -241,7 +262,8 @@ window.SOC = (function () {
     });
   };
   S.takeContract = function (id) {
-    S.contract = { id, have: 0, uid: Date.now() + '_' + NET.id };
+    const d0 = cdef(id);
+    S.contract = { id, have: 0, uid: Date.now() + '_' + NET.id, def: d0.daily ? d0 : null };
     G.log(`Контракт «${cdef(id).title}» взят${members().length ? ' на весь отряд' : ''}.`, 'good');
     bcast({ kind: 'party_contract', c: S.contract });
     renderContract();

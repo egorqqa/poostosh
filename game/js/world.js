@@ -137,6 +137,23 @@ window.WORLD_API = (function () {
     ENG.cam.x = c.x; ENG.cam.y = c.y - 40;
     G.log(`— ${def.name} —`, 'sys');
     SND.setScene(LOCATIONS[id] ? id : 'wild');
+    if (id === 'rassvet') { const l = L.actors.find(a => a.tpl === 'lada'); if (l && !G.flags.ladaFree) l.gone = true; }
+    const inv = G.flags.invasion;
+    if (inv && !inv.done && inv.loc === id && !NET.active) {
+      const k = Math.min(4, inv.n || 1);
+      const tpls = inv.kind === 'column' ? ['col_soldier', 'col_soldier', 'col_soldier', 'col_soldier', 'col_soldier'] : ['infected', 'infected', 'z_soldier', 'infected', 'infected_brute'];
+      const ex = L.def.exits[0], cx = Math.round((ex.x0 + ex.x1) / 2), cy = Math.min(ex.y0, ex.y1) - 5;
+      for (let i = 0; i < 2 + k; i++) {
+        const a = R.makeNpc(tpls[i % tpls.length], cx, cy, {});
+        a.id = 'inv_' + i; a.invader = true; a.hostile = true; a.alerted = true; a.faction = 'invaders';
+        a.name = (inv.kind === 'column' ? 'Штурмовик Колонны' : a.name);
+        const f = W.freeTile(L, cx + R.rnd(-4, 4), cy + R.rnd(-3, 3), a) || { x: cx, y: cy };
+        a.x = a.rx = f.x; a.y = a.ry = f.y; a.homeX = f.x; a.homeY = f.y;
+        a.path = []; a.moving = false; a.walkPhase = 0; a.aimT = 0; a.hitFlash = 0; a.deathAt = null;
+        L.actors.push(a);
+      }
+      G.log(`⚠ ${inv.kind === 'column' ? 'Штурмовики Колонны' : 'Обращённые'} уже здесь! Защитите поселение.`, 'bad');
+    }
     if (id === 'observatory' || id === 'obs_dome') {
       const friendly = G.flags.columnEnd === 'joined' || G.flags.granitYield || G.flags.obsDone;
       for (const a of L.actors) {
@@ -164,7 +181,7 @@ window.WORLD_API = (function () {
     const L = G.loc;
     return {
       objects: L.objects.filter(o => o.container).map(o => ({ uid: o.uid, inv: o.inv, lock: o.lock, caps: o.caps, jammed: o.jammed })),
-      actors: L.actors.filter(a => !a.isPlayer && !a.isRemote && !a.isCompanion && !a.gone).map(a => {
+      actors: L.actors.filter(a => !a.isPlayer && !a.isRemote && !a.isCompanion && !a.gone && !a.invader).map(a => {
         const c = { ...a };
         delete c.path; delete c.onArrive; delete c.stepCb; delete c.bubble;
         return c;

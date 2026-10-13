@@ -71,6 +71,12 @@ window.COMBAT = (function () {
     G.combat = null;
     G.player.ap = R.maxAP(G.player);
     G.log(msg || 'Бой окончен.', 'warn');
+    const cmp = G.companion;
+    if (cmp && !cmp.dead && cmp.tpl === 'lada') {
+      const h = 6 + Math.floor(R.skill(cmp, 'medic') / 10), p = G.player;
+      if (p.hp < R.maxHP(p)) { p.hp = Math.min(R.maxHP(p), p.hp + h); G.log(`Лада перевязывает вас после боя: +${h} ОЗ.`, 'good'); }
+      cmp.hp = Math.min(R.maxHP(cmp), cmp.hp + 4);
+    }
     SND.setCombat(false);
     if (net()) NET.forceSnap();
     UI.setMode('move');
@@ -279,6 +285,7 @@ window.COMBAT = (function () {
     if (a.tpl === 'klyk') G.flags.klykDead = true;
     if (a.tpl === 'marauder') G.flags.marauderKilled = true;
     if (a.tpl === 'mytar') G.openBridge();
+    if (a.invader && G.loc && !G.loc.actors.some(x => x.invader && !x.dead)) G.invasionCleared();
     if (a.tpl === 'klyk_city') { G.flags.klykCityDead = true; if (G.q('column') >= 1 && G.q('column') < 4) G.setQuest('column', 4); }
     if (a.tpl === 'granit') { G.flags.granitDead = true; if (G.q('column') < 9) G.columnEnd('exposed'); }
     if (window.SOC && by && by.isPlayer) SOC.onKill(a);

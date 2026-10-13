@@ -60,6 +60,7 @@ window.DATA = (function () {
     holotape: { name: 'Голодиск', type: 'misc', icon: 'holotape', weight: 0.1, value: 50, desc: 'Довоенная запись. Кому-то может быть интересна.' },
     col_armor: { name: 'Броня Колонны', type: 'armor', icon: 'armor', weight: 12, value: 600, ac: 25, dt: 5, dr: 40, desc: 'Пластинчатая броня Стальной Колонны с гербом-шестернёй.' },
     column_orders: { name: 'Приказ Колонны', type: 'quest', icon: 'holotape', weight: 0.1, value: 0, desc: '«Закупить у Объекта 9 все партии З-2. Цель — бойцы, не знающие боли. Свидетелей не оставлять.» Подпись: командор Гранит.' },
+    moonshine: { name: 'Самогон', type: 'aid', icon: 'water', weight: 0.5, value: 30, heal: 8, healSkill: 0, desc: 'Мутный, крепкий, домашний. +8 ОЗ. Торговцы охотно берут.' },
     explosive: { name: 'Самодельная взрывчатка', type: 'misc', icon: 'ammo', weight: 2, value: 80, desc: 'Тротиловые шашки, скрученные проволокой. Обращаться осторожно.' },
     keycard9: { name: 'Ключ-карта Объекта 9', type: 'quest', icon: 'holotape', weight: 0.1, value: 0, desc: 'Пластиковая карта с гербом части. Открывает хранилище.' },
     z2_crate: { name: 'Ящик «З-2»', type: 'quest', icon: 'meds', weight: 8, value: 0, desc: 'Опечатанный ящик с ампулами «З-2». Опасный груз — и очень дорогой.' },
@@ -405,9 +406,12 @@ window.DATA = (function () {
           opts: [
             { t: 'Я из Ржавого Ручья. Ищу, куда ушла партия «З-2» из «Зари».', if: g => g.q('thread') === 1, go: 'thread' },
             { t: 'Напомни, что с Объектом 9.', if: g => g.q('thread') === 2 || g.q('thread') === 3, go: 'obj9' },
+            { t: 'Пойдёшь со мной? Станция под охраной, а мне нужен лучший стрелок.', if: g => g.q('thread') === 9 && g.canRecruit(), go: 'join' },
             { t: 'Что у вас за беда?', go: 'about' },
             { t: 'Бывай.', end: true },
           ] },
+        join: { text: 'Ты сделал для «Рассвета» больше, чем кто-либо. Часовые справятся без меня. Винтовка при мне — веди.',
+          opts: [{ t: 'Идём.', act: g => g.recruit('vera', { weapon: 'rifle', loaded: 5, skills: { guns: 75, sneak: 45 } }), end: true }, { t: 'Пожалуй, оставайся.', end: true }] },
         about: { text: 'Станция «Рассвет». Вода, частокол, радио. Было радио: антенна молчит — поговори с Кузьмой. И люди болеют. Злые становятся, своих не узнают.', opts: [{ t: 'Понятно.', go: 'hello' }] },
         thread: { text: '«З-2»... Значит, вот что нам продали как лекарство. Наш доктор колол это больным — и они обратились. Ящики пришли с Объекта 9, это к югу отсюда. Если там остался склад — его надо уничтожить. Палыч выдаст тебе взрывчатку. Сделаешь — Рассвет тебя не забудет.',
           onEnter: g => { g.setQuest('thread', 2); g.revealSite('object9'); if (!g.flags.veraExplosive) { g.flags.veraExplosive = true; g.reward(0, 0, [['explosive', 1]]); } },
@@ -578,7 +582,7 @@ window.DATA = (function () {
       },
     },
     lada: {
-      start: g => g.flags.ladaFree ? 'free' : 'hello',
+      start: g => g.loc && g.loc.id === 'rassvet' ? 'r_hello' : g.flags.ladaFree ? 'free' : 'hello',
       nodes: {
         hello: { text: 'Тише! Я Лада, инженер. Колонна заставила меня переделать телескоп: вместо зеркала — распылитель, вместо обзора неба — облако «З-2» над всей округой. Развяжи меня — дам код от двери купола.',
           opts: [
@@ -589,6 +593,12 @@ window.DATA = (function () {
         how: { text: 'Пульт рядом с баками. Отключить можно руками (Взлом 50) или головой (Интеллект 7). Надёжнее — взорвать, если есть чем. Только Гранит там, внутри, и он не уйдёт без боя... или без очень убедительных слов.', opts: [{ t: 'Понял.', go: 'hello' }] },
         freed: { text: 'Спасибо! Код от купола — 7-7-1-2. Я ухожу к «Рассвету». Удачи — она тебе понадобится.', opts: [{ t: 'Беги.', end: true }] },
         free: { text: '...', opts: [{ t: '...', end: true }] },
+        r_hello: { text: g => g.q('obs') === 9 ? 'Ты спас пустошь — а мне спас жизнь. Я тут чиню радио и лечу людей. Но если нужен инженер в дороге — я с тобой.' : 'Я на «Рассвете», в безопасности. Спасибо тебе. Останови их там, под куполом.',
+          opts: [
+            { t: 'Идём со мной. Мне нужен врач и инженер.', if: g => g.q('obs') === 9 && g.canRecruit(), act: g => g.recruit('lada', { weapon: 'pistol', loaded: 8, skills: { guns: 45, medic: 75, lockpick: 60 } }), go: 'r_join' },
+            { t: 'Береги себя.', end: true },
+          ] },
+        r_join: { text: 'Возьму аптечку и инструменты. После каждого боя буду латать тебя — не спорь.', opts: [{ t: 'Идём.', end: true }] },
       },
     },
     granit_obs: {
@@ -725,7 +735,10 @@ window.DATA = (function () {
         ['mil_locker', 6, 1, { name: 'Мой схрон', container: true, items: [], desc: 'Ваш личный шкаф. Вещи здесь в безопасности.' }],
         ['crate_long', 9, 3, { interact: 'workbench', showIf: 'benchBuilt' }],
         ['pallet_boxes', 9, 3, { interact: 'bench_spot', gate: 'benchBuilt' }],
-        ['barrels', 2, 7, {}], ['cable_spool', 10, 7, {}],
+        ['cable_barrel', 2, 4, { interact: 'still', showIf: 'stillBuilt' }], ['crate_small', 2, 4, { interact: 'still_spot', gate: 'stillBuilt' }],
+        ['locker_green', 9, 6, { interact: 'rack', showIf: 'rackBuilt', name: 'Стойка для брони', container: false }], ['crate_small', 9, 6, { interact: 'rack_spot', gate: 'rackBuilt' }],
+        ['elec_cabinet', 4, 1, { interact: 'radio', showIf: 'radioBuilt' }], ['crate_small', 4, 1, { interact: 'radio_spot', gate: 'radioBuilt' }],
+        ['cable_spool', 10, 8, {}],
       ],
       npcs: [],
     },
@@ -867,7 +880,7 @@ window.DATA = (function () {
         ['grass1', 20, 30, { block: false }], ['grass3', 12, 13, { block: false }], ['flowers', 22, 24, { block: false }], ['bush_round', 2, 29, {}],
       ],
       npcs: [
-        ['vera', 20, 16, {}], ['kuzma', 31, 18, {}], ['palych', 13, 22, {}], ['mitya', 9, 13, {}],
+        ['vera', 20, 16, {}], ['lada', 27, 24, {}], ['kuzma', 31, 18, {}], ['palych', 13, 22, {}], ['mitya', 9, 13, {}],
         ['rguard', 17, 33, {}], ['rguard', 24, 32, { wander: 3 }], ['settler', 22, 25, { wander: 4 }], ['settler', 8, 25, { wander: 3 }],
       ],
     },
@@ -1254,6 +1267,30 @@ window.DATA = (function () {
         return null; } }] },
     workbench: { name: 'Верстак', look: 'Ваш верстак: тиски, напильники, паяльник.', lookXp: 0,
       actions: [{ label: 'Работать за верстаком', act: g => { setTimeout(() => UI.openCraft({ name: 'Ваш верстак' }, true), 0); return 'Вы раскладываете инструменты.'; } }] },
+    still_spot: { name: 'Место под самогонный аппарат', look: 'Угол с вытяжкой. Здесь можно поставить аппарат.', lookXp: 0,
+      actions: [{ label: 'Собрать самогонный аппарат (4 хлама, 2 воды, 20 крышек)', act: g => g.buildUpgrade('stillBuilt', [['junk', 4], ['water', 2]], 20) }] },
+    still: { name: 'Самогонный аппарат', look: 'Змеевик, бак и много изоленты. Булькает.', lookXp: 0,
+      actions: [{ label: 'Поставить брагу (1 консервы + 1 вода → 2 самогона, раз в 6 ч)', act: g => {
+        if (g.time - (g.flags.stillAt || -9999) < 360) return `Брага ещё бродит. Будет готово через ${360 - (g.time - g.flags.stillAt)} мин.`;
+        if (!g.hasItem('food') || !g.hasItem('water')) return 'Нужны консервы и вода.';
+        R.removeItem(g.player, 'food', 1); R.removeItem(g.player, 'water', 1); R.addItem(g.player, 'moonshine', 2); g.flags.stillAt = g.time; SND.play('pickup');
+        return 'Вы получаете 2 бутылки самогона. Следующая партия — через 6 часов.'; } }] },
+    rack_spot: { name: 'Место под стойку для брони', look: 'Стена с крюками. Сюда встанет стойка.', lookXp: 0,
+      actions: [{ label: 'Собрать стойку для брони (5 хлама, 25 крышек)', act: g => g.buildUpgrade('rackBuilt', [['junk', 5]], 25) }] },
+    rack: { name: 'Стойка для брони', look: 'Манекен, тиски и кожаные ремни.', lookXp: 0,
+      actions: [{ label: 'Подогнать надетую броню (6 хлама, +3 КБ и +1 ПУ, до 3 раз)', act: g => {
+        const p = g.player;
+        if (!p.armor) return 'Сначала наденьте броню.';
+        p.armorMods = p.armorMods || {};
+        const lvl = p.armorMods[p.armor] || 0;
+        if (lvl >= 3) return 'Эту броню лучше уже не сделать.';
+        if (R.count(p, 'junk') < 6) return 'Нужно 6 хлама.';
+        R.removeItem(p, 'junk', 6); p.armorMods[p.armor] = lvl + 1; SND.play('reload'); g.giveXP(20);
+        return `Броня «${DATA.ITEMS[p.armor].name}» подогнана (уровень ${lvl + 1}/3): +3 КБ, +1 ПУ.`; } }] },
+    radio_spot: { name: 'Место под радиоприёмник', look: 'Полка у окна. Тут поймается сигнал.', lookXp: 0,
+      actions: [{ label: 'Собрать радио (3 хлама, 1 голодиск, 15 крышек)', act: g => g.buildUpgrade('radioBuilt', [['junk', 3], ['holotape', 1]], 15) }] },
+    radio: { name: 'Радиоприёмник', look: 'Ламповый приёмник. Шипит, потом ловит голоса.', lookXp: 0,
+      actions: [{ label: 'Слушать новости', act: g => g.radioNews() }] },
     obs_dome: { name: 'Купол обсерватории', look: 'Под куполом гудят насосы. На двери — кодовый замок и знак шестерни.', lookXp: 10,
       enter: { to: 'obs_dome', at: { x: 12, y: 15 }, label: 'Войти под купол', code: 'obsCode', codeMsg: 'Вы набираете 7-7-1-2. Замок щёлкает.', lock: 55, text: 'Дверь заперта. Код знает пленный инженер в лагере (или Взлом 55).' } },
     obs_terminal: { name: 'Журнал купола', look: 'Терминал с графиком запуска.', lookXp: 5,

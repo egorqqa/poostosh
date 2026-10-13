@@ -89,7 +89,7 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); font
 #dlg-portrait { width: 38px; height: 38px; border: 1px solid var(--green-dim); image-rendering: pixelated; background: #000; }
 #dlg-name { color: var(--amber); font-weight: bold; }
 #dlg-sub { color: var(--green-dim); font-size: 11px; }
-#dlg-text { color: #c8f5bd; margin-bottom: 6px; line-height: 1.35; }
+#dlg-text { white-space: pre-line; color: #c8f5bd; margin-bottom: 6px; line-height: 1.35; }
 #dlg-options { margin: 0; padding-left: 20px; }
 #dlg-options li { cursor: pointer; padding: 1px 0; color: var(--green); }
 #dlg-options li:hover { color: #fff; text-shadow: 0 0 6px var(--green); }
