@@ -664,12 +664,22 @@ window.WORLD_API = (function () {
   W.searchObject = function (G, o) {
     const it = o.interact, s = it.search;
     const k = objKey(G, o, 'search');
+    // квестовый предмет выдаётся, даже если объект обыскали раньше, чем взяли задание
+    const qi = s.questItem;
+    const qiPending = qi && G.q(qi.quest) === 1 && !G.hasItem(qi.item) && !G.flags['qiGot_' + qi.quest];
+    if (G.flags[k] && qiPending) {
+      G.flags['qiGot_' + qi.quest] = true;
+      R.addItem(G.player, qi.item, 1); G.passTime(10); SND.play('pickup'); UI.refresh();
+      G.log(`Найдено: ${DATA.ITEMS[qi.item].name}.`, 'good');
+      return `Теперь, зная, что искать, вы находите: ${DATA.ITEMS[qi.item].name}.`;
+    }
     if (G.flags[k]) return 'Здесь вы уже всё перерыли.';
     G.flags[k] = true;
     G.passTime(10);
     SND.play('search');
     const got = rollLoot(G, s);
-    if (s.questItem && G.q(s.questItem.quest) === 1 && !G.hasItem(s.questItem.item)) {
+    if (qiPending) {
+      G.flags['qiGot_' + qi.quest] = true;
       R.addItem(G.player, s.questItem.item, 1);
       got.unshift(DATA.ITEMS[s.questItem.item].name);
     }
@@ -729,7 +739,8 @@ window.WORLD_API = (function () {
     G.player.path = [];
     const build = text => {
       const opts = [{ t: 'Осмотреть' + (G.flags[objKey(G, o, 'look')] ? '' : it.lookXp ? ` <span class="chk">(+${it.lookXp} опыта)</span>` : ''), act: () => node(W.lookObject(G, o)) }];
-      if (it.search) opts.push({ t: G.flags[objKey(G, o, 'search')] ? '<span class="muted">Обыскать (уже обыскано)</span>' : 'Обыскать', act: () => node(W.searchObject(G, o)) });
+      const qiOpen = it.search && it.search.questItem && G.q(it.search.questItem.quest) === 1 && !G.hasItem(it.search.questItem.item) && !G.flags['qiGot_' + it.search.questItem.quest];
+      if (it.search) opts.push({ t: G.flags[objKey(G, o, 'search')] && !qiOpen ? '<span class="muted">Обыскать (уже обыскано)</span>' : 'Обыскать', act: () => node(W.searchObject(G, o)) });
       if (it.enter) opts.unshift({ t: `<b>${it.enter.label}</b>`, act: () => { const r = W.tryEnter(G, o); if (r) node(r); } });
       if (it.check) {
         const c = it.check;
