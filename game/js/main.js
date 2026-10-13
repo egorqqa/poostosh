@@ -218,6 +218,8 @@
   G.siteQuestMark = function (id) {
     const q = G.q, f = G.flags;
     if (G.flags.invasion && !G.flags.invasion.done && G.flags.invasion.loc === id) return '!';
+    if (id === 'oasis') return G.hasItem('pump_core') ? '?' : q('west') === 1 ? '!' : q('west') === 9 ? '✔' : null;
+    if (id === 'solar') return q('west') === 2 && !G.hasItem('pump_core') ? '!' : null;
     if (id === 'hive' || id === 'fort') return q('south') >= 1 && q('south') < 3 ? '!' : q('south') === 9 ? '✔' : null;
     if (id === 'observatory') return q('obs') >= 1 && q('obs') < 4 ? '!' : q('obs') === 9 ? '✔' : null;
     if (id === 'city') return q('column') >= 1 && q('column') < 9 ? '!' : q('column') === 9 ? '✔' : null;
@@ -246,10 +248,12 @@
       case 'semyon': return (G.hasItem('samples') && q('zarya') < 9) || (q('pelts') === 1 && R.count(p, 'wolf_pelt') >= 3) ? '?' : q('pelts') === 0 && q('debt') !== 0 ? '!' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
       case 'granit': return q('column') >= 1 && q('column') < 3 ? '!' : q('column') === 4 ? '?' : null;
       case 'klyk_city': return q('column') === 3 ? '!' : null;
+      case 'yasna': return G.hasItem('pump_core') ? '?' : q('west') === 1 ? '!' : null;
+      case 'zno': return q('west') === 2 && !G.flags.westEnd ? '!' : null;
       case 'vera': return q('thread') === 1 ? '!' : q('thread') === 4 && (G.flags.z2Destroyed || G.hasItem('z2_crate')) ? '?' : null;
       case 'lada': return G.flags.ladaFree ? null : '!';
       case 'rzha': return q('south') >= 1 && q('south') < 3 && !G.flags.southDone ? '!' : null;
-      case 'kuzma': return q('obs') === 4 || q('south') === 3 ? '?' : q('obs') === 9 && q('south') === 0 ? '!' : q('column') === 9 && q('obs') === 0 ? '!' : q('mast') === 2 ? '?' : q('mast') === 0 || (q('thread') === 9 && q('column') === 0) ? '!' : null;
+      case 'kuzma': return q('obs') === 4 || q('south') === 3 ? '?' : (q('obs') === 9 && q('south') === 0) || (q('south') === 9 && q('west') === 0) ? '!' : q('column') === 9 && q('obs') === 0 ? '!' : q('mast') === 2 ? '?' : q('mast') === 0 || (q('thread') === 9 && q('column') === 0) ? '!' : null;
       case 'palych': return q('thread') >= 2 && q('thread') < 9 && !G.hasItem('explosive') && !G.flags.z2Done && !G.flags.palychExplosive ? '!' : null;
       case 'mitya': return G.hasItem('samples') && !G.flags.mityaCured ? '?' : null;
       case 'mytar': return !G.flags.bridgeOpen && q('thread') >= 1 ? '!' : null;
@@ -270,7 +274,7 @@
       const p = G.player;
       p.hp = Math.min(R.maxHP(p), p.hp + hours * R.healRate(p));
     }
-    if (hours > 0) G.tickInvasions();
+    if (hours > 0) { G.tickInvasions(); G.tickCaravan(); }
   };
 
   // ---------- улучшения квартиры ----------
@@ -301,6 +305,85 @@
   // ---------- после финала: вторжения на поселения ----------
   const INV_TARGETS = ['camp', 'rassvet'];
   G.postGame = () => G.q('obs') === 9;
+  // ---------- глава 6 ----------
+  G.westCore = function (how) {
+    G.flags.westEnd = how;
+    const zno = G.findNpc('zno');
+    if (how !== 'storm' && how !== 'stolen') {
+      const box = G.loc && G.loc.objects.find(o => o.name === 'Склад пустынников');
+      if (box && R.removeItem(box, 'pump_core', 1)) NET.syncObj(box);
+      R.addItem(G.player, 'pump_core', 1); G.log('Получено: Сердечник насоса.', 'good');
+    }
+    if (G.q('west') < 3) G.setQuest('west', 3);
+    G.giveXP(how === 'deal' ? 250 : 120);
+    if (how === 'deal' && zno) for (const a of G.loc.actors) if (a.faction === 'nomads') a.hostile = false;
+  };
+  G.westFinish = function () {
+    if (!G.hasItem('pump_core') || G.q('west') === 9) return;
+    R.removeItem(G.player, 'pump_core', 1);
+    G.setQuest('west', 9);
+    G.reward(700, 300, [['desert_robe', 1], ['water', 5]]);
+    G.log('КОНЕЦ ГЛАВЫ 6. Оазис спасён, а караваны теперь могут ходить и на запад.', 'warn');
+  };
+
+  // ---------- караваны ----------
+  G.caravanRoutes = function (from) {
+    const list = [];
+    const other = from === 'camp' ? 'rassvet' : 'camp';
+    if (WMAP.siteState(G, 'rassvet').known) list.push({ to: other, hours: 24, bonus: 0, need: G.flags.bridgeOpen ? '' : 'Ржавый мост закрыт — караван платит мытарям 15% выручки.' });
+    if (G.q('west') === 9) list.push({ to: 'oasis', hours: 40, bonus: 0.35, need: 'Долгий путь через пески: выше прибыль и выше риск.' });
+    return list;
+  };
+  G.caravanQuote = function (route, invest, guards) {
+    const p = G.player;
+    const mult = 1.5 + R.skill(p, 'barter') / 400 + (G.rep() >= 15 ? 0.05 : 0) + route.bonus + Math.min(0.2, (G.flags.caravanRuns || 0) * 0.02) - (route.need && route.to !== 'oasis' ? 0.15 : 0);
+    const risk = Math.max(5, (route.to === 'oasis' ? 45 : 35) - guards * 12);
+    return { mult, risk, profit: Math.round(invest * mult) };
+  };
+  G.sendCaravan = function (from, route, invest, guards, escort) {
+    const p = G.player, cost = invest + guards * 25;
+    if (G.flags.caravan) return 'Ваш караван уже в пути.';
+    if (p.caps < cost) return `Нужно ${cost} крышек.`;
+    p.caps -= cost;
+    const q = G.caravanQuote(route, invest, guards);
+    G.flags.caravan = { from, to: route.to, invest, guards, eta: G.time + route.hours * 60, payout: q.profit, risk: escort ? 0 : q.risk, escort: !!escort };
+    G.setQuest('caravan', 1);
+    SND.play('cash');
+    if (escort) {
+      G.log('Вы ведёте караван лично. По дороге на него нападут — отбейте атаку!', 'warn');
+      UI.closeModal(); if (G.dialog) WORLD_API.endDialog(G);
+      G.passTime(route.hours * 30);
+      WORLD_API.leaveToWorld(G); WMAP.leave();
+      WORLD_API.goLocation(G, 'wild_caravan_' + Date.now(), { kind: route.to === 'oasis' ? 'nomads' : 'raiders' }).then(() => { G.flags.caravan.inFight = G.loc.id; G.log('Налётчики атакуют караван!', 'bad'); });
+      return null;
+    }
+    G.log(`Караван ушёл в «${DATA.LOCATIONS[route.to].name}». Вернётся через ${route.hours} ч. Риск нападения: ${q.risk}%.`, 'good');
+    return null;
+  };
+  G.caravanDone = function (ok, text) {
+    const c = G.flags.caravan;
+    if (!c) return;
+    G.flags.caravan = null;
+    G.quests.caravan = 0;
+    if (ok) {
+      const pay = c.escort ? Math.round(c.payout * 1.2) : c.payout;
+      G.player.caps += pay; G.flags.caravanRuns = (G.flags.caravanRuns || 0) + 1;
+      G.log(`${text || 'Караван вернулся с прибылью!'} +${pay} крышек (вложено ${c.invest + c.guards * 25}).`, 'good');
+      G.giveXP(40 + Math.round(c.invest / 10)); SND.play('cash');
+    } else {
+      const left = Math.round(c.invest * 0.25);
+      G.player.caps += left;
+      G.log(`${text || 'Караван разграбили в пути!'} Спасено только ${left} крышек.`, 'bad');
+    }
+    if (NET.active) NET.send({ t: 'stat', k: ok ? 'caravans' : 'caravansLost' });
+  };
+  G.tickCaravan = function () {
+    const c = G.flags.caravan;
+    if (!c || c.escort || G.time < c.eta) return;
+    if (Math.random() * 100 < c.risk) G.caravanDone(false, 'Тревожные вести: на караван напали.');
+    else G.caravanDone(true);
+  };
+
   G.tickInvasions = function () {
     if (NET.active || !G.postGame()) return;
     const f = G.flags;
@@ -351,7 +434,7 @@
       if (G.loc && G.loc.id === inv.loc) {
         const k = inv.n || 1;
         G.log(`Вторжение отбито совместными силами! «${name}» спасено.`, 'good');
-        G.reward(150 + 50 * k, 100 + 30 * k, [['medkit', 1]]); SND.play('quest');
+        G.reward(150 + 50 * k, 100 + 30 * k, [['medkit', 1]]); SND.play('quest'); NET.send({ t: 'stat', k: 'invasions' });
         if (inv.loc === 'camp') G.addRep(10, 'защита Ручья');
       } else G.log(`Другие игроки отбили вторжение на «${name}».`, 'sys');
     }

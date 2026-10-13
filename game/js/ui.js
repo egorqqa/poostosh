@@ -346,6 +346,7 @@ window.UI = (function () {
         else if (r.dataset.id) { const s = src.inv.find(i => i.id === r.dataset.id); const n = s.n; R.removeItem(src, s.id, n); R.addItem(p, s.id, n); }
         else if (r.dataset.mine) { const s = p.inv.find(i => i.id === r.dataset.mine); if (ITEMS[s.id].type === 'quest') return; const n = s.n; R.removeItem(p, s.id, n); R.addItem(src, s.id, n); }
         NET.touch(src);
+        if (G.hasItem('pump_core') && !G.flags.westEnd) G.westCore('stolen');
         U.refresh();
       });
       root.querySelector('#l-all').onclick = () => {
@@ -353,6 +354,7 @@ window.UI = (function () {
         p.caps += src.caps || 0; src.caps = 0;
         for (const s of src.inv.slice()) { const n = s.n; R.removeItem(src, s.id, n); R.addItem(p, s.id, n); }
         NET.touch(src);
+        if (G.hasItem('pump_core') && !G.flags.westEnd) G.westCore('stolen');
         U.closeModal();
       };
       modalRefresh = draw;
@@ -810,6 +812,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
       <button data-p="load" ${mp || !G.hasSave() ? 'disabled' : ''}>Загрузить</button>
       <button data-p="journal">Журнал заданий</button>
       <button data-p="char">Персонаж</button>
+      ${mp ? '<button data-p="leaders">Таблица лидеров</button>' : ''}
       <button data-p="set">Настройки</button>
       <button data-p="menu">${mp ? 'Отключиться и выйти в меню' : 'Главное меню'}</button>
       ${window.desktop ? '<button data-p="quit">Выйти из игры</button>' : ''}
@@ -823,6 +826,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
           case 'load': G.load(); break;
           case 'journal': U.openJournal(); break;
           case 'char': U.openCharacter(false); break;
+          case 'leaders': U.openLeaders(); break;
           case 'set': U.openSettings(true); break;
           case 'menu': U.confirm(mp ? 'Отключиться от сервера? Персонаж сохранится.' : 'Выйти в главное меню? Несохранённый прогресс будет потерян (автосохранение — при входе в локацию).',
             () => { if (mp) { G.saveMP(true); NET.disconnect(); } location.reload(); }, () => U.openPause()); break;
@@ -842,7 +846,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
 
   // ---------- журнал заданий ----------
   const SITE_OF = {
-    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', south: g => ({ 1: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 2: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 3: 'rassvet' })[g.q('south')], obs: g => ({ 1: 'observatory', 2: 'observatory', 3: 'observatory', 4: 'rassvet' })[g.q('obs')], rats: 'camp', column: g => ({ 1: 'city', 2: 'city', 3: 'city', 4: 'city' })[g.q('column')],
+    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', south: g => ({ 1: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 2: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 3: 'rassvet' })[g.q('south')], obs: g => ({ 1: 'observatory', 2: 'observatory', 3: 'observatory', 4: 'rassvet' })[g.q('obs')], west: g => ({ 1: 'oasis', 2: 'solar', 3: 'oasis' })[g.q('west')], rats: 'camp', column: g => ({ 1: 'city', 2: 'city', 3: 'city', 4: 'city' })[g.q('column')],
     battery: g => g.hasItem('battery') ? 'camp' : 'zarya', zarya: g => ({ 1: 'zarya', 2: 'zarya', 3: 'zarya', 4: 'camp' })[g.q('zarya')],
     thread: g => ({ 1: g.flags.bridgeOpen ? 'rassvet' : 'bridge', 2: 'object9', 3: 'object9', 4: 'rassvet' })[g.q('thread')], mast: 'rassvet',
   };
@@ -891,6 +895,46 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
       });
       modalRefresh = draw;
       draw();
+    });
+  };
+
+  U.openCaravan = function (from) {
+    const routes = G.caravanRoutes(from);
+    const c = G.flags.caravan;
+    U.openModal('caravan', `<div class="modal" style="width:min(600px,95vw)">
+      <h2>Свой караван <button class="close" data-close>✕</button></h2>
+      ${c ? `<div class="screen">Караван в пути: «${DATA.LOCATIONS[c.from].name}» → «${DATA.LOCATIONS[c.to].name}». ${c.escort ? 'Вы сопровождаете его лично.' : `Вернётся через ${Math.max(0, Math.ceil((c.eta - G.time) / 60))} ч. Ожидаемая выручка: ${c.payout} крышек, риск: ${c.risk}%.`}</div>`
+        : !routes.length ? '<div class="screen">Пока некуда отправлять: откройте путь к станции «Рассвет».</div>'
+        : `<div class="screen">
+          <label>Маршрут</label><select id="cv-route" style="width:100%;font-family:var(--font);background:#050a05;color:var(--green);border:1px solid var(--green-dim);padding:4px">${routes.map((r, i) => `<option value="${i}">${DATA.LOCATIONS[from].name} → ${DATA.LOCATIONS[r.to].name} (${r.hours} ч)</option>`).join('')}</select>
+          <label>Товар (вложение, крышек)</label><select id="cv-inv" style="width:100%;font-family:var(--font);background:#050a05;color:var(--green);border:1px solid var(--green-dim);padding:4px"><option>100</option><option selected>250</option><option>500</option><option>1000</option></select>
+          <label>Охрана (25 крышек за бойца, −12% риска)</label><select id="cv-guard" style="width:100%;font-family:var(--font);background:#050a05;color:var(--green);border:1px solid var(--green-dim);padding:4px"><option value="0">без охраны</option><option value="1">1 охранник</option><option value="2" selected>2 охранника</option></select>
+          <div id="cv-quote" class="good" style="margin-top:8px"></div><div class="muted" id="cv-note" style="font-size:12px"></div></div>
+          <div class="cols" style="justify-content:flex-end;margin-top:8px"><button id="cv-escort" data-tip="Без риска и +20% к выручке, но по дороге будет бой">Сопровождать лично</button><button class="primary" id="cv-send">Отправить</button></div>`}
+      <div id="cv-msg" class="warn" style="min-height:16px;margin-top:6px"></div></div>`, root => {
+      const sel = () => ({ route: routes[+root.querySelector('#cv-route').value], invest: +root.querySelector('#cv-inv').value, guards: +root.querySelector('#cv-guard').value });
+      const quote = () => {
+        if (!root.querySelector('#cv-route')) return;
+        const v = sel(), q = G.caravanQuote(v.route, v.invest, v.guards);
+        root.querySelector('#cv-quote').textContent = `Вложение ${v.invest + v.guards * 25} → выручка ≈ ${q.profit} крышек · риск нападения ${q.risk}%`;
+        root.querySelector('#cv-note').textContent = v.route.need || `Прибыль растёт с Торговлей, репутацией и опытом караванов (рейсов: ${G.flags.caravanRuns || 0}).`;
+      };
+      root.addEventListener('change', quote);
+      const go = esc => { const v = sel(); const r = G.sendCaravan(from, v.route, v.invest, esc ? 0 : v.guards, esc); if (r) root.querySelector('#cv-msg').textContent = r; else if (!esc) U.closeModal(); };
+      const s = root.querySelector('#cv-send'); if (s) s.onclick = () => go(false);
+      const e = root.querySelector('#cv-escort'); if (e) e.onclick = () => go(true);
+      quote();
+    });
+  };
+
+  U.openLeaders = function () {
+    U.openModal('leaders', `<div class="modal" style="width:min(620px,95vw)"><h2>Таблица лидеров сервера <button class="close" data-close>✕</button></h2>
+      <div class="screen" id="ld-body">Загрузка...</div></div>`, root => {
+      NET.onLeaders = list => {
+        const el = root.querySelector('#ld-body'); if (!el) return;
+        el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px"><tr class="warn"><td>#</td><td>Игрок</td><td>Вторжения</td><td>Контракты</td><td>Караваны</td><td>Убито</td></tr>${list.map((r, i) => `<tr style="${r.name === NET.name ? 'color:#fff' : ''}"><td>${i + 1}</td><td>${r.name}</td><td>${r.invasions || 0}</td><td>${r.contracts || 0}</td><td>${r.caravans || 0}</td><td>${r.kills || 0}</td></tr>`).join('')}</table>` + (list.length ? '' : '<div class="muted">Пока пусто.</div>');
+      };
+      NET.send({ t: 'leaders' });
     });
   };
 

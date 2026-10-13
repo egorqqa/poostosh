@@ -289,6 +289,7 @@ window.SOC = (function () {
     const caps = Math.round(d.caps * bonus);
     G.player.caps += caps; G.log(`+${caps} крышек.`, 'good');
     G.giveXP(Math.round(d.xp * bonus), true); // награда уже у каждого — без доли отряду
+    if (NET.active) NET.send({ t: 'stat', k: 'contracts' });
     S.contract = null;
     renderContract();
   }

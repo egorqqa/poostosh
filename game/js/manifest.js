@@ -708,6 +708,25 @@ window.ASSET_MANIFEST = {
 ],
 "rows_found": 7
 },
+"char_roach": {
+"src": "assets/chars/roach.png",
+"w": 720,
+"h": 528,
+"fw": 90,
+"fh": 66,
+"ax": 45,
+"ay": 60,
+"frames": [
+6,
+8,
+8,
+8,
+3,
+8,
+5,
+5
+]
+},
 "city_panel_double": {
 "src": "assets/sprites/city_panel_double.png",
 "w": 609,

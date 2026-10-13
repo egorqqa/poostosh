@@ -293,6 +293,7 @@ window.NET = (function () {
       case 'ev': handleEv(m); break;
       case 'time': if (G.player) G.time = m.time; break;
       case 'invasion': if (G.player) G.onServerInvasion(m.inv); break;
+      case 'leaders': if (N.onLeaders) N.onLeaders(m.list || []); break;
       case 'defense': N.defense = m.defense || {}; UI.refresh(); break;
       case 'chat': G.log(m.system ? m.text : `[${m.name}] ${m.text}`, m.system ? 'sys' : 'chat'); break;
     }

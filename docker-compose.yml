@@ -10,7 +10,7 @@ services:
       PASSWORD: "${PASSWORD:-}"
       SERVER_NAME: "${SERVER_NAME:-Пустошь}"
       MOTD: "${MOTD:-}"
-      MAX_PLAYERS: "${MAX_PLAYERS:-32}"
+      MAX_PLAYERS: "${MAX_PLAYERS:-8}"
     volumes:
       - poostosh-data:/data
 volumes:

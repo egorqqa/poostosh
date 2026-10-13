@@ -97,9 +97,10 @@ window.WORLD_API = (function () {
     const npcs = [];
     const n = 2 + Math.floor(r() * 3);
     for (let i = 0; i < n; i++) {
-      const tpl = kind === 'wolves' ? 'wolf' : kind === 'rats' ? 'rat' : kind === 'raiders' ? (r() < 0.5 ? 'raider' : 'raider_melee') : (r() < 0.4 ? 'wild_gun' : 'wild');
+      const tpl = kind === 'nomads' ? 'nomad_raider' : kind === 'roaches' ? 'roach' : kind === 'wolves' ? 'wolf' : kind === 'rats' ? 'rat' : kind === 'raiders' ? (r() < 0.5 ? 'raider' : 'raider_melee') : (r() < 0.4 ? 'wild_gun' : 'wild');
       npcs.push([tpl, 12 + Math.floor(r() * 10), 6 + Math.floor(r() * 8), { wander: 3 }]);
     }
+    if (kind === 'roaches') npcs.push(['roach', 15, 9, { wander: 3 }], ['roach', 19, 12, { wander: 3 }], ['roach', 13, 13, { wander: 3 }]);
     if (kind === 'wolves') { for (let i = 0; i < 6; i++) objects.push([['tree_pine', 'tree_spruce', 'tree_oak', 'tree_dead'][Math.floor(r() * 4)], 2 + Math.floor(r() * 30), 2 + Math.floor(r() * 24), {}]); if (r() < 0.3) npcs.push(['wolf_alpha', 16, 6, { wander: 2 }]); }
     if (kind === 'rats') { npcs.push(['rat', 14, 9, { wander: 3 }], ['rat', 18, 11, { wander: 3 }]); if (r() < 0.35) npcs.push(['rat_big', 16, 7, { wander: 2 }]); }
     return { name: 'Пустошь', w: 34, h: 34, exits: [{ x0: 12, y0: 32, x1: 22, y1: 33 }], ground: ['dirt_tracks', 'overgrown_grassland', 'rubble_ground', 'cracked_road'], groundW: [3, 3, 1, 1], base: '#5b4c35', entry: { x: 17, y: 30 }, objects, npcs, temp: true, desc: 'Безымянный клочок пустоши.' };
@@ -124,7 +125,7 @@ window.WORLD_API = (function () {
       L.actors = def.npcs.map(([tpl, x, y, o], i) => { const a = R.makeNpc(tpl, x, y, o || {}); a.id = `${id}_${i}`; return a; });
     }
     const p = G.player;
-    const e = opts.at || (def.entryEast && G.world && G.world.prevC > 18 ? def.entryEast : def.entry);
+    const e = opts.at || (def.entryEast && G.world && G.world.prevC > 18 + (DATA.WORLD.westShift || 0) ? def.entryEast : def.entry);
     p.x = e.x; p.y = e.y;
     L.actors = L.actors.filter(a => !a.isPlayer && !a.isRemote && !a.isCompanion);
     L.actors.unshift(p);
@@ -181,6 +182,8 @@ window.WORLD_API = (function () {
     if (id === 'fort' && G.flags.southDone) L.actors.forEach(a => { if (a.faction === 'remnant') { if (G.flags.southDone === 'command') a.hostile = false; else a.gone = true; } });
     if (id === 'hive' && G.flags.southDone) L.actors.forEach(a => { if (a.faction === 'infected') a.gone = true; });
     if (id === 'rassvet' && G.flags.southDone === 'disband') for (let i = 0; i < 2; i++) { const a = R.makeNpc('rem_soldier', 22 + i * 3, 30, {}); a.id = 'rem_guard_' + i; a.name = 'Бывший боец Колонны'; a.faction = 'rassvet'; a.hostile = false; a.dialog = 'rguard'; Object.assign(a, { rx: a.x, ry: a.y, path: [], moving: false, walkPhase: 0, aimT: 0, hitFlash: 0 }); L.actors.push(a); }
+    if (id === 'solar' && G.flags.westEnd === 'deal') L.actors.forEach(a => { if (a.faction === 'nomads') a.hostile = false; });
+    if (id === 'solar' && (G.flags.westEnd === 'storm' || G.flags.westEnd === 'stolen')) L.actors.forEach(a => { if (a.faction === 'nomads' && G.flags.westEnd === 'storm') a.gone = true; });
     if (id === 'city') {
       const k = L.actors.find(a => a.tpl === 'klyk_city');
       if (k && G.flags.klykDead) k.name = 'Шрам';
@@ -231,6 +234,7 @@ window.WORLD_API = (function () {
     if (id === 'zarya_lab' && G.q('zarya') >= 1 && G.q('zarya') < 3) G.setQuest('zarya', 3);
     if (id === 'object9' && G.q('thread') === 2) G.setQuest('thread', 3);
     if ((id === 'hive' || id === 'fort') && G.q('south') === 1) G.setQuest('south', 2);
+    if (id === 'oasis' && G.q('west') === 1) G.log('Вы добрались до Оазиса. Найдите Хранительницу Ясну.', 'good');
     if (id === 'city' && G.q('column') === 1) G.setQuest('column', 2);
     if (id === 'observatory' && G.q('obs') === 1) G.setQuest('obs', 2);
     if (!NET.active) { W.loadLocation(G, id, opts); setTimeout(() => G.autosave(), 300); return; }
@@ -253,6 +257,8 @@ window.WORLD_API = (function () {
   };
 
   W.leaveToWorld = function (G, worldAt) {
+    const cv = G.flags && G.flags.caravan;
+    if (cv && cv.escort && G.loc && cv.inFight === G.loc.id && G.loc.actors.some(a => a.hostile && !a.dead && !a.gone)) setTimeout(() => G.caravanDone(false, 'Вы бросили караван!'), 0);
     if (G.loc && G.loc.def.interior) {
       const r = W.exitRect(G.loc, G.player.x, G.player.y);
       if (r) { W.useExit(G, r); return; }

@@ -372,6 +372,42 @@ def build_city(manifest):
         print(name, im.size)
 
 
+def build_roach(manifest):
+    """Лист радтаракана 4x8: ряд0 — Ю, ряд1 — В/ЮВ, ряд2 — СВ, ряд3 — С (3 кадра) и З (5 кадров). СЗ — зеркало СВ."""
+    src = Image.open(os.path.join(ROOT, "радтаракан.png")).convert("RGBA")
+    a = np.array(src)
+    lab, _ = ndimage.label(a[:, :, 3] > 100)
+    band = src.height / 4
+    rows = [[] for _ in range(4)]
+    for i, sl in enumerate(ndimage.find_objects(lab), start=1):
+        if sl is None or (lab[sl] == i).sum() < 1500:
+            continue
+        mid = (sl[0].start + sl[0].stop) / 2
+        rows[min(3, int(mid // band))].append((sl[1].start, sl[1].stop, sl[0].start, sl[0].stop, i))
+    for r in rows:
+        r.sort()
+    S, SE, NE, R3 = rows
+    N, W = R3[:3], R3[3:]
+    # направления движка: S, SE, E, NE, N, NW, W, SW; True — отразить
+    plan = [(S[:6], False), (SE, False), (SE, False), (NE, False), (N, False), (NE, True), (W, False), (W, False)]
+    CW, CH, AX, AY, SC = 90, 66, 45, 60, 0.30
+    ncol = max(len(f) for f, _ in plan)
+    sheet = Image.new("RGBA", (CW * ncol, CH * 8), (0, 0, 0, 0))
+    counts = []
+    for r, (frames, flip) in enumerate(plan):
+        counts.append(len(frames))
+        for c, (x0, x1, y0, y1, i) in enumerate(frames):
+            fr = a.copy(); fr[lab != i, 3] = 0
+            piece = Image.fromarray(fr[y0:y1, x0:x1])
+            if flip:
+                piece = piece.transpose(Image.FLIP_LEFT_RIGHT)
+            piece = piece.resize((max(1, round(piece.width * SC)), max(1, round(piece.height * SC))), Image.LANCZOS)
+            sheet.alpha_composite(piece, (c * CW + AX - piece.width // 2, r * CH + AY - piece.height))
+    sheet.save(os.path.join(OUT, "chars", "roach.png"))
+    manifest["char_roach"] = {"src": "assets/chars/roach.png", "w": sheet.width, "h": sheet.height,
+                              "fw": CW, "fh": CH, "ax": AX, "ay": AY, "frames": counts}
+
+
 def build_portrait(manifest):
     src = Image.open(os.path.join(ROOT, "Пиксельный лист солдата в противогазе.png")).convert("RGBA")
     face = src.crop((40, 0, 160, 120)).resize((120, 120), Image.LANCZOS)
@@ -424,6 +460,7 @@ def main():
     build_soldier(manifest)
     build_rat(manifest)
     build_wolf(manifest)
+    build_roach(manifest)
     build_city(manifest)
     build_portrait(manifest)
     build_ground(manifest)

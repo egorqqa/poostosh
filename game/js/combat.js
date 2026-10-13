@@ -298,11 +298,14 @@ window.COMBAT = (function () {
       a.weapon = null;
     }
     if (a.armor) { R.addItem(a, a.armor, 1); a.armor = null; }
-    if (by && by.isPlayer) G.giveXP(a.xpValue || 25);
+    if (by && by.isPlayer) { G.giveXP(a.xpValue || 25); if (net()) NET.send({ t: 'stat', k: 'kills' }); }
     if (by && by.isRemote) NET.event(by.pid, { kind: 'xp', n: a.xpValue || 25 });
     if (a.tpl === 'klyk') G.flags.klykDead = true;
     if (a.tpl === 'marauder') G.flags.marauderKilled = true;
     if (a.tpl === 'mytar') G.openBridge();
+    if (a.tpl === 'zno' && !G.flags.westEnd) { G.flags.westEnd = 'storm'; if (G.q('west') === 2) G.log('Атаман пал. Сердечник — на складе пустынников.', 'good'); }
+    const cv = G.flags.caravan;
+    if (cv && cv.escort && cv.inFight === G.loc.id && !G.loc.actors.some(x => x.hostile && !x.dead && !x.gone && x !== a)) setTimeout(() => G.caravanDone(true, 'Нападение отбито, караван дошёл!'), 400);
     if (a.tpl === 'rzha' && !G.flags.southDone) G.southEnd('storm');
     if (a.invader && G.loc && !G.loc.actors.some(x => x.invader && !x.dead)) G.invasionCleared();
     if (a.tpl === 'klyk_city') { G.flags.klykCityDead = true; if (G.q('column') >= 1 && G.q('column') < 4) G.setQuest('column', 4); }
@@ -436,6 +439,7 @@ window.COMBAT = (function () {
   C.autoEnd = autoEnd;
 
   // ---------- ИИ ----------
+  const NO_FLEE = ['klyk', 'klyk_city', 'granit', 'granit_obs', 'zorin', 'hive_queen', 'rzha', 'zno', 'scav_boss', 'mytar', 'infected', 'infected_brute', 'z_soldier', 'z_officer'];
   async function ai(G, a) {
     let guard = 30;
     while (a.ap > 0 && guard-- > 0 && !a.dead && G.combat) {
@@ -446,6 +450,28 @@ window.COMBAT = (function () {
       } else p = nearestPC(G, a).p;
       if (!p) break;
       const w = R.weaponOf(a);
+      // при здоровье меньше 15% — бегство в сторону от врага (кроме боссов и напарника)
+      if (!a.isCompanion && a.hp < R.maxHP(a) * 0.15 && !NO_FLEE.includes(a.tpl) && !R.count(a, 'medkit')) {
+        if (!a.fleeing) { a.fleeing = true; a.bubble = { text: 'Бежим!', t: 1.6, color: '#f0b43c' }; G.log(`${a.name} в панике отступает!`, 'warn'); if (net()) NET.fx({ type: 'log', text: `${a.name} в панике отступает!`, cls: 'warn' }); }
+        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+        let best = null, bd = ENG.dist(a, p);
+        for (const [dx, dy] of dirs) {
+          const nx = a.x + dx, ny = a.y + dy;
+          if (!ENG.passable(G.loc, nx, ny, a)) continue;
+          const d = Math.max(Math.abs(nx - p.x), Math.abs(ny - p.y));
+          if (d > bd) { bd = d; best = { x: nx, y: ny }; }
+        }
+        if (!best) break;
+        await stepTo(G, a, best);
+        a.ap--;
+        const edge = best.x <= 0 || best.y <= 0 || best.x >= G.loc.w - 1 || best.y >= G.loc.h - 1;
+        if (edge || (bd > 13 && !ENG.los(G.loc, a.x, a.y, p.x, p.y))) {
+          a.gone = true; G.log(`${a.name} сбегает с поля боя.`, 'sys');
+          if (net()) { NET.syncEnt(a); NET.fx({ type: 'log', text: `${a.name} сбегает с поля боя.`, cls: 'sys' }); }
+          break;
+        }
+        continue;
+      }
       if (a.hp < R.maxHP(a) * 0.35 && R.count(a, 'medkit') && a.ap >= 2) {
         R.removeItem(a, 'medkit', 1);
         const h = 15;

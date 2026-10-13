@@ -20,6 +20,7 @@
     <h3>Подключение</h3><div id="addr"></div>
     <h3 style="margin-top:12px">Игроки</h3><div id="players"></div>
     <h3 style="margin-top:12px">Работает</h3><div id="up"></div>
+    <h3 style="margin-top:12px">Лидеры</h3><div id="lead"></div>
   </div>
   <div class="box" id="log"></div>
 </main>
@@ -30,6 +31,7 @@
       document.getElementById('ver').textContent = i.version + (i.locked ? ' · с паролем' : ' · без пароля');
       document.getElementById('addr').innerHTML = i.addresses.concat(['127.0.0.1']).map(a => `<div>${a}:${i.port}</div>`).join('') + '<div class="muted" style="margin-top:6px">Для игры через интернет откройте порт на роутере.</div>';
       document.getElementById('players').innerHTML = i.players.length ? i.players.map(p => `<div>${p.name} <span class="muted">${p.loc || 'карта мира'}</span></div>`).join('') : '<div class="muted">никого</div>';
+      document.getElementById('lead').innerHTML = (i.leaders || []).map((r, n) => `<div>${n + 1}. ${r.name} <span class="muted">вт ${r.invasions || 0} · к ${r.contracts || 0} · кар ${r.caravans || 0}</span></div>`).join('') || '<div class="muted">пусто</div>';
       const s = i.uptime; document.getElementById('up').textContent = `${Math.floor(s / 3600)} ч ${Math.floor(s / 60) % 60} мин`;
       const log = document.getElementById('log');
       const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 5;

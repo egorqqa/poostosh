@@ -71,7 +71,7 @@ window.WMAP = (function () {
   const siteState = (G, id) => (G.world.sites[id] = G.world.sites[id] || { known: !!(WORLD.sites.find(s => s.id === id) || {}).known });
   M.siteState = siteState;
   M.initState = function () {
-    const st = { c: WORLD.start.x, r: WORLD.start.y, path: [], revealed: {}, sites: {} };
+    const st = { c: WORLD.start.x, r: WORLD.start.y, path: [], revealed: {}, sites: {}, mapV: 2 };
     for (const s of WORLD.sites) st.sites[s.id] = { known: s.known };
     const p = center(st.c, st.r); st.px = p.x; st.py = p.y;
     return st;
@@ -85,7 +85,19 @@ window.WMAP = (function () {
     for (const s of WORLD.sites) if (W.revealed[key(s.x, s.y)] && hexDist({ c: s.x, r: s.y }, { c: W.c, r: W.r }) <= 1) siteState(G, s.id).known = true;
   }
 
+  // старые сохранения: карта расширилась на запад — сдвигаем координаты
+  M.migrate = function (G) {
+    const W = G.world;
+    if (!W || W.mapV >= 2) return;
+    const s = WORLD.westShift || 0;
+    W.c += s; if (W.prevC != null) W.prevC += s;
+    const rv = {};
+    for (const k of Object.keys(W.revealed || {})) { const [c, r] = k.split(',').map(Number); rv[(c + s) + ',' + r] = true; }
+    W.revealed = rv; W.path = []; W.mapV = 2;
+    const p = center(W.c, W.r); W.px = p.x; W.py = p.y;
+  };
   M.enter = function (G) {
+    M.migrate(G);
     G.scene = 'world';
     G.combat = null;
     G.sneaking = false;
@@ -169,6 +181,15 @@ window.WMAP = (function () {
 
   function onHex(G) {
     const W = G.world, p = G.player;
+    // Великая пустыня: жажда
+    if (terrainAt(W.c, W.r) === 'y' && W.c < (WORLD.westShift || 0) + 1) {
+      G.flags.thirst = (G.flags.thirst || 0) + (R.skill(p, 'survival') >= 70 ? 0.5 : 1);
+      if (G.flags.thirst >= 2) {
+        G.flags.thirst = 0;
+        if (R.removeItem(p, 'water', 1)) G.log('Пустыня: вы выпиваете бутылку воды.', 'sys');
+        else { p.hp = Math.max(1, p.hp - 7); G.log('Жажда! Без воды вы теряете силы: −7 ОЗ.', 'bad'); G.hint('Жажда! Нужна вода'); }
+      }
+    }
     const mins = Math.round(180 * (1 - Math.min(0.5, R.skill(p, 'survival') / 300)));
     G.passTime(mins);
     W.hexes = (W.hexes || 0) + 1;
@@ -268,8 +289,9 @@ window.WMAP = (function () {
   function encounter(G, tr) {
     const p = G.player;
     const roll = Math.random();
-    const kind = tr === 'g' && roll < 0.35 ? 'wolves' : roll < 0.25 ? 'rats' : tr === 'r' || tr === 'x' || tr === 'c' || roll < 0.55 ? 'raiders' : 'wild';
-    const who = kind === 'wolves' ? 'стаю волков' : kind === 'rats' ? 'стаю радкрыс' : kind === 'raiders' ? 'группу рейдеров' : 'стаю одичалых';
+    const west = G.world.c < (WORLD.westShift || 0);
+    const kind = west ? (roll < 0.6 ? 'nomads' : 'roaches') : roll > 0.9 ? 'roaches' : tr === 'g' && roll < 0.35 ? 'wolves' : roll < 0.25 ? 'rats' : tr === 'r' || tr === 'x' || tr === 'c' || roll < 0.55 ? 'raiders' : 'wild';
+    const who = kind === 'nomads' ? 'пустынных налётчиков' : kind === 'roaches' ? 'рой радтараканов' : kind === 'wolves' ? 'стаю волков' : kind === 'rats' ? 'стаю радкрыс' : kind === 'raiders' ? 'группу рейдеров' : 'стаю одичалых';
     const spotChance = R.clamp(Math.round(R.skill(p, 'survival') * 0.6 + p.stats.per * 4), 5, 95);
     const spotted = Math.random() * 100 < spotChance;
     const seed = 'wild_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);

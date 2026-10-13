@@ -26,7 +26,7 @@ function createServer(opts = {}) {
   const password = String(opts.password || '');
   const serverName = String(opts.name || 'Пустошь').slice(0, 40);
   const motd = String(opts.motd || '').slice(0, 300);
-  const maxPlayers = +opts.max || 32;
+  const maxPlayers = +opts.max || 8;
   const invFirst = opts.invFirst != null ? +opts.invFirst : 24 * 60;   // минут игрового времени до первого вторжения
   const invEvery = +opts.invEvery || 48;                                 // в среднем часов между вторжениями (0 — выключить)
   const log = opts.log || console.log;
@@ -54,6 +54,9 @@ function createServer(opts = {}) {
   };
   // общее игровое время: 1 игровая минута за 2 секунды
   if (!world.defense) world.defense = {};
+  if (!world.stats) world.stats = {};
+  const leaders = () => Object.values(world.stats).sort((a, b) => (b.invasions || 0) * 10 + (b.contracts || 0) * 5 + (b.caravans || 0) * 3 + (b.kills || 0) * 0.1
+    - ((a.invasions || 0) * 10 + (a.contracts || 0) * 5 + (a.caravans || 0) * 3 + (a.kills || 0) * 0.1)).slice(0, 20);
   // вторжения на поселения — общие для всех игроков сервера
   const INV_LOCS = ['camp', 'rassvet'];
   function tickInvasion() {
@@ -112,7 +115,7 @@ function createServer(opts = {}) {
     const url = decodeURIComponent(req.url.split('?')[0]);
     if (url === '/info') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
-      res.end(JSON.stringify({ name: serverName, motd, max: maxPlayers, version, players: playerList(), uptime: Math.round((Date.now() - started) / 1000), log: logLines.slice(-60), addresses: localAddresses(), port, locked: !!password }));
+      res.end(JSON.stringify({ name: serverName, motd, max: maxPlayers, version, players: playerList(), uptime: Math.round((Date.now() - started) / 1000), log: logLines.slice(-60), addresses: localAddresses(), port, locked: !!password, leaders: leaders().slice(0, 10) }));
       return;
     }
     if (url === '/server') { serveFile(path.join(__dirname, 'status.html'), res); return; }
@@ -202,6 +205,14 @@ function createServer(opts = {}) {
           break;
         }
         case 'ping': send(p, { t: 'pong', at: m.at }); break;
+        case 'stat': {
+          const k = ['invasions', 'contracts', 'kills', 'caravans', 'caravansLost'].includes(m.k) ? m.k : null;
+          if (!k) break;
+          const st = world.stats[p.nameKey] = world.stats[p.nameKey] || { name: p.name };
+          st[k] = (st[k] || 0) + 1; dirty = true;
+          break;
+        }
+        case 'leaders': send(p, { t: 'leaders', list: leaders() }); break;
         case 'invdone':
           if (world.invasion && world.invasion.id === m.id && !world.invasion.done) {
             world.invasion.done = 'won'; dirty = true; toAll({ t: 'invasion', inv: world.invasion }); say('Вторжение отбито:', world.invasion.loc, '—', p.name);
@@ -254,7 +265,7 @@ if (require.main === module) {
   const env = process.env;
   const srv = createServer({
     port: arg('port', env.PORT || 7777), password: arg('password', env.PASSWORD || ''), dataDir: arg('data', env.DATA_DIR || null),
-    name: arg('name', env.SERVER_NAME || 'Пустошь'), motd: arg('motd', env.MOTD || ''), max: arg('max', env.MAX_PLAYERS || 32),
+    name: arg('name', env.SERVER_NAME || 'Пустошь'), motd: arg('motd', env.MOTD || ''), max: arg('max', env.MAX_PLAYERS || 8),
     invFirst: arg('inv-first', env.INVASION_FIRST_MIN ?? null), invEvery: arg('inv-every', env.INVASION_EVERY_H || 48),
   });
   const stop = () => { srv.close(); process.exit(0); };
