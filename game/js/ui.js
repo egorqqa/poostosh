@@ -846,7 +846,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
 
   // ---------- журнал заданий ----------
   const SITE_OF = {
-    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', south: g => ({ 1: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 2: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 3: 'rassvet' })[g.q('south')], obs: g => ({ 1: 'observatory', 2: 'observatory', 3: 'observatory', 4: 'rassvet' })[g.q('obs')], west: g => ({ 1: 'oasis', 2: 'solar', 3: 'oasis' })[g.q('west')], rats: 'camp', column: g => ({ 1: 'city', 2: 'city', 3: 'city', 4: 'city' })[g.q('column')],
+    meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', south: g => ({ 1: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 2: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 3: 'rassvet' })[g.q('south')], obs: g => ({ 1: 'observatory', 2: 'observatory', 3: 'observatory', 4: 'rassvet' })[g.q('obs')], north: g => ({ 1: 'mine', 2: 'mine', 3: 'bastion', 4: 'rassvet' })[g.q('north')], west: g => ({ 1: 'oasis', 2: 'solar', 3: 'oasis' })[g.q('west')], rats: 'camp', column: g => ({ 1: 'city', 2: 'city', 3: 'city', 4: 'city' })[g.q('column')],
     battery: g => g.hasItem('battery') ? 'camp' : 'zarya', zarya: g => ({ 1: 'zarya', 2: 'zarya', 3: 'zarya', 4: 'camp' })[g.q('zarya')],
     thread: g => ({ 1: g.flags.bridgeOpen ? 'rassvet' : 'bridge', 2: 'object9', 3: 'object9', 4: 'rassvet' })[g.q('thread')], mast: 'rassvet',
   };
@@ -910,6 +910,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
           <label>Товар (вложение, крышек)</label><select id="cv-inv" style="width:100%;font-family:var(--font);background:#050a05;color:var(--green);border:1px solid var(--green-dim);padding:4px"><option>100</option><option selected>250</option><option>500</option><option>1000</option></select>
           <label>Охрана (25 крышек за бойца, −12% риска)</label><select id="cv-guard" style="width:100%;font-family:var(--font);background:#050a05;color:var(--green);border:1px solid var(--green-dim);padding:4px"><option value="0">без охраны</option><option value="1">1 охранник</option><option value="2" selected>2 охранника</option></select>
           <div id="cv-quote" class="good" style="margin-top:8px"></div><div class="muted" id="cv-note" style="font-size:12px"></div></div>
+          ${NET.active && Object.keys(SOC.party).length ? '<label style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="cv-party" checked> Совместно с отрядом: участники вкладываются, прибыль делится по долям</label>' : ''}
           <div class="cols" style="justify-content:flex-end;margin-top:8px"><button id="cv-escort" data-tip="Без риска и +20% к выручке, но по дороге будет бой">Сопровождать лично</button><button class="primary" id="cv-send">Отправить</button></div>`}
       <div id="cv-msg" class="warn" style="min-height:16px;margin-top:6px"></div></div>`, root => {
       const sel = () => ({ route: routes[+root.querySelector('#cv-route').value], invest: +root.querySelector('#cv-inv').value, guards: +root.querySelector('#cv-guard').value });
@@ -920,7 +921,10 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
         root.querySelector('#cv-note').textContent = v.route.need || `Прибыль растёт с Торговлей, репутацией и опытом караванов (рейсов: ${G.flags.caravanRuns || 0}).`;
       };
       root.addEventListener('change', quote);
-      const go = esc => { const v = sel(); const r = G.sendCaravan(from, v.route, v.invest, esc ? 0 : v.guards, esc); if (r) root.querySelector('#cv-msg').textContent = r; else if (!esc) U.closeModal(); };
+      const go = esc => { const v = sel();
+        const pc = root.querySelector('#cv-party');
+        if (!esc && pc && pc.checked) { const r = SOC.startPartyCaravan(from, v.route, v.invest, v.guards); root.querySelector('#cv-msg').textContent = r || 'Предложение отправлено отряду. Ждём вклады 15 секунд...'; if (!r) setTimeout(() => U.closeModal(), 1500); return; }
+        const r = G.sendCaravan(from, v.route, v.invest, esc ? 0 : v.guards, esc); if (r) root.querySelector('#cv-msg').textContent = r; else if (!esc) U.closeModal(); };
       const s = root.querySelector('#cv-send'); if (s) s.onclick = () => go(false);
       const e = root.querySelector('#cv-escort'); if (e) e.onclick = () => go(true);
       quote();

@@ -64,6 +64,11 @@ window.DATA = (function () {
     pump_core: { name: 'Сердечник насоса', type: 'quest', icon: 'junk', weight: 5, value: 0, desc: 'Тяжёлый узел из меди и стали. Без него насос Оазиса не качает воду.' },
     desert_robe: { name: 'Плащ пустынника', type: 'armor', icon: 'jacket', weight: 3, value: 260, ac: 14, dt: 2, dr: 22, desc: 'Слоёная накидка с нашитыми пластинами. Лёгкая и не даёт перегреться.' },
     roach_shell: { name: 'Панцирь радтаракана', type: 'misc', icon: 'junk', weight: 0.3, value: 6, desc: 'Хитиновая пластина. Борис и торговцы принимают как хлам.' },
+    wolf_armor: { name: 'Броня из волчьих шкур', type: 'armor', icon: 'jacket', weight: 6, value: 320, ac: 18, dt: 2, dr: 28, desc: 'Сшитые шкуры мутантных волков поверх кожи. +18 КБ.' },
+    chitin_armor: { name: 'Хитиновая броня', type: 'armor', icon: 'armor', weight: 8, value: 420, ac: 20, dt: 4, dr: 32, desc: 'Пластины панцирей радтараканов на кожаной основе. Лёгкая и прочная.' },
+    chitin_knife: { name: 'Хитиновый клинок', type: 'weapon', icon: 'knife', weight: 0.8, value: 90, melee: true, dmg: [4, 10], ap: 3, range: 1, crit: 15, desc: 'Острее стали. Высокий шанс крита.' },
+    rat_stew: { name: 'Крысиная похлёбка', type: 'aid', icon: 'food', weight: 0.5, value: 15, heal: 15, healSkill: 0, desc: 'Горячая похлёбка. +15 ОЗ.' },
+    mine_key: { name: 'Ключ надсмотрщика', type: 'quest', icon: 'lockpicks', weight: 0.1, value: 0, desc: 'Ключ от клетки с пленными на руднике.' },
     moonshine: { name: 'Самогон', type: 'aid', icon: 'water', weight: 0.5, value: 30, heal: 8, healSkill: 0, desc: 'Мутный, крепкий, домашний. +8 ОЗ. Торговцы охотно берут.' },
     explosive: { name: 'Самодельная взрывчатка', type: 'misc', icon: 'ammo', weight: 2, value: 80, desc: 'Тротиловые шашки, скрученные проволокой. Обращаться осторожно.' },
     keycard9: { name: 'Ключ-карта Объекта 9', type: 'quest', icon: 'holotape', weight: 0.1, value: 0, desc: 'Пластиковая карта с гербом части. Открывает хранилище.' },
@@ -202,6 +207,19 @@ window.DATA = (function () {
     rzha: { name: 'Лейтенант Ржа', tint: 'boss', faction: 'remnant', dialog: 'rzha', guard: true,
       stats: { str: 8, per: 7, end: 8, cha: 6, int: 6, agi: 7, luck: 5 }, hp: 95,
       inv: [['ammo762', 30], ['medkit', 2]], caps: 180, weapon: 'ak', armor: 'col_armor', skills: { guns: 72 }, xp: 400 },
+    overseer: { name: 'Надсмотрщик', tint: 'guard', faction: 'bastion', hostile: true,
+      stats: { str: 7, per: 6, end: 7, cha: 3, int: 4, agi: 6, luck: 5 }, hp: 50,
+      inv: [['mine_key', 1], ['ammo9', 12]], caps: 40, weapon: 'shotgun', armor: 'vest', skills: { guns: 58 }, xp: 120 },
+    b_soldier: { name: 'Страж Бастиона', tint: 'guard', faction: 'bastion', hostile: true,
+      stats: { str: 7, per: 7, end: 7, cha: 4, int: 4, agi: 6, luck: 5 }, hp: 52,
+      inv: [['ammo762', 15]], caps: 20, weapon: 'rifle', armor: 'col_armor', skills: { guns: 66 }, xp: 130 },
+    borey: { name: 'Маршал Борей', tint: 'boss', faction: 'bastion', dialog: 'borey', guard: true,
+      stats: { str: 9, per: 8, end: 9, cha: 8, int: 7, agi: 6, luck: 6 }, hp: 140,
+      inv: [['ammo762', 40], ['medkit', 3]], caps: 300, weapon: 'ak', armor: 'col_armor', skills: { guns: 80 }, xp: 600 },
+    miron: { name: 'Старик Мирон', tint: 'bum', faction: 'miners', dialog: 'miron',
+      stats: { str: 6, per: 6, end: 6, cha: 5, int: 6, agi: 4, luck: 5 }, hp: 25, inv: [], caps: 0 },
+    miner: { name: 'Пленный шахтёр', tint: 'bum', faction: 'miners',
+      stats: { str: 6, per: 4, end: 6, cha: 3, int: 3, agi: 4, luck: 4 }, hp: 20, inv: [], caps: 0 },
     yasna: { name: 'Хранительница Ясна', tint: 'elder', faction: 'oasis', dialog: 'yasna',
       stats: { str: 4, per: 7, end: 6, cha: 8, int: 8, agi: 5, luck: 6 }, hp: 30, inv: [['water', 3]], caps: 100 },
     oasis_trader: { name: 'Водонос Рашид', tint: 'trader', faction: 'oasis', dialog: 'oasis_trader', trader: true, caps: 500,
@@ -482,6 +500,8 @@ window.DATA = (function () {
             { t: 'Что слышно с юга?', if: g => g.q('obs') === 9 && g.q('south') === 0, go: 'south' },
             { t: 'С угрозой на юге покончено.', if: g => g.q('south') === 3, go: 'south_done' },
             { t: 'Есть новые сигналы?', if: g => g.q('south') === 9 && g.q('west') === 0, go: 'west' },
+            { t: 'Что слышно с севера?', if: g => g.q('west') === 9 && g.q('north') === 0, go: 'north' },
+            { t: 'Бастион больше не угроза.', if: g => g.q('north') === 4, go: 'north_done' },
             { t: 'Чем помочь с антенной?', if: g => g.q('mast') === 0, go: 'mast' },
             { t: 'Антенна снова работает.', if: g => g.q('mast') === 2, go: 'mast_done' },
             { t: 'Вера говорит, ты служил на Объекте 9. Какой там код?', if: g => g.q('thread') >= 2 && !g.flags.z9code && g.q('mast') !== 2, go: 'code' },
@@ -489,6 +509,11 @@ window.DATA = (function () {
           ] },
         column: { text: g => `Слышно, и недоброе. Какая-то «Стальная Колонна» — военные, броня, порядок — вошла в Старый город на юго-западе. Передают по кругу: «Ищем ${g.klykN()}. Награда тому, кто выдаст». Похоже, ${g.klykN()} увёл у них что-то ценное. А Колонна... они ведь и «З-2» могли скупать — больше некому было.`,
           opts: [{ t: 'Схожу в Старый город.', act: g => { g.setQuest('column', 1); g.revealSite('city'); }, end: true }, { t: 'Не сейчас.', end: true }] },
+        north: { text: 'Худшее, что можно услышать. Колонна не кончилась — Гранит был лишь передовым отрядом. На севере, за обсерваторией, их Бастион «Сталь», и маршал Борей собирает армию для похода на юг. По пути у них рудник, где пленные куют им броню. Если кто и остановит это — то ты.',
+          opts: [{ t: 'Иду на север.', act: g => { g.setQuest('north', 1); g.revealSite('mine'); }, end: true }, { t: 'Позже.', end: true }] },
+        north_done: { text: g => ({ peace: 'Маршал распустил армию?! Колонна разошлась по пустоши — люди возвращаются домой. Ты сделал невозможное.', sabotage: 'Арсенал Бастиона взлетел на воздух — слышно было даже здесь. Без патронов и брони похода не будет.', killed: 'Маршал мёртв, Бастион в смятении. Юг спасён.', heir: 'Говорят, новый маршал Бастиона — ты. Надеюсь, ты поведёшь их не туда, куда Борей.' })[g.flags.northEnd] || 'Спасибо.',
+          onEnter: g => { g.setQuest('north', 9); g.reward(1000, 500, [['medkit', 3]]); if (g.flags.northEnd !== 'heir') g.addRep(25, 'север спокоен'); g.log('КОНЕЦ ГЛАВЫ 7. История Стальной Колонны завершена.', 'warn'); },
+          opts: [{ t: 'Бывай, Кузьма.', end: true }] },
         west: { text: 'Есть. С запада, из-за Великой пустыни, слабый сигнал: «Оазис... насос стоит... вода кончается... помогите». Через пески никто не ходит — жара и жажда убивают быстрее пуль. Возьми воды побольше, хотя бы бутылок пять.',
           opts: [{ t: 'Пойду на запад.', act: g => { g.setQuest('west', 1); g.revealSite('oasis'); }, end: true }, { t: 'Позже.', end: true }] },
         south: { text: g => g.flags.obsDone === 'dark'
@@ -728,6 +753,29 @@ window.DATA = (function () {
         after: { text: 'Дело сделано. Пески помнят.', opts: [{ t: 'Ага.', end: true }] },
       },
     },
+    miron: {
+      start: g => g.flags.minersFree ? 'free' : 'hello',
+      nodes: {
+        hello: { text: 'Тише! Я Мирон, бригадир. Нас тут три десятка, держат в клетке, гоняют в забой. Ключ у надсмотрщика. Вытащи нас — покажу тайный ход в Бастион: мы сами его рыли.',
+          opts: [{ t: 'Вытащу.', act: g => { if (g.q('north') < 2) g.setQuest('north', 2); }, end: true }, { t: 'Позже.', end: true }] },
+        free: { text: 'Свобода! Ход в Бастион — через старую штольню, выходит прямо к нижним воротам под штабом. Я пометил его на твоей карте. Береги себя.', opts: [{ t: 'Уходите на юг, к «Рассвету».', end: true }] },
+      },
+    },
+    borey: {
+      start: g => g.flags.northEnd ? 'after' : 'hello',
+      nodes: {
+        hello: { text: g => `Значит, это ты — тот, кто сорвал Гранита, взорвал Объект 9 и ${g.flags.obsDone === 'dark' ? 'запустил облако' : 'остановил распылитель'}. Маршал Борей. Пустошь без хозяина гибнет. Колонна принесёт ей хозяина — меня.`,
+          opts: [
+            { t: '«З-2» уничтожен, Гранит разбит, южане вооружены. Ваш поход утонет в крови ваших же людей. Распусти армию.', check: { skill: 'speech', diff: 75 }, ok: 'peace', fail: 'refuse' },
+            { t: 'Я служил Колонне. Сделай меня своим преемником.', if: g => g.flags.columnEnd === 'joined', check: { skill: 'speech', diff: 50 }, ok: 'heir', fail: 'refuse' },
+            { t: '[Атаковать маршала]', act: 'fight', end: true },
+          ] },
+        peace: { text: '...Ты прав. Я видел, что стало с Зориным и с Гранитом. Колонна расходится. Пусть каждый вернётся домой — если у кого-то он ещё есть.', onEnter: g => g.northEnd('peace'), opts: [{ t: '[Уйти]', end: true }] },
+        heir: { text: 'Мне нужен тот, кто доводит дело до конца. Бастион — твой, когда меня не станет. А пока — веди армию сам. Куда — решай.', onEnter: g => g.northEnd('heir'), opts: [{ t: 'Армия остаётся дома.', end: true }] },
+        refuse: { text: 'Слова. Стража!', opts: [{ t: '[Бой]', act: 'fight', end: true }] },
+        after: { text: 'Колонна ждёт приказов.', opts: [{ t: '...', end: true }] },
+      },
+    },
     companion: {
       start: () => 'hello',
       nodes: {
@@ -810,6 +858,50 @@ window.DATA = (function () {
   // ---- локации ----
   // объекты: [спрайт, x, y, {fw, fh, oy, block, name, container, lock, items, owner, desc}]
   const LOCATIONS = {
+    mine: {
+      name: 'Северный рудник', w: 42, h: 38, ground: ['rubble_ground', 'dirt_tracks', 'ruined_concrete_yard'], groundW: [3, 3, 2], base: '#4a4640',
+      entry: { x: 21, y: 34 },
+      exits: [{ x0: 16, y0: 36, x1: 26, y1: 37 }],
+      desc: 'Карьер у подножия холмов. Колонна гонит сюда пленных добывать руду для брони. Скрип вагонеток и окрики надсмотрщиков.',
+      objects: [
+        ['gantry_crane', 6, 4, { fw: 5, fh: 4, oy: 8 }], ['silo', 30, 3, { fw: 3, fh: 3, oy: 6 }], ['boxcar', 15, 6, { fw: 4, fh: 3, oy: 6, name: 'Вагонетка с рудой' }],
+        ['rocks_big', 22, 4, {}], ['rocks_big', 36, 10, {}], ['rocks_big', 2, 14, {}], ['rocks', 12, 13, {}], ['rocks2', 26, 12, {}], ['city_rubble', 33, 18, {}],
+        ['forklift', 20, 14, { fw: 2, fh: 2 }], ['pipes_stack', 9, 20, {}], ['cable_barrel', 29, 22, {}],
+        ['fence_bars', 32, 26, { fw: 4, fh: 1, interact: 'cage' }], ['fence_bars', 36, 26, { fw: 3, fh: 1 }],
+        ['mil_tent', 5, 26, { fw: 4, fh: 3, oy: 6, name: 'Палатка надсмотрщиков' }], ['mil_crates', 12, 28, { name: 'Ящики надсмотрщиков', container: true, lock: 30, items: [['ammo762', 15], ['medkit', 1], ['food', 2]], caps: 40 }],
+        ['mil_lamp', 18, 22, {}], ['floodlight', 26, 30, {}], ['tree_dead', 40, 34, {}], ['tree_dead2', 1, 33, {}],
+      ],
+      npcs: [['overseer', 22, 24, { wander: 2 }], ['b_soldier', 14, 18, { wander: 2 }], ['b_soldier', 27, 17, { wander: 2 }], ['b_soldier', 31, 31, {}],
+        ['miron', 34, 29, {}], ['miner', 32, 30, {}], ['miner', 36, 30, {}]],
+    },
+    bastion: {
+      name: 'Бастион «Сталь»', w: 46, h: 40, ground: ['ruined_concrete_yard', 'broken_pavement', 'cracked_road'], groundW: [4, 2, 1], base: '#45453f',
+      entry: { x: 23, y: 36 },
+      exits: [{ x0: 18, y0: 38, x1: 28, y1: 39 }],
+      desc: 'Родина Стальной Колонны: бетонные стены, танки в капонирах, на мачте — флаг с шестернёй. Здесь собирают армию для похода на юг.',
+      objects: [
+        ['mil_bunker_door', 21, 4, { fw: 3, fh: 3, oy: 6, interact: 'bastion_door' }],
+        ['mil_hq', 8, 3, { fw: 9, fh: 7, oy: 10, name: 'Казармы' }], ['mil_hangar', 30, 4, { fw: 8, fh: 6, oy: 8, name: 'Ангар' }],
+        ['mil_tank', 6, 15, { fw: 5, fh: 4, oy: 6 }], ['mil_tank', 34, 15, { fw: 5, fh: 4, oy: 6 }], ['mil_btr', 20, 17, { fw: 5, fh: 3, oy: 6 }],
+        ['mil_missile', 12, 24, { fw: 6, fh: 4, oy: 6 }], ['mil_aa', 32, 24, { fw: 4, fh: 3, oy: 6 }], ['mil_radar', 40, 3, { fw: 4, fh: 4, oy: 6 }],
+        ['mil_tower', 3, 30, { fw: 3, fh: 3, oy: 6 }], ['mil_tower', 40, 30, { fw: 3, fh: 3, oy: 6 }], ['mil_checkpoint', 21, 31, { fw: 4, fh: 3, oy: 6, name: 'КПП Бастиона' }],
+        ['mil_sandwall', 8, 33, { fw: 4, fh: 1 }], ['mil_sandwall', 33, 33, { fw: 4, fh: 1 }], ['mil_sandwall', 17, 12, { fw: 4, fh: 1 }], ['mil_sandwall', 26, 12, { fw: 4, fh: 1 }],
+        ['mil_crates', 28, 21, { name: 'Ящики снабжения', container: true, items: [['ammo762', 20], ['medkit', 1]] }], ['mil_lamp', 18, 26, {}], ['mil_lamp', 28, 26, {}], ['floodlight', 23, 9, {}],
+      ],
+      npcs: [['b_soldier', 20, 28, {}], ['b_soldier', 27, 28, {}], ['b_soldier', 12, 20, { wander: 2 }], ['b_soldier', 31, 20, { wander: 2 }], ['b_soldier', 23, 14, { wander: 2 }]],
+    },
+    bastion_hall: {
+      name: 'Зал маршала', w: 26, h: 20, interior: true, ground: ['ruined_concrete_yard', 'broken_pavement'], groundW: [3, 1], base: '#25262a',
+      wallColor: [96, 98, 104], entry: { x: 13, y: 17 },
+      exits: [{ x0: 11, y0: 19, x1: 15, y1: 19, to: 'bastion', at: { x: 22, y: 9 }, label: 'НАРУЖУ' }],
+      desc: 'Штабной зал под бетоном. Карта пустоши во всю стену, стрелки походов ведут на юг — к Ручью и «Рассвету».',
+      objects: [
+        ['mil_crate_pile', 18, 3, { interact: 'armory' }], ['mil_crates', 21, 4, {}], ['mil_ammo', 15, 3, {}],
+        ['mil_locker', 3, 2, { name: 'Сейф маршала', container: true, lock: 60, items: [['col_armor', 1], ['ak', 1], ['medkit', 3]], caps: 400 }],
+        ['elec_cabinet', 8, 2, { interact: 'march_map' }], ['transformer', 3, 11, { fw: 3, fh: 3, oy: 6 }], ['barrels', 21, 13, {}], ['concrete_blocks', 9, 10, {}],
+      ],
+      npcs: [['borey', 13, 8, {}], ['b_soldier', 8, 13, {}], ['b_soldier', 18, 13, {}], ['b_soldier', 13, 4, {}]],
+    },
     oasis: {
       name: 'Оазис', w: 40, h: 38, ground: ['overgrown_grassland', 'dirt_tracks', 'rubble_ground'], groundW: [3, 4, 1], base: '#6b5a3a',
       entry: { x: 20, y: 34 },
@@ -1016,7 +1108,7 @@ window.DATA = (function () {
       name: 'Ржавый мост', w: 36, h: 30, ground: ['cracked_road', 'dirt_tracks', 'rubble_ground', 'overgrown_grassland'], groundW: [2, 3, 2, 2], base: '#4f4634',
       river: { y0: 12, y1: 17, bx0: 15, bx1: 20 },
       entry: { x: 18, y: 26 }, entryEast: { x: 18, y: 3 },
-      exits: [{ x0: 13, y0: 28, x1: 23, y1: 29, world: { c: 23, r: 5 } }, { x0: 13, y0: 0, x1: 23, y1: 1, world: { c: 25, r: 5 }, label: 'НА ВОСТОК' }],
+      exits: [{ x0: 13, y0: 28, x1: 23, y1: 29, world: { c: 23, r: 9 } }, { x0: 13, y0: 0, x1: 23, y1: 1, world: { c: 25, r: 9 }, label: 'НА ВОСТОК' }],
       desc: 'Старый мост через реку. Единственная переправа на восток — и её держат сборщики пошлины.',
       objects: [
         ['checkpoint2', 15, 18, { fw: 3, fh: 1, oy: 4, gate: 'bridgeOpen', name: 'Шлагбаум сборщиков' }],
@@ -1270,6 +1362,10 @@ window.DATA = (function () {
   };
   const WORLD = {
     rows: [
+      'yyyyssrrsssggdsssrrxxsddvdssrrdd',
+      'yyysssrxxsgggdssrrrxsdddvddsrrsd',
+      'yyyyssrrsggdgdsssrrssddsvdssddsd',
+      'yyysyssdsgggddssdrrsdsdsvdddssdd',
       'yssyyyyyyssdddggsrrxxccdvggdssdd',
       'yyyyysysyddsgggsdrxxccsdvgddsrrd',
       'syyyyyyyddbddgggsrrxcccsvddbbbdd',
@@ -1289,21 +1385,24 @@ window.DATA = (function () {
     terrain: { v: 'Река', y: 'Пустыня', d: 'Пустошь', s: 'Камни', g: 'Пустошь', b: 'Дорога', w: 'Дорога', a: 'Дорога', m: 'Болото', r: 'Руины', x: 'Руины', c: 'Руины', o: 'Руины' },
     encounter: { v: 0, y: 0.10, d: 0.12, s: 0.12, g: 0.12, b: 0.06, w: 0.06, a: 0.06, m: 0.18, r: 0.20, x: 0.20, c: 0.18, o: 0.15 },
     sites: [
-      { id: 'oasis', x: 2, y: 6, name: 'Оазис', sprite: 'tree_willow', known: false },
-      { id: 'solar', x: 1, y: 11, name: 'Солнечная станция', sprite: 'transformer_big', known: false },
-      { id: 'camp', x: 10, y: 8, name: 'Ржавый Ручей', sprite: 'booth', known: true },
-      { id: 'post', x: 19, y: 2, name: 'Блокпост 17', sprite: 'mil_tower', known: false },
-      { id: 'zarya', x: 21, y: 9, name: 'Промзона «Заря»', sprite: 'brick_factory', known: false },
-      { id: 'hive', x: 15, y: 13, name: 'Улей', sprite: 'transformer_rad', known: false },
-      { id: 'fort', x: 15, y: 13, name: 'Южный форт', sprite: 'mil_tower', known: false },
-      { id: 'observatory', x: 18, y: 0, name: 'Обсерватория', sprite: 'mil_radar', known: false },
-      { id: 'city', x: 8, y: 10, name: 'Старый город', sprite: 'city_panel_tower', known: false },
-      { id: 'forest', x: 13, y: 2, name: 'Мёртвый лес', sprite: 'tree_spruce', known: false },
-      { id: 'bridge', x: 24, y: 5, name: 'Ржавый мост', sprite: 'checkpoint2', known: false },
-      { id: 'rassvet', x: 28, y: 3, name: 'Станция «Рассвет»', sprite: 'mil_radar', known: false },
-      { id: 'object9', x: 29, y: 9, name: 'Объект 9', sprite: 'mil_bunker_door', known: false },
+      { id: 'mine', x: 14, y: 1, name: 'Северный рудник', sprite: 'gantry_crane', known: false },
+      { id: 'bastion', x: 19, y: 0, name: 'Бастион «Сталь»', sprite: 'mil_hq', known: false },
+      { id: 'oasis', x: 2, y: 10, name: 'Оазис', sprite: 'tree_willow', known: false },
+      { id: 'solar', x: 1, y: 15, name: 'Солнечная станция', sprite: 'transformer_big', known: false },
+      { id: 'camp', x: 10, y: 12, name: 'Ржавый Ручей', sprite: 'booth', known: true },
+      { id: 'post', x: 19, y: 6, name: 'Блокпост 17', sprite: 'mil_tower', known: false },
+      { id: 'zarya', x: 21, y: 13, name: 'Промзона «Заря»', sprite: 'brick_factory', known: false },
+      { id: 'hive', x: 15, y: 17, name: 'Улей', sprite: 'transformer_rad', known: false },
+      { id: 'fort', x: 15, y: 17, name: 'Южный форт', sprite: 'mil_tower', known: false },
+      { id: 'observatory', x: 18, y: 4, name: 'Обсерватория', sprite: 'mil_radar', known: false },
+      { id: 'city', x: 8, y: 14, name: 'Старый город', sprite: 'city_panel_tower', known: false },
+      { id: 'forest', x: 13, y: 6, name: 'Мёртвый лес', sprite: 'tree_spruce', known: false },
+      { id: 'bridge', x: 24, y: 9, name: 'Ржавый мост', sprite: 'checkpoint2', known: false },
+      { id: 'rassvet', x: 28, y: 7, name: 'Станция «Рассвет»', sprite: 'mil_radar', known: false },
+      { id: 'object9', x: 29, y: 13, name: 'Объект 9', sprite: 'mil_bunker_door', known: false },
     ],
-    start: { x: 10, y: 8 },
+    start: { x: 10, y: 12 },
+    northShift: 4,
     westShift: 6,
   };
 
@@ -1324,6 +1423,11 @@ window.DATA = (function () {
       3: 'Объект 9: проникните в хранилище (код — у радиста Кузьмы, ключ-карта — у охраны, или Взлом 60) и разберитесь со складом «З-2».',
       4: 'Вернитесь к коменданту Вере на станцию «Рассвет».' } },
     mast: { title: 'Молчащая антенна', giver: 'kuzma', steps: { 1: 'Почините радиомачту «Рассвета»: нужно 3 хлама и Интеллект 6 или Взлом 35.', 2: 'Антенна работает — сообщите радисту Кузьме.' } },
+    north: { title: 'Глава 7: Север', giver: 'kuzma', steps: {
+      1: 'С севера, из-за обсерватории, идёт сама Стальная Колонна — её родина, Бастион «Сталь». Разведайте северный край (север карты мира), начните с рудника.',
+      2: 'На Северном руднике Колонна держит пленных. Освободите их (ключ у надсмотрщика или Взлом 45) — шахтёры знают тайный ход в Бастион.',
+      3: 'Проникните в Бастион «Сталь» (тайный ход шахтёров или Взлом 70) и остановите поход на юг: маршал Борей в зале под землёй.',
+      4: 'Вернитесь к радисту Кузьме на «Рассвет».' } },
     west: { title: 'Глава 6: Запад', giver: 'kuzma', steps: {
       1: 'Из-за Великой пустыни на западе пришёл сигнал о помощи: Оазис умирает от жажды. Запаситесь водой — в пустыне без неё мучает жажда — и найдите Оазис (запад карты).',
       2: 'Хранительница Ясна: пустынники атамана Зноя сняли сердечник насоса и увезли на Солнечную станцию (юго-запад). Верните его — силой, хитростью или словом.',
@@ -1486,6 +1590,23 @@ window.DATA = (function () {
         if (!g.hasItem('explosive')) return 'Нужна взрывчатка (интендант Палыч на «Рассвете»).';
         R.removeItem(g.player, 'explosive', 1); SND.play('shot', { weapon: 'shotgun' }); g.southEnd('hive');
         return 'Взрыв разносит нарост в клочья. По всему посёлку обращённые падают на колени и затихают.'; } }] },
+    cage: { name: 'Клетка с пленными', look: 'Решётка на цепях. За ней — измождённые шахтёры.', lookXp: 10,
+      actions: [{ label: 'Открыть клетку (ключ надсмотрщика или Взлом 45)', if: g => !g.flags.minersFree, act: g => {
+        if (G.loc.actors.some(a => a.faction === 'bastion' && a.hostile && !a.dead && !a.gone && ENG.dist(a, g.player) < 8)) return 'Охрана рядом — сначала разберитесь с ней.';
+        const pick = R.skill(g.player, 'lockpick') + (R.count(g.player, 'lockpicks') ? 20 : 0);
+        if (!g.hasItem('mine_key') && pick < 45) return 'Замок не поддаётся: нужен ключ надсмотрщика или Взлом 45.';
+        g.freeMiners(); SND.play('lock_open');
+        return 'Решётка со скрипом отъезжает. Шахтёры обнимают вас и уходят по тропе на юг.'; } }] },
+    bastion_door: { name: 'Нижние ворота Бастиона', look: 'Тяжёлая гермодверь под штабом. Тайный ход шахтёров выходит прямо к ней.', lookXp: 10,
+      enter: { to: 'bastion_hall', at: { x: 13, y: 17 }, label: 'Войти в зал маршала', code: 'minersFree', codeMsg: 'Вы проходите штольней шахтёров и оказываетесь за воротами.', lock: 70, text: 'Ворота заперты. Нужен тайный ход шахтёров с рудника или Взлом 70.' } },
+    march_map: { name: 'Карта походов', look: 'Карта пустоши. Красные стрелки — на Ручей, «Рассвет», Оазис.', lookXp: 15 },
+    armory: { name: 'Арсенал Бастиона', look: 'Штабеля ящиков: патроны, броня, взрывчатка. Без этого похода не будет.', lookXp: 10,
+      actions: [{ label: 'Взорвать арсенал (взрывчатка)', if: g => !g.flags.northEnd, act: g => {
+        if (!g.hasItem('explosive')) return 'Нужна взрывчатка.';
+        R.removeItem(g.player, 'explosive', 1); SND.play('shot', { weapon: 'shotgun' }); setTimeout(() => SND.play('shot', { weapon: 'rifle' }), 300);
+        g.northEnd('sabotage');
+        for (const a of G.loc.actors) if (a.faction === 'bastion' && !a.dead) { a.hostile = true; a.alerted = true; }
+        return 'Фитиль шипит... Взрыв сотрясает зал, ящики горят. Тревога! Пора уходить!'; } }] },
     pump: { name: 'Насос Оазиса', look: 'Старый насос над колодцем. Кожух снят, внутри — пустое гнездо под сердечник.', lookXp: 10,
       actions: [{ label: 'Поставить сердечник', if: g => g.hasItem('pump_core'), act: g => { g.westFinish(); return 'Сердечник встаёт на место. Насос кашляет, стонет — и в чашу колодца ударяет струя воды.'; } }] },
     obs_dome: { name: 'Купол обсерватории', look: 'Под куполом гудят насосы. На двери — кодовый замок и знак шестерни.', lookXp: 10,
@@ -1556,6 +1677,10 @@ window.DATA = (function () {
     { id: 'lockpicks', n: 1, need: [['junk', 2]], caps: 10, desc: 'Набор отмычек из пружин и спиц.' },
     { id: 'medkit', n: 1, need: [['bandage', 2], ['water', 1]], caps: 15, desc: 'Бинты, вода и что-то покрепче из запасов Бориса.' },
     { id: 'leather', n: 1, need: [['jacket', 1], ['junk', 4]], caps: 40, desc: 'Усилить кожаную куртку пластинами — получится кожаная броня.' },
+    { id: 'wolf_armor', n: 1, need: [['wolf_pelt', 4], ['junk', 2]], caps: 30, desc: 'Сшить броню из волчьих шкур: тёплая, лёгкая, хорошо держит когти.' },
+    { id: 'chitin_armor', n: 1, need: [['roach_shell', 8], ['junk', 3]], caps: 40, desc: 'Наклепать хитиновые пластины тараканов на кожаную основу.' },
+    { id: 'chitin_knife', n: 1, need: [['roach_shell', 3], ['knife', 1]], caps: 15, desc: 'Заточенный хитиновый клинок на рукояти ножа. Острее стали.' },
+    { id: 'rat_stew', n: 2, need: [['rat_tail', 3], ['water', 1]], caps: 0, desc: 'Похлёбка из крысиных хвостов. Звучит мерзко, лечит хорошо.' },
   ];
 
   return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, INTERACT, PERKS, AIM, RECIPES };

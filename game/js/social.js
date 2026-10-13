@@ -159,6 +159,7 @@ window.SOC = (function () {
   S.onEv = function (m) {
     const from = m.from, name = m.fromName || nameOf(from);
     if ((m.kind === 'party_contract' || m.kind === 'party_prog') && S.onContractEv(m)) return;
+    if (String(m.kind).startsWith('party_cv') && S.party[m.from] && onCaravanEv(m)) return;
     switch (m.kind) {
       case 'trade_req':
         if (S.trade || G.combat || UI.modalOpen()) { send(from, { kind: 'trade_ans', ok: false, busy: true }); return; }
@@ -316,6 +317,68 @@ window.SOC = (function () {
     el.innerHTML = `<b>КОНТРАКТ</b> ${d.title}: ${Math.min(c.have, d.need)}/${d.need}`;
   }
   S.renderContract = renderContract;
+
+  // ---------- совместный караван ----------
+  S.startPartyCaravan = function (from, route, invest, guards) {
+    const p = G.player, cost = invest + guards * 25;
+    if (G.flags.caravan) return 'Ваш караван уже в пути.';
+    if (S.cvPending) return 'Предложение уже отправлено.';
+    if (p.caps < cost) return `Нужно ${cost} крышек.`;
+    p.caps -= cost;
+    const id = Date.now() + '_' + NET.id;
+    S.cvPending = { id, from, route, guards, shares: { [NET.id]: invest } };
+    bcast({ kind: 'party_cvoffer', id, cfrom: from, cto: route.to, hours: route.hours, guards, lead: invest }); // не «to»/«from» — это служебные поля сообщения
+    G.log('Предложение совместного каравана отправлено отряду.', 'sys');
+    setTimeout(finishPartyCaravan, 15000);
+    return null;
+  };
+  function finishPartyCaravan() {
+    const pc = S.cvPending;
+    if (!pc) return;
+    S.cvPending = null;
+    const total = Object.values(pc.shares).reduce((a, b) => a + b, 0);
+    const q = G.caravanQuote(pc.route, total, pc.guards);
+    const cv = { id: pc.id, party: true, from: pc.from, to: pc.route.to, invest: total, guards: pc.guards, eta: G.time + pc.route.hours * 60, payout: q.profit, risk: q.risk, shares: pc.shares };
+    G.flags.caravan = cv; G.setQuest('caravan', 1);
+    bcast({ kind: 'party_cvstart', cv });
+    G.log(`Караван отряда ушёл: вклад ${total} крышек от ${Object.keys(pc.shares).length} участников, риск ${q.risk}%.`, 'good');
+    SND.play('cash');
+  }
+  function onCaravanEv(m) {
+    const from = m.from;
+    if (m.kind === 'party_cvoffer') {
+      if (G.flags.caravan) { send(from, { kind: 'party_cvjoin', id: m.id, amount: 0 }); return true; }
+      const p = G.player;
+      UI.openModal('prompt', `<div class="modal" style="width:min(460px,94vw)"><h2>Совместный караван</h2>
+        <div class="screen" style="margin-bottom:10px"><b>${nameOf(from)}</b> снаряжает караван «${DATA.LOCATIONS[m.cfrom].name}» → «${DATA.LOCATIONS[m.cto].name}» (${m.hours} ч) и вложил ${m.lead} крышек. Сколько вложите вы? Прибыль делится по долям. У вас: ${p.caps} крышек.</div>
+        <div class="cols" style="justify-content:flex-end;flex-wrap:wrap" id="cvj">${[100, 250, 500].map(n => `<button data-n="${n}" ${p.caps < n ? 'disabled' : ''}>${n}</button>`).join('')}<button data-n="0">Отказаться</button></div></div>`, root => {
+        root.querySelector('#cvj').onclick = e => {
+          const b = e.target.closest('[data-n]'); if (!b || b.disabled) return;
+          const n = +b.dataset.n;
+          if (n) { G.player.caps -= n; G.flags.cvPendingPay = { id: m.id, n }; }
+          send(from, { kind: 'party_cvjoin', id: m.id, amount: n });
+          UI.closeModal(); UI.refresh();
+        };
+      });
+      return true;
+    }
+    if (m.kind === 'party_cvjoin') {
+      if (S.cvPending && S.cvPending.id === m.id) { if (m.amount > 0) { S.cvPending.shares[from] = m.amount; G.log(`${nameOf(from)} вкладывает ${m.amount} крышек в караван.`, 'sys'); } }
+      else if (m.amount > 0) send(from, { kind: 'party_cvrefund', id: m.id, amount: m.amount });
+      return true;
+    }
+    if (m.kind === 'party_cvstart') {
+      const cv = m.cv, mine = cv.shares[NET.id];
+      if (mine) { G.flags.caravan = cv; G.setQuest('caravan', 1); G.flags.cvPendingPay = null; G.log(`Караван отряда в пути. Ваша доля: ${mine} из ${cv.invest} крышек.`, 'good'); }
+      return true;
+    }
+    if (m.kind === 'party_cvrefund') {
+      G.player.caps += m.amount; G.flags.cvPendingPay = null; G.log(`Караван ушёл без вас — возвращено ${m.amount} крышек.`, 'warn'); UI.refresh();
+      return true;
+    }
+    return false;
+  }
+  S.onCaravanEv = onCaravanEv;
 
   // ---------- панель отряда ----------
   function renderParty() {

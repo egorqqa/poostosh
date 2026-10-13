@@ -71,7 +71,7 @@ window.WMAP = (function () {
   const siteState = (G, id) => (G.world.sites[id] = G.world.sites[id] || { known: !!(WORLD.sites.find(s => s.id === id) || {}).known });
   M.siteState = siteState;
   M.initState = function () {
-    const st = { c: WORLD.start.x, r: WORLD.start.y, path: [], revealed: {}, sites: {}, mapV: 2 };
+    const st = { c: WORLD.start.x, r: WORLD.start.y, path: [], revealed: {}, sites: {}, mapV: 3 };
     for (const s of WORLD.sites) st.sites[s.id] = { known: s.known };
     const p = center(st.c, st.r); st.px = p.x; st.py = p.y;
     return st;
@@ -88,13 +88,21 @@ window.WMAP = (function () {
   // старые сохранения: карта расширилась на запад — сдвигаем координаты
   M.migrate = function (G) {
     const W = G.world;
-    if (!W || W.mapV >= 2) return;
+    if (!W || W.mapV >= 3) return;
+    if (W.mapV === 2) {  // карта выросла на север: сдвиг рядов
+      const n = WORLD.northShift || 0, rv = {};
+      W.r += n;
+      for (const k of Object.keys(W.revealed || {})) { const [c, r] = k.split(',').map(Number); rv[c + ',' + (r + n)] = true; }
+      W.revealed = rv; W.path = []; W.mapV = 3;
+      const p = center(W.c, W.r); W.px = p.x; W.py = p.y;
+      return;
+    }
     const s = WORLD.westShift || 0;
     W.c += s; if (W.prevC != null) W.prevC += s;
     const rv = {};
     for (const k of Object.keys(W.revealed || {})) { const [c, r] = k.split(',').map(Number); rv[(c + s) + ',' + r] = true; }
     W.revealed = rv; W.path = []; W.mapV = 2;
-    const p = center(W.c, W.r); W.px = p.x; W.py = p.y;
+    M.migrate(G);
   };
   M.enter = function (G) {
     M.migrate(G);

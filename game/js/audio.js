@@ -129,6 +129,9 @@ window.SND = (function () {
     fort: { root: 55, fifth: 1.335, wind: 0.3, ping: 0.7, pingNotes: [392, 466] },
     oasis: { root: 73.4, fifth: 1.498, wind: 0.22, ping: 1, pingNotes: [587, 698, 880] },
     solar: { root: 58.3, fifth: 1.335, wind: 0.34, ping: 0.7, pingNotes: [466, 523] },
+    mine: { root: 41.2, fifth: 1.335, wind: 0.3, ping: 1, pingNotes: [330, 392] },
+    bastion: { root: 49, fifth: 1.335, wind: 0.36, ping: 0.8, pingNotes: [349, 415, 523] },
+    bastion_hall: { root: 36.7, fifth: 1.06, wind: 0.04, ping: 1, pingNotes: [523, 554] },
     wild: { root: 65.4, fifth: 1.498, wind: 0.3, ping: 0.6, pingNotes: [392, 523] },
     world: { root: 82.4, fifth: 1.498, wind: 0.2, ping: 0.7, pingNotes: [494, 659, 740] },
   };

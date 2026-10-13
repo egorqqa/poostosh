@@ -184,6 +184,8 @@ window.WORLD_API = (function () {
     if (id === 'rassvet' && G.flags.southDone === 'disband') for (let i = 0; i < 2; i++) { const a = R.makeNpc('rem_soldier', 22 + i * 3, 30, {}); a.id = 'rem_guard_' + i; a.name = 'Бывший боец Колонны'; a.faction = 'rassvet'; a.hostile = false; a.dialog = 'rguard'; Object.assign(a, { rx: a.x, ry: a.y, path: [], moving: false, walkPhase: 0, aimT: 0, hitFlash: 0 }); L.actors.push(a); }
     if (id === 'solar' && G.flags.westEnd === 'deal') L.actors.forEach(a => { if (a.faction === 'nomads') a.hostile = false; });
     if (id === 'solar' && (G.flags.westEnd === 'storm' || G.flags.westEnd === 'stolen')) L.actors.forEach(a => { if (a.faction === 'nomads' && G.flags.westEnd === 'storm') a.gone = true; });
+    if (id === 'mine' && G.flags.minersFree) L.actors.forEach(a => { if (a.faction === 'miners') a.gone = true; });
+    if ((id === 'bastion' || id === 'bastion_hall' || id === 'mine') && (G.flags.northEnd === 'peace' || G.flags.northEnd === 'heir' || G.flags.columnEnd === 'joined')) L.actors.forEach(a => { if (a.faction === 'bastion') a.hostile = false; });
     if (id === 'city') {
       const k = L.actors.find(a => a.tpl === 'klyk_city');
       if (k && G.flags.klykDead) k.name = 'Шрам';
@@ -234,6 +236,7 @@ window.WORLD_API = (function () {
     if (id === 'zarya_lab' && G.q('zarya') >= 1 && G.q('zarya') < 3) G.setQuest('zarya', 3);
     if (id === 'object9' && G.q('thread') === 2) G.setQuest('thread', 3);
     if ((id === 'hive' || id === 'fort') && G.q('south') === 1) G.setQuest('south', 2);
+    if (id === 'mine' && G.q('north') === 1) G.setQuest('north', 2);
     if (id === 'oasis' && G.q('west') === 1) G.log('Вы добрались до Оазиса. Найдите Хранительницу Ясну.', 'good');
     if (id === 'city' && G.q('column') === 1) G.setQuest('column', 2);
     if (id === 'observatory' && G.q('obs') === 1) G.setQuest('obs', 2);

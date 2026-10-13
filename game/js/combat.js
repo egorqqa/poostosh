@@ -303,6 +303,7 @@ window.COMBAT = (function () {
     if (a.tpl === 'klyk') G.flags.klykDead = true;
     if (a.tpl === 'marauder') G.flags.marauderKilled = true;
     if (a.tpl === 'mytar') G.openBridge();
+    if (a.tpl === 'borey' && !G.flags.northEnd) G.northEnd('killed');
     if (a.tpl === 'zno' && !G.flags.westEnd) { G.flags.westEnd = 'storm'; if (G.q('west') === 2) G.log('Атаман пал. Сердечник — на складе пустынников.', 'good'); }
     const cv = G.flags.caravan;
     if (cv && cv.escort && cv.inFight === G.loc.id && !G.loc.actors.some(x => x.hostile && !x.dead && !x.gone && x !== a)) setTimeout(() => G.caravanDone(true, 'Нападение отбито, караван дошёл!'), 400);
