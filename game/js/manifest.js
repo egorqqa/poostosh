@@ -881,5 +881,41 @@ window.ASSET_MANIFEST = {
 "src": "assets/tiles/hex_worn_asphalt_hex.png",
 "w": 104,
 "h": 100
+},
+"gun_pistol": {
+"src": "assets/chars/pl_pistol.png",
+"w": 600,
+"h": 896,
+"fw": 150,
+"fh": 112,
+"ax": 75,
+"ay": 106,
+"walk": 2,
+"aim": 2,
+"fire": 3
+},
+"gun_rifle": {
+"src": "assets/chars/pl_rifle.png",
+"w": 750,
+"h": 896,
+"fw": 150,
+"fh": 112,
+"ax": 75,
+"ay": 106,
+"walk": 3,
+"aim": 3,
+"fire": 4
+},
+"gun_ak": {
+"src": "assets/chars/pl_ak.png",
+"w": 1200,
+"h": 896,
+"fw": 150,
+"fh": 112,
+"ax": 75,
+"ay": 106,
+"walk": 6,
+"aim": 6,
+"fire": 7
 }
 };

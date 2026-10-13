@@ -94,7 +94,20 @@ window.R = (function () {
   }
   const overloaded = a => weight(a) > carryMax(a);
 
-  function weaponOf(a) { return ITEMS[a.weapon || 'fists']; }
+  // модификации оружия (верстак): прицел, магазин, глушитель, заточка
+  const WMOD_MARK = { scope: 'П', mag: 'М', sil: 'Г', sharp: 'З' };
+  function weaponOf(a) {
+    const id = a.weapon || 'fists', w = ITEMS[id], m = a.wmods && a.wmods[id];
+    if (!m || !w) return w;
+    const o = { ...w };
+    if (m.scope && !w.melee) { o.range = w.range + 2; o.aim = 10; }
+    if (m.mag && w.mag) o.mag = Math.round(w.mag * 1.5);
+    if (m.sil && !w.melee) o.silent = true;
+    if (m.sharp && w.melee) o.dmg = [w.dmg[0] + 2, w.dmg[1] + 2];
+    const marks = Object.keys(WMOD_MARK).filter(k => m[k]).map(k => WMOD_MARK[k]).join('');
+    if (marks) o.name = `${w.name} [${marks}]`;
+    return o;
+  }
 
   // ---- торговля ----
   function buyMult(p, discount = 0) { return Math.max(1.05, 2.2 - skill(p, 'barter') * 0.01 - p.stats.cha * 0.04 - discount - (has(p, 'trader') ? 0.15 : 0)); }

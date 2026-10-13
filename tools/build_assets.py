@@ -458,6 +458,8 @@ def main():
         manifest[name] = {"src": f"assets/sprites/{name}.png", "w": im.width, "h": im.height}
         print(name, im.size)
     build_soldier(manifest)
+    import build_guns
+    build_guns.build(manifest)
     build_rat(manifest)
     build_wolf(manifest)
     build_roach(manifest)

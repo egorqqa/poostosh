@@ -410,6 +410,46 @@ window.WMAP = (function () {
       ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - tw / 2, p.y - 66, tw, 16);
       ctx.fillStyle = '#9dff8a'; ctx.fillText(txt, p.x, p.y - 54);
     }
+    // вторжение: пульсирующий знак над поселением
+    const inv = G.flags.invasion;
+    if (inv && !inv.done) {
+      const s = WORLD.sites.find(x => x.id === inv.loc);
+      if (s) {
+        const p = center(s.x, s.y), k = 1 + Math.sin(t * 6) * 0.15;
+        ctx.strokeStyle = 'rgba(255,70,50,0.9)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 40 * k, 0, Math.PI * 2); ctx.stroke();
+        ctx.font = 'bold 18px Consolas, monospace'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#ff5a3c'; ctx.fillText('⚠', p.x, p.y - 44);
+        const hrs = Math.max(0, Math.ceil((inv.until - G.time) / 60));
+        ctx.font = 'bold 11px Consolas, monospace';
+        ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - 50, p.y - 82, 100, 15);
+        ctx.fillStyle = '#ff8a6a'; ctx.fillText(`ВТОРЖЕНИЕ · ${hrs} ч`, p.x, p.y - 71);
+      }
+    }
+    // караван в пути: значок движется от поселения к цели
+    const cv = G.flags.caravan;
+    if (cv && !cv.escort) {
+      const a = WORLD.sites.find(x => x.id === cv.from), b = WORLD.sites.find(x => x.id === cv.to);
+      if (a && b) {
+        const pa = center(a.x, a.y), pb = center(b.x, b.y);
+        const total = cv.eta - (cv.start != null ? cv.start : cv.eta - 600);
+        const k = Math.max(0, Math.min(1, 1 - (cv.eta - G.time) / Math.max(1, total)));
+        // туда и обратно: первая половина — путь к цели, вторая — возвращение
+        const u = k < 0.5 ? k * 2 : 2 - k * 2;
+        const x = pa.x + (pb.x - pa.x) * u, y = pa.y + (pb.y - pa.y) * u;
+        ctx.setLineDash([3, 7]); ctx.strokeStyle = 'rgba(240,180,60,0.45)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke(); ctx.setLineDash([]);
+        const bob = Math.sin(t * 4) * 2;
+        ctx.fillStyle = '#f0b43c'; ctx.strokeStyle = '#3a2408'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.rect(x - 9, y - 7 + bob, 18, 11); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#3a2408'; ctx.beginPath(); ctx.arc(x - 5, y + 5 + bob, 3, 0, Math.PI * 2); ctx.arc(x + 5, y + 5 + bob, 3, 0, Math.PI * 2); ctx.fill();
+        const hrs = Math.max(0, Math.ceil((cv.eta - G.time) / 60));
+        ctx.font = 'bold 11px Consolas, monospace'; ctx.textAlign = 'center';
+        const txt = `${cv.party ? 'Караван отряда' : 'Караван'} · ${hrs} ч`, tw = ctx.measureText(txt).width + 8;
+        ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(x - tw / 2, y - 26 + bob, tw, 15);
+        ctx.fillStyle = '#ffd080'; ctx.fillText(txt, x, y - 15 + bob);
+      }
+    }
     // цель из журнала заданий
     if (W.target) {
       const s = WORLD.sites.find(x => x.id === W.target);

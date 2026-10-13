@@ -246,7 +246,8 @@
     if (a.dead || a.hostile || a.isRemote) return null;
     const q = G.q, p = G.player;
     switch (a.tpl) {
-      case 'mihalych': return (G.hasItem('meds') && G.quests.meds < 3) || (q('rats') === 1 && R.count(p, 'rat_tail') >= 5) ? '?' : G.quests.meds === 0 || q('rats') === 0 ? '!' : null;
+      case 'mihalych': if (q('finale') === 1 || q('finale') === 3) return '?';
+        return (G.hasItem('meds') && G.quests.meds < 3) || (q('rats') === 1 && R.count(p, 'rat_tail') >= 5) ? '?' : G.quests.meds === 0 || q('rats') === 0 ? '!' : null;
       case 'semyon': return (G.hasItem('samples') && q('zarya') < 9) || (q('pelts') === 1 && R.count(p, 'wolf_pelt') >= 3) ? '?' : q('pelts') === 0 && q('debt') !== 0 ? '!' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
       case 'granit': return q('column') >= 1 && q('column') < 3 ? '!' : q('column') === 4 ? '?' : null;
       case 'klyk_city': return q('column') === 3 ? '!' : null;
@@ -257,7 +258,7 @@
       case 'vera': return q('thread') === 1 ? '!' : q('thread') === 4 && (G.flags.z2Destroyed || G.hasItem('z2_crate')) ? '?' : null;
       case 'lada': return G.flags.ladaFree ? null : '!';
       case 'rzha': return q('south') >= 1 && q('south') < 3 && !G.flags.southDone ? '!' : null;
-      case 'kuzma': return q('obs') === 4 || q('south') === 3 ? '?' : (q('obs') === 9 && q('south') === 0) || (q('south') === 9 && q('west') === 0) || (q('west') === 9 && q('north') === 0) ? '!' : q('north') === 4 ? '?' : q('column') === 9 && q('obs') === 0 ? '!' : q('mast') === 2 ? '?' : q('mast') === 0 || (q('thread') === 9 && q('column') === 0) ? '!' : null;
+      case 'kuzma': return q('obs') === 4 || q('south') === 3 ? '?' : (q('obs') === 9 && q('south') === 0) || (q('south') === 9 && q('west') === 0) || (q('west') === 9 && q('north') === 0) ? '!' : q('north') === 4 ? '?' : q('north') === 9 && q('finale') === 0 ? '!' : q('column') === 9 && q('obs') === 0 ? '!' : q('mast') === 2 ? '?' : q('mast') === 0 || (q('thread') === 9 && q('column') === 0) ? '!' : null;
       case 'palych': return q('thread') >= 2 && q('thread') < 9 && !G.hasItem('explosive') && !G.flags.z2Done && !G.flags.palychExplosive ? '!' : null;
       case 'mitya': return G.hasItem('samples') && !G.flags.mityaCured ? '?' : null;
       case 'mytar': return !G.flags.bridgeOpen && q('thread') >= 1 ? '!' : null;
@@ -309,6 +310,63 @@
   // ---------- после финала: вторжения на поселения ----------
   const INV_TARGETS = ['camp', 'rassvet'];
   G.postGame = () => G.q('obs') === 9;
+  // ---------- глава 8: Совет пустоши ----------
+  // состав орды «Пепел» зависит от всех прежних решений
+  G.finaleWave = function () {
+    const f = G.flags, w = [], help = [];
+    if (f.obsDone === 'dark') w.push(['infected_brute', 'Порченый из облака'], ['infected', 'Обращённый']);
+    if (f.samplesSold) w.push(['z_soldier', 'Наёмник на чужом антидоте']);
+    if (f.northEnd === 'killed' || f.northEnd === 'sabotage') w.push(['b_soldier', 'Мститель Бастиона'], ['b_soldier', 'Мститель Бастиона']);
+    if (f.columnEnd === 'lied' || f.columnEnd === 'exposed') w.push(['col_soldier', 'Отставший боец Колонны']);
+    if (f.westEnd && f.westEnd !== 'deal') w.push(['nomad_raider', 'Налётчик Зноя']);
+    if (f.southDone === 'storm' || f.southDone === 'hive') w.push(['raider', 'Мародёр Пепла']);
+    while (w.length < 4) w.push(['raider', 'Мародёр Пепла']);
+    if (f.northEnd === 'heir') help.push('Стражи Бастиона по вашему приказу держат северную дорогу — часть орды не дошла.');
+    if (f.southDone === 'disband' || f.southDone === 'command') help.push('Бойцы из форта прикрывают фланг.');
+    if (f.westEnd === 'deal') help.push('Пустынники Зноя перехватили отряд налётчиков в песках.');
+    if (f.cureGiven) help.push('Лекарство Семёна сделало своё: в Ручье некому болеть — все на стенах.');
+    const cut = Math.min(help.length, w.length - 3);
+    w.splice(w.length - cut, cut);
+    w.push(['ash_warlord', 'Вожак Пепла']);
+    return { list: w, help };
+  };
+  G.finaleStart = function () {
+    G.setQuest('finale', 2);
+    if (G.loc && G.loc.id === 'camp') WORLD_API.spawnFinale(G);
+  };
+  G.finaleWaveCleared = function () {
+    if (G.q('finale') !== 2) return;
+    G.setQuest('finale', 3);
+    G.log('Вожак Пепла повержен. Орда бежит в пустошь. Поговорите с Михалычем.', 'good');
+    SND.play('quest'); G.giveXP(500);
+    if (G.combat) COMBAT.end(G, 'Штурм отбит!');
+  };
+  G.finaleSpeech = function () {
+    const r = G.rep();
+    return (r >= 50 ? 'Совет решил единогласно. Ты не наш староста — ты больше. Ты тот, кто сшил пустошь обратно. ' : r >= 0 ? 'Совет спорил до хрипоты, но одно признали все: без тебя нас бы уже не было. ' : 'Скажу честно: многие на Совете тебя боятся. Но сегодня ты дрался за Ручей, и это помнят. ')
+      + 'Ворота целы, люди живы. Сядь, выпей. И расскажи — а лучше послушай, что о тебе уже рассказывают у костров.';
+  };
+  G.epilogue = function () {
+    const f = G.flags, r = G.rep(), out = [];
+    out.push(['Ржавый Ручей', f.cureGiven ? 'Лекарство Семёна спасло десятки жизней. Через год у Ручья появилась больница — первая со времён войны.' : f.samplesSold ? 'Образцы «Зари» ушли на сторону, и лихорадка ещё долго гуляла по Ручью. Михалыч так и не простил.' : 'Ручей выстоял. Не богато, не сыто — но выстоял.']);
+    out.push(['Старый город и Колонна', ({ alive: 'Клык жив — бывший главарь осел в Старом городе и, говорят, держит слово.', dead: 'Колонна ушла с вестью о смерти Клыка. Старый город долго не верил, что его оставили в покое.', lied: 'Ложь Гранит запомнил. Колонна ушла, но её разведчики ещё годами кружили у города.', exposed: 'Правда о «З-2» расколола Колонну. Её солдаты разбрелись, и не все — с миром.', joined: 'Вы носили знак Колонны. Одни помнят вас солдатом, другие — тем, кто вовремя ушёл.' })[f.columnEnd] || 'О Колонне в городе говорят шёпотом.']);
+    out.push(['Обсерватория', ({ off: 'Распылитель обесточен. Купол обсерватории снова смотрит в небо — туда водят детей считать звёзды.', boom: 'Купол обсерватории — груда стекла. Зато жёлтого облака больше никто не увидит.', dark: 'Жёлтое облако ушло на юг, и юг ещё долго будет платить за ту ночь. Этот грех не смыть.' })[f.obsDone] || 'Купол молчит.']);
+    out.push(['Юг', ({ hive: 'Улей сгорел, обращённые вымерли. На пепелище посадили картошку — растёт, как ни странно.', disband: 'Бывшие бойцы Колонны стали часовыми «Рассвета». Их дети уже не знают, что такое строй.', command: 'Форт на развилке подчиняется вам. Караваны платят пошлину — небольшую. Пока.', storm: 'Форт взят штурмом. Дорога на юг открыта, хоть и усеяна крестами.' })[f.southDone] || 'О юге вести приходят редко.']);
+    out.push(['Запад', ({ deal: 'Оазис и пустынники Зноя делят воду по уговору. Первый мир в песках за много лет.', bought: 'Сердечник выкуплен. Насос Оазиса стучит, а Зной считает крышки.', stolen: 'Сердечник украден из-под носа у Зноя. Оазис жив, а пустынники до сих пор ищут вора.', storm: 'Атаман Зной пал. Пустынники разбрелись, и пески снова стали ничьими.' })[f.westEnd] || 'Запад молчит.']);
+    out.push(['Север', ({ peace: 'Маршал распустил армию. Бастион «Сталь» стал рынком, куда свозят броню на продажу, а не на войну.', sabotage: 'Арсенал Бастиона взорван. Без патронов поход на юг не состоялся — и уже не состоится.', killed: 'Маршал Борей мёртв. Бастион раздирают споры, но на юг больше никто не смотрит.', heir: 'Бастион «Сталь» — ваш. Северная армия ждёт приказа. Пустошь гадает, каким он будет.' })[f.northEnd] || 'Север затих.']);
+    const comp = G.companion ? `Рядом до конца шёл ${G.companion.name}. ` : '';
+    const runs = f.caravanRuns ? `Ваши караваны прошли ${f.caravanRuns} раз — торговые тропы помнят ваше имя. ` : '';
+    out.push(['Вы', comp + runs + (r >= 50 ? 'У костров вас зовут Хранителем пустоши.' : r >= 0 ? 'У костров вас зовут Странником — тем, кто приходит, когда плохо.' : 'У костров вас зовут Пеплом — и не все в похвалу.') + ` Уровень ${G.player.level}. История окончена — но пустошь живёт дальше.`]);
+    return out;
+  };
+  G.finaleEnd = function () {
+    if (G.q('finale') !== 3) return;
+    G.setQuest('finale', 9);
+    G.reward(1500, 1000, [['medkit', 5]]); G.addRep(30, 'Совет пустоши');
+    G.flags.gameDone = true;
+    G.log('КОНЕЦ ГЛАВЫ 8. История «Пустоши» завершена. Свободная игра продолжается.', 'warn');
+    setTimeout(() => UI.openEpilogue(G.epilogue()), 300);
+  };
   // ---------- глава 7 ----------
   G.freeMiners = function () {
     G.flags.minersFree = true;
@@ -365,7 +423,7 @@
     if (p.caps < cost) return `Нужно ${cost} крышек.`;
     p.caps -= cost;
     const q = G.caravanQuote(route, invest, guards);
-    G.flags.caravan = { from, to: route.to, invest, guards, eta: G.time + route.hours * 60, payout: q.profit, risk: escort ? 0 : q.risk, escort: !!escort };
+    G.flags.caravan = { from, to: route.to, invest, guards, start: G.time, eta: G.time + route.hours * 60, payout: q.profit, risk: escort ? 0 : q.risk, escort: !!escort };
     G.setQuest('caravan', 1);
     SND.play('cash');
     if (escort) {

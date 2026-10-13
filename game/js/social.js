@@ -338,7 +338,7 @@ window.SOC = (function () {
     S.cvPending = null;
     const total = Object.values(pc.shares).reduce((a, b) => a + b, 0);
     const q = G.caravanQuote(pc.route, total, pc.guards);
-    const cv = { id: pc.id, party: true, from: pc.from, to: pc.route.to, invest: total, guards: pc.guards, eta: G.time + pc.route.hours * 60, payout: q.profit, risk: q.risk, shares: pc.shares };
+    const cv = { id: pc.id, party: true, from: pc.from, to: pc.route.to, invest: total, guards: pc.guards, start: G.time, eta: G.time + pc.route.hours * 60, payout: q.profit, risk: q.risk, shares: pc.shares };
     G.flags.caravan = cv; G.setQuest('caravan', 1);
     bcast({ kind: 'party_cvstart', cv });
     G.log(`Караван отряда ушёл: вклад ${total} крышек от ${Object.keys(pc.shares).length} участников, риск ${q.risk}%.`, 'good');

@@ -260,6 +260,9 @@ window.DATA = (function () {
     scav_gun: { name: 'Мусорщик со стволом', tint: 'scav', faction: 'scav', hostile: true,
       stats: { str: 5, per: 6, end: 5, cha: 2, int: 3, agi: 6, luck: 4 }, hp: 22,
       inv: [['ammo9', 8], ['junk', 1]], caps: 12, weapon: 'pistol', skills: { guns: 45 }, xp: 45 },
+    ash_warlord: { name: 'Вожак Пепла', tint: 'boss', faction: 'horde', hostile: true,
+      stats: { str: 8, per: 7, end: 8, cha: 5, int: 5, agi: 7, luck: 6 }, hp: 90,
+      inv: [['ammo762', 30], ['medkit', 2], ['junk', 5]], caps: 300, weapon: 'ak', armor: 'leather', skills: { guns: 75, melee: 70 }, xp: 500 },
     scav_boss: { name: 'Бригадир мусорщиков', tint: 'boss', faction: 'scav', hostile: true,
       stats: { str: 6, per: 7, end: 6, cha: 4, int: 5, agi: 6, luck: 5 }, hp: 40,
       inv: [['ammo762', 12], ['medkit', 1], ['office_key', 1]], caps: 35, weapon: 'rifle', armor: 'leather', skills: { guns: 55 }, xp: 90 },
@@ -275,8 +278,13 @@ window.DATA = (function () {
   // opt: { t, go, end, act, check:{skill,diff}, ok, fail, if, once, xp }
   const DIALOGS = {
     mihalych: {
-      start: g => g.quests.meds === 0 ? 'hello' : g.quests.meds >= 3 ? 'done' : g.hasItem('meds') ? 'return' : 'progress',
+      start: g => g.q('finale') === 1 ? 'fin1' : g.q('finale') === 2 ? 'fin_wait' : g.q('finale') === 3 ? 'fin_end' : g.quests.meds === 0 ? 'hello' : g.quests.meds >= 3 ? 'done' : g.hasItem('meds') ? 'return' : 'progress',
       nodes: {
+        fin1: { text: 'Пришёл всё-таки. Глянь вокруг: старосты, караванщики, люди с «Рассвета» — Совет пустоши впервые за двадцать лет. Все хотят знать, что дальше... Погоди. Слышишь? Часовые бьют тревогу у ворот!',
+          opts: [{ t: '[К воротам!]', act: g => g.finaleStart(), end: true }] },
+        fin_wait: { text: 'Не стой столбом, они уже у ворот! Отобьём — тогда и поговорим.', opts: [{ t: '[В бой]', end: true }] },
+        fin_end: { text: g => g.finaleSpeech(),
+          opts: [{ t: 'Расскажи, что стало с пустошью.', act: g => g.finaleEnd(), end: true }] },
         hello: { text: 'А, новое лицо. Нечасто к нам из пустоши живыми доходят. Я Михалыч, тут вроде как за старшего.',
           opts: [
             { t: 'Слышал, у вас крысы завелись?', if: g => g.q('rats') === 0, go: 'rats' },
@@ -502,6 +510,7 @@ window.DATA = (function () {
             { t: 'Есть новые сигналы?', if: g => g.q('south') === 9 && g.q('west') === 0, go: 'west' },
             { t: 'Что слышно с севера?', if: g => g.q('west') === 9 && g.q('north') === 0, go: 'north' },
             { t: 'Бастион больше не угроза.', if: g => g.q('north') === 4, go: 'north_done' },
+            { t: 'Что теперь? Эфир притих.', if: g => g.q('north') === 9 && g.q('finale') === 0, go: 'finale' },
             { t: 'Чем помочь с антенной?', if: g => g.q('mast') === 0, go: 'mast' },
             { t: 'Антенна снова работает.', if: g => g.q('mast') === 2, go: 'mast_done' },
             { t: 'Вера говорит, ты служил на Объекте 9. Какой там код?', if: g => g.q('thread') >= 2 && !g.flags.z9code && g.q('mast') !== 2, go: 'code' },
@@ -509,6 +518,8 @@ window.DATA = (function () {
           ] },
         column: { text: g => `Слышно, и недоброе. Какая-то «Стальная Колонна» — военные, броня, порядок — вошла в Старый город на юго-западе. Передают по кругу: «Ищем ${g.klykN()}. Награда тому, кто выдаст». Похоже, ${g.klykN()} увёл у них что-то ценное. А Колонна... они ведь и «З-2» могли скупать — больше некому было.`,
           opts: [{ t: 'Схожу в Старый город.', act: g => { g.setQuest('column', 1); g.revealSite('city'); }, end: true }, { t: 'Не сейчас.', end: true }] },
+        finale: { text: 'Притих — перед бурей. Все, кому ты перешёл дорогу за эти месяцы, сбиваются в одну стаю. Зовут себя «Пепел», ведёт их какой-то вожак без имени. Михалыч созывает Совет пустоши в Ржавом Ручье — старосты, караванщики, мы. Без тебя Совет не начнут.',
+          opts: [{ t: 'Иду в Ржавый Ручей.', act: g => { g.setQuest('finale', 1); if (g.world) g.world.target = 'camp'; }, end: true }, { t: 'Позже.', end: true }] },
         north: { text: 'Худшее, что можно услышать. Колонна не кончилась — Гранит был лишь передовым отрядом. На севере, за обсерваторией, их Бастион «Сталь», и маршал Борей собирает армию для похода на юг. По пути у них рудник, где пленные куют им броню. Если кто и остановит это — то ты.',
           opts: [{ t: 'Иду на север.', act: g => { g.setQuest('north', 1); g.revealSite('mine'); }, end: true }, { t: 'Позже.', end: true }] },
         north_done: { text: g => ({ peace: 'Маршал распустил армию?! Колонна разошлась по пустоши — люди возвращаются домой. Ты сделал невозможное.', sabotage: 'Арсенал Бастиона взлетел на воздух — слышно было даже здесь. Без патронов и брони похода не будет.', killed: 'Маршал мёртв, Бастион в смятении. Юг спасён.', heir: 'Говорят, новый маршал Бастиона — ты. Надеюсь, ты поведёшь их не туда, куда Борей.' })[g.flags.northEnd] || 'Спасибо.',
@@ -1407,6 +1418,13 @@ window.DATA = (function () {
   };
 
   // ---- задания (0 — не взято, 1..8 — этапы, 9 — выполнено) ----
+  // модификации оружия на верстаке
+  const WMODS = [
+    { id: 'scope', name: 'Оптический прицел', for: 'ranged', desc: '+10% к попаданию, +2 к дальности.', need: [['junk', 5]], caps: 40 },
+    { id: 'mag', name: 'Увеличенный магазин', for: 'mag', desc: 'Магазин вмещает в 1,5 раза больше патронов.', need: [['junk', 6]], caps: 30 },
+    { id: 'sil', name: 'Глушитель', for: 'ranged', desc: 'Выстрел слышат только в паре шагов. Атака из скрытности не поднимает всю округу.', need: [['junk', 5], ['roach_shell', 2]], caps: 50 },
+    { id: 'sharp', name: 'Заточка и балансировка', for: 'melee', desc: '+2 к урону в ближнем бою.', need: [['junk', 3], ['roach_shell', 1]], caps: 25 },
+  ];
   const QUESTS = {
     debt: { title: 'Долг Тихона', giver: 'semyon', steps: { 1: 'Выбейте из бродяги Тихона 15 крышек долга (Красноречие, Сила или Кража) и отнесите их Сёме.' } },
     tools: { title: 'Инструменты Бориса', giver: 'boris', steps: { 1: 'Вскройте ящик с инструментами у гаража (Взлом) и принесите их механику Борису.' } },
@@ -1423,6 +1441,10 @@ window.DATA = (function () {
       3: 'Объект 9: проникните в хранилище (код — у радиста Кузьмы, ключ-карта — у охраны, или Взлом 60) и разберитесь со складом «З-2».',
       4: 'Вернитесь к коменданту Вере на станцию «Рассвет».' } },
     mast: { title: 'Молчащая антенна', giver: 'kuzma', steps: { 1: 'Почините радиомачту «Рассвета»: нужно 3 хлама и Интеллект 6 или Взлом 35.', 2: 'Антенна работает — сообщите радисту Кузьме.' } },
+    finale: { title: 'Глава 8: Совет пустоши', giver: 'kuzma', steps: {
+      1: 'Михалыч созывает Совет пустоши в Ржавом Ручье. Поговорите с ним.',
+      2: 'Орда «Пепел» атакует Ржавый Ручей во время Совета! Отбейте штурм и убейте Вожака.',
+      3: 'Штурм отбит. Поговорите с Михалычем.' } },
     north: { title: 'Глава 7: Север', giver: 'kuzma', steps: {
       1: 'С севера, из-за обсерватории, идёт сама Стальная Колонна — её родина, Бастион «Сталь». Разведайте северный край (север карты мира), начните с рудника.',
       2: 'На Северном руднике Колонна держит пленных. Освободите их (ключ у надсмотрщика или Взлом 45) — шахтёры знают тайный ход в Бастион.',
@@ -1683,5 +1705,5 @@ window.DATA = (function () {
     { id: 'rat_stew', n: 2, need: [['rat_tail', 3], ['water', 1]], caps: 0, desc: 'Похлёбка из крысиных хвостов. Звучит мерзко, лечит хорошо.' },
   ];
 
-  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, INTERACT, PERKS, AIM, RECIPES };
+  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, WMODS, INTERACT, PERKS, AIM, RECIPES };
 })();

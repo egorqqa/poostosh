@@ -22,20 +22,21 @@ window.COMBAT = (function () {
   }
 
   // first: персонаж, который ходит первым (true — локальный игрок)
-  C.start = function (G, initiator, first) {
+  C.start = function (G, initiator, first, silent) {
     if (!isAuth()) { NET.req({ act: 'combat', npc: initiator ? initiator.id : null, first: !!first }); return; }
     if (first === true) first = G.player;
     const L = G.loc;
     if (G.combat) { C.join(G); return; }
     for (const a of L.actors) a.path = [];
-    const list = [...players(G), ...L.actors.filter(a => involved(G, a, initiator))];
+    // тихая атака (глушитель): в бой вступают только цель и те, кто уже настороже
+    const list = [...players(G), ...L.actors.filter(a => involved(G, a, initiator) && (!silent || a === initiator || a.alerted))];
     list.forEach(a => a.seq = R.sequence(a) + R.rnd(0, 4));
     list.sort((a, b) => b.seq - a.seq);
     if (first && list.includes(first)) { list.splice(list.indexOf(first), 1); list.unshift(first); }
     for (const a of list) if (!isPC(a)) a.alerted = true;
     if (G.companion) G.companionEquip(false);
     G.combat = {
-      list, idx: -1, round: 1, current: null, busy: false,
+      list, idx: -1, round: 1, current: null, busy: false, silent: !!silent,
       isPlayerTurn() { return this.current === G.player; },
       spend(n) {
         if (!G.combat) return true;
@@ -56,6 +57,7 @@ window.COMBAT = (function () {
     if (!cb || cb.mirror) return;
     for (const a of G.loc.actors) {
       if (cb.list.includes(a)) continue;
+      if (cb.silent && !a.alerted && !isAlly(a)) continue;
       if (involved(G, a) || (isAlly(a) && !a.dead && !a.gone)) { if (!isPC(a)) a.alerted = true; cb.list.push(a); }
     }
   };
@@ -149,7 +151,7 @@ window.COMBAT = (function () {
     const t = G.defense ? G.defense(G.loc.id).turrets || 0 : 0;
     if (!t) return;
     for (let i = 0; i < t; i++) {
-      const foes = G.loc.actors.filter(a => a.invader && !a.dead && !a.gone);
+      const foes = G.loc.actors.filter(a => (a.invader || a.finalWave) && !a.dead && !a.gone);
       if (!foes.length) break;
       const f = foes[Math.floor(Math.random() * foes.length)];
       const dmg = R.rnd(6, 12);
@@ -188,6 +190,7 @@ window.COMBAT = (function () {
     if (!w.melee && !ENG.los(G.loc, att.x, att.y, def.x, def.y)) return 0;
     let ch = R.skill(att, w.melee ? 'melee' : 'guns') + 15 - R.AC(def);
     if (!w.melee) ch -= Math.max(0, d - att.stats.per + 1) * 3;
+    ch += w.aim || 0;
     if (!w.melee && d > 5) ch -= Math.round(12 * G.nightK()); // ночью вдаль стрелять труднее
     if (!def.alerted && !isPC(def)) ch += 20;
     const A = DATA.AIM[aim] || DATA.AIM.torso;
@@ -275,7 +278,8 @@ window.COMBAT = (function () {
       NET.syncEnt(def);
       C.join(G);
     }
-    for (const a of G.loc.actors) if (!a.dead && !isPC(a) && a.hostile && ENG.dist(a, att) < 18) a.alerted = true;
+    const noise = R.weaponOf(att).silent ? 5 : 18;
+    for (const a of G.loc.actors) if (!a.dead && !isPC(a) && a.hostile && ENG.dist(a, att) < noise) a.alerted = true;
     def.alerted = true;
     UI.refresh();
     await sleep(380);
@@ -309,6 +313,7 @@ window.COMBAT = (function () {
     if (cv && cv.escort && cv.inFight === G.loc.id && !G.loc.actors.some(x => x.hostile && !x.dead && !x.gone && x !== a)) setTimeout(() => G.caravanDone(true, 'Нападение отбито, караван дошёл!'), 400);
     if (a.tpl === 'rzha' && !G.flags.southDone) G.southEnd('storm');
     if (a.invader && G.loc && !G.loc.actors.some(x => x.invader && !x.dead)) G.invasionCleared();
+    if (a.finalWave && G.loc && !G.loc.actors.some(x => x.finalWave && !x.dead && !x.gone)) setTimeout(() => G.finaleWaveCleared(), 300);
     if (a.tpl === 'klyk_city') { G.flags.klykCityDead = true; if (G.q('column') >= 1 && G.q('column') < 4) G.setQuest('column', 4); }
     if (a.tpl === 'granit') { G.flags.granitDead = true; if (G.q('column') < 9) G.columnEnd('exposed'); }
     if (window.SOC && by && by.isPlayer) SOC.onKill(a);
@@ -386,7 +391,7 @@ window.COMBAT = (function () {
   C.actorAttack = async function (G, a, target, aim = 'torso') {
     if (!DATA.AIM[aim]) aim = 'torso';
     const extra = C.aimCost(aim);
-    if (!G.combat) C.start(G, target, a);
+    if (!G.combat) C.start(G, target, a, isPC(a) && R.weaponOf(a).silent && !target.alerted);
     const c = G.combat;
     if (!c || c.mirror || c.current !== a || c.busy) return;
     const w = R.weaponOf(a);
@@ -440,7 +445,7 @@ window.COMBAT = (function () {
   C.autoEnd = autoEnd;
 
   // ---------- ИИ ----------
-  const NO_FLEE = ['klyk', 'klyk_city', 'granit', 'granit_obs', 'zorin', 'hive_queen', 'rzha', 'zno', 'scav_boss', 'mytar', 'infected', 'infected_brute', 'z_soldier', 'z_officer'];
+  const NO_FLEE = ['klyk', 'klyk_city', 'granit', 'granit_obs', 'zorin', 'hive_queen', 'rzha', 'zno', 'scav_boss', 'mytar', 'infected', 'infected_brute', 'z_soldier', 'z_officer', 'ash_warlord'];
   async function ai(G, a) {
     let guard = 30;
     while (a.ap > 0 && guard-- > 0 && !a.dead && G.combat) {
@@ -452,7 +457,7 @@ window.COMBAT = (function () {
       if (!p) break;
       const w = R.weaponOf(a);
       // при здоровье меньше 15% — бегство в сторону от врага (кроме боссов и напарника)
-      if (!a.isCompanion && a.hp < R.maxHP(a) * 0.15 && !NO_FLEE.includes(a.tpl) && !R.count(a, 'medkit')) {
+      if (!a.isCompanion && !a.finalWave && a.hp < R.maxHP(a) * 0.15 && !NO_FLEE.includes(a.tpl) && !R.count(a, 'medkit')) {
         if (!a.fleeing) { a.fleeing = true; a.bubble = { text: 'Бежим!', t: 1.6, color: '#f0b43c' }; G.log(`${a.name} в панике отступает!`, 'warn'); if (net()) NET.fx({ type: 'log', text: `${a.name} в панике отступает!`, cls: 'warn' }); }
         const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
         let best = null, bd = ENG.dist(a, p);

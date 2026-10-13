@@ -771,6 +771,8 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
       <h2>Мастерская: ${npc.name} <button class="close" data-close>✕</button></h2>
       <div class="muted" style="margin-bottom:6px">${own ? 'Свой верстак: работа бесплатная, нужны только материалы.' : 'Борис делает полезное из хлама. Хлам находится при обыске и у торговцев.'}</div>
       <div class="screen" style="flex:1" id="cr-list"></div>
+      <h3 style="margin:8px 0 4px;color:var(--amber)">Улучшение оружия</h3>
+      <div class="screen" style="max-height:36vh" id="cr-mods"></div>
       <div class="muted" style="margin-top:6px" id="cr-st"></div></div>`, root => {
       const p = G.player;
       const draw = () => {
@@ -783,8 +785,35 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
             <div><div class="nm">${ITEMS[r.id].name}${r.n > 1 ? ' ×' + r.n : ''}</div><div class="sub">${r.desc}<br>Нужно: ${needs}${cost ? `, <span class="${p.caps >= cost ? '' : 'bad'}">${cost} крышек</span>` : ''}</div></div>
             <div><button ${ok ? '' : 'disabled'} data-cr="${i}">Сделать</button></div></div>`;
         }).join('');
+        const wids = [...new Set([p.weapon, ...p.inv.map(s => s.id)].filter(id => id && ITEMS[id] && ITEMS[id].type === 'weapon' && !ITEMS[id].hidden))];
+        const rows = [];
+        for (const wid of wids) {
+          const w = ITEMS[wid], have = (p.wmods && p.wmods[wid]) || {};
+          for (const m of DATA.WMODS) {
+            if (m.for === 'melee' ? !w.melee : w.melee || (m.for === 'mag' && !w.mag)) continue;
+            const cost = own ? 0 : m.caps;
+            const needs = m.need.map(([id, n]) => `<span class="${R.count(p, id) >= n ? '' : 'bad'}">${ITEMS[id].name} ×${n} (${R.count(p, id)})</span>`).join(', ');
+            const ok = !have[m.id] && m.need.every(([id, n]) => R.count(p, id) >= n) && p.caps >= cost;
+            rows.push(`<div class="item" style="grid-template-columns:40px 1fr auto;cursor:default"><div class="ico">${itemIcon(wid)}</div>
+              <div><div class="nm">${w.name}: ${m.name}</div><div class="sub">${m.desc}${have[m.id] ? '' : `<br>Нужно: ${needs}${cost ? `, <span class="${p.caps >= cost ? '' : 'bad'}">${cost} крышек</span>` : ''}`}</div></div>
+              <div>${have[m.id] ? '<span class="good">✔ стоит</span>' : `<button ${ok ? '' : 'disabled'} data-wm="${m.id}" data-w="${wid}">Поставить</button>`}</div></div>`);
+          }
+        }
+        root.querySelector('#cr-mods').innerHTML = rows.join('') || '<div class="muted">Нет оружия, которое можно улучшить. Прицел, магазин и глушитель ставятся на огнестрел, заточка — на холодное.</div>';
       };
       root.addEventListener('click', e => {
+        const bm = e.target.closest('[data-wm]');
+        if (bm) {
+          const m = DATA.WMODS.find(x => x.id === bm.dataset.wm), wid = bm.dataset.w, cost = own ? 0 : m.caps;
+          p.wmods = p.wmods || {};
+          const have = p.wmods[wid] = p.wmods[wid] || {};
+          if (have[m.id] || !m.need.every(([id, n]) => R.count(p, id) >= n) || p.caps < cost) return;
+          m.need.forEach(([id, n]) => R.removeItem(p, id, n));
+          p.caps -= cost; have[m.id] = 1;
+          G.log(`${own ? 'Установлено' : 'Борис установил'}: ${m.name} → ${ITEMS[wid].name}.`, 'good');
+          SND.play('reload'); NET.syncSelf && NET.syncSelf();
+          U.refresh(); return;
+        }
         const b = e.target.closest('[data-cr]');
         if (!b) return;
         const r = DATA.RECIPES[+b.dataset.cr];
@@ -987,6 +1016,39 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
       root.addEventListener('click', e => { const b = e.target.closest('[data-cs]'); if (b) { G.companionSkillUp(b.dataset.cs); draw(); } });
       draw();
     });
+  };
+
+  // эпилог финала и титры
+  U.openEpilogue = function (slides) {
+    let i = 0;
+    U.openModal('epilogue', `<div class="title-screen" style="max-width:640px;margin:auto">
+      <div id="ep-body"></div>
+      <button class="primary" id="ep-next" style="margin-top:20px">Далее</button></div>`, root => {
+      const body = root.querySelector('#ep-body'), next = root.querySelector('#ep-next');
+      const draw = () => {
+        if (i < slides.length) {
+          const [h, t] = slides[i];
+          body.innerHTML = `<div class="sub" style="margin-bottom:6px">ЭПИЛОГ · ${i + 1} / ${slides.length}</div><h1 style="font-size:30px">${h}</h1>
+            <p style="color:var(--green);font-size:16px;line-height:1.6;margin-top:18px">${t}</p>`;
+          next.textContent = i === slides.length - 1 ? 'Титры' : 'Далее';
+        } else {
+          body.innerHTML = `<div class="credits-wrap"><div class="credits-roll">
+            <h1>ПУСТОШЬ</h1><div class="sub">постъядерная ролевая игра</div>
+            <p class="cr-h">Автор и разработка</p><p>egorqqa</p>
+            <p class="cr-h">Сюжет и диалоги</p><p>egorqqa</p>
+            <p class="cr-h">Графика и звук</p><p>egorqqa</p>
+            <p class="cr-h">Сетевая игра</p><p>egorqqa</p>
+            <p class="cr-h">Тестирование</p><p>все, кто дошёл до этих строк</p>
+            <p class="cr-h">Спасибо</p><p>друзьям, игравшим по сети,<br>и каждому, кто не бросил пустошь</p>
+            <h1 style="font-size:22px;margin-top:40px">КОНЕЦ</h1><div class="sub">...но пустошь живёт дальше</div>
+          </div></div>`;
+          next.textContent = 'Продолжить свободную игру';
+          SND.play('quest');
+        }
+      };
+      next.onclick = () => { if (i >= slides.length) { U.closeModal(); return; } i++; draw(); };
+      draw();
+    }, { full: true });
   };
 
   U.openRespawn = function () {

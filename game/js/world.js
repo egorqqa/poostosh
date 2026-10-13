@@ -171,6 +171,7 @@ window.WORLD_API = (function () {
       }
       G.log(`⚠ ${inv.kind === 'column' ? 'Штурмовики Колонны' : 'Обращённые'} уже здесь! Защитите поселение.`, 'bad');
     }
+    if (id === 'camp' && G.q('finale') === 2) W.spawnFinale(G);
     if (id === 'observatory' || id === 'obs_dome') {
       const friendly = G.flags.columnEnd === 'joined' || G.flags.granitYield || G.flags.obsDone;
       for (const a of L.actors) {
@@ -223,6 +224,23 @@ window.WORLD_API = (function () {
     return null;
   };
 
+  W.spawnFinale = function (G) {
+    const L = G.loc;
+    if (!L || L.actors.some(a => a.finalWave)) return;
+    const wave = G.finaleWave();
+    const ex = L.def.exits[0], cx = Math.round((ex.x0 + ex.x1) / 2), cy = Math.min(ex.y0, ex.y1) - 5;
+    wave.list.forEach(([tpl, name], i) => {
+      const a = R.makeNpc(tpl, cx, cy, {});
+      a.id = 'ash_' + i; a.finalWave = true; a.hostile = true; a.alerted = true; a.faction = 'horde'; a.name = name;
+      const f = W.freeTile(L, cx + R.rnd(-4, 4), cy + R.rnd(-3, 3), a) || { x: cx, y: cy };
+      a.x = a.rx = f.x; a.y = a.ry = f.y; a.homeX = f.x; a.homeY = f.y;
+      a.path = []; a.moving = false; a.walkPhase = 0; a.aimT = 0; a.hitFlash = 0; a.deathAt = null;
+      L.actors.push(a); NET.syncEnt(a);
+    });
+    G.log('⚠ Орда «Пепел» штурмует Ржавый Ручей!', 'bad');
+    for (const h of wave.help) G.log(h, 'good');
+    SND.play('alert');
+  };
   W.saveLocationState = function (G) {
     const L = G.loc;
     if (!L || L.def.temp) return;

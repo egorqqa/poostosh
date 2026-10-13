@@ -30,6 +30,15 @@ window.ENG = (function () {
         const ox = o.getContext('2d'); ox.shadowColor = 'rgba(0,0,0,0.8)'; ox.shadowBlur = 2; ox.drawImage(im, 0, 0);
         E.models[key.slice(5)] = { canvas: o, fw: man.fw, fh: man.fh, ax: man.ax, ay: man.ay, frames: man.frames };
       }
+      // модели героя с оружием в руках (пистолет, ружьё, автомат)
+      E.guns = {};
+      for (const [key, man] of Object.entries(window.ASSET_MANIFEST)) {
+        if (!key.startsWith('gun_') || !E.img[key]) continue;
+        const im = E.img[key];
+        const o = document.createElement('canvas'); o.width = im.width; o.height = im.height;
+        const ox = o.getContext('2d'); ox.shadowColor = 'rgba(0,0,0,0.85)'; ox.shadowBlur = 3; ox.drawImage(im, 0, 0);
+        E.guns[key.slice(4)] = { canvas: o, fw: man.fw, fh: man.fh, ax: man.ax, ay: man.ay, walk: man.walk, aim: man.aim, fire: man.fire };
+      }
       // перекрашенные копии модели персонажа
       const base = E.img.char_soldier;
       for (const [k, f] of Object.entries(DATA.TINTS)) {
@@ -592,8 +601,24 @@ window.ENG = (function () {
     ctx.filter = 'none';
   }
 
+  // какая модель с оружием у игрока: по значку оружия в руках
+  const GUN_OF = { pistol: 'pistol', shotgun: 'rifle', rifle: 'rifle', ak: 'ak' };
+  E.gunModel = function (a) {
+    if (!a || !(a.isPlayer || a.isRemote) || !a.weapon || !E.guns) return null;
+    const w = DATA.ITEMS[a.weapon];
+    return w && !w.melee ? E.guns[GUN_OF[w.icon]] || null : null;
+  };
+  function gunFrame(G, a, M) {
+    const row = a.dir8 != null ? a.dir8 : DIR4_TO_8[a.dir || 0];
+    if (a.aimT > 0) return { row, col: a.aimT > 0.3 ? M.fire : M.aim };   // вспышка, затем удержание прицела
+    if (a.moving) return { row, col: Math.floor(a.walkPhase * M.walk * (M.walk < 4 ? 2 : 1)) % M.walk };
+    if (G.combat && G.combat.list && G.combat.list.includes(a)) return { row, col: M.aim }; // в бою — оружие наготове
+    return { row, col: 0 };
+  }
+
   function drawActor(ctx, G, a, t, hovered) {
     if (a.model && E.models[a.model]) { drawModel(ctx, G, a, t, hovered, E.models[a.model]); return; }
+    const GM = E.gunModel(a);
     const sheet = E.sheets[a.tint || 'player'];
     const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
     // тень
@@ -610,14 +635,16 @@ window.ENG = (function () {
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.ellipse(sx, sy - 2, 20, 9, 0, 0, Math.PI * 2); ctx.stroke();
     }
-    const f = frameFor(a, t);
+    const f = GM ? gunFrame(G, a, GM) : frameFor(a, t);
     if (a.isPlayer && G.sneaking) ctx.globalAlpha = 0.82;
     if (a.hitFlash > 0) ctx.filter = 'brightness(1.7) sepia(1) hue-rotate(-40deg) saturate(4)';
     // отдача и встряска от попадания
     let ox = 0, oy = 0;
     if (a.recoilT > 0) { const k = a.recoilT / 0.14; ox += (a.recoilX || 0) * 5 * k; oy += (a.recoilY || 0) * 3 * k; }
     if (a.shakeT > 0) { ox += (Math.random() - 0.5) * 6 * a.shakeT / 0.25; oy += (Math.random() - 0.5) * 3 * a.shakeT / 0.25; }
-    ctx.drawImage(sheet, f.col * FR.w, f.row * FR.h, FR.w, FR.h, sx - FR.ax + ox, sy - FR.ay + oy + (a.isPlayer && G.sneaking ? 4 : 0), FR.w, FR.h);
+    const sneakY = a.isPlayer && G.sneaking ? 4 : 0;
+    if (GM) ctx.drawImage(GM.canvas, f.col * GM.fw, f.row * GM.fh, GM.fw, GM.fh, sx - GM.ax + ox, sy - GM.ay + oy + sneakY, GM.fw, GM.fh);
+    else ctx.drawImage(sheet, f.col * FR.w, f.row * FR.h, FR.w, FR.h, sx - FR.ax + ox, sy - FR.ay + oy + sneakY, FR.w, FR.h);
     if (a.isCompanion) {
       ctx.strokeStyle = 'rgba(143,208,255,0.7)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.ellipse(sx, sy - 2, 18, 8, 0, 0, Math.PI * 2); ctx.stroke();
@@ -678,6 +705,7 @@ window.ENG = (function () {
   };
   // вспышка выстрела
   E.muzzle = function (from, to) {
+    if (E.gunModel(from)) return; // у моделей с оружием вспышка нарисована в кадре выстрела
     const a = tileCenter(from.x, from.y), b = tileCenter(to.x, to.y);
     const dx = b.x > a.x ? 1 : -1;
     E.effects.push({ t: 0, life: 0.09, draw(ctx) {
