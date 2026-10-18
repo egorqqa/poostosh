@@ -69,7 +69,7 @@ window.COMBAT = (function () {
   C.end = function (G, msg) {
     if (!G.combat) return;
     clearTimeout(G.combat.remoteTimer);
-    for (const a of G.combat.list) { a.crippled = false; a.stunned = false; a.burn = 0; }
+    for (const a of G.combat.list) { a.crippled = false; a.stunned = false; a.burn = 0; a.firedInCombat = false; }
     G.combat = null;
     G.player.ap = R.maxAP(G.player);
     G.log(msg || 'Бой окончен.', 'warn');
@@ -203,7 +203,8 @@ window.COMBAT = (function () {
     if (!w.melee) ch -= Math.max(0, d - att.stats.per + 1) * (w.steady ? 1.5 : 3);
     ch += w.aim || 0;
     if (!w.melee && d > 5 && !w.laser) ch -= Math.round(12 * G.nightK()); // ночью вдаль стрелять труднее
-    if (!def.alerted && !isPC(def)) ch += 20;
+    if (!w.melee && !def.alerted && !isPC(def)) ch += 20;
+    if (att.trait === 'gunslinger' && w.icon === 'pistol') ch += 10;
     const A = DATA.AIM[aim] || DATA.AIM.torso;
     if (A.pen) ch -= Math.max(0, A.pen - (R.has(att, 'sniper') ? 10 : 0));
     return R.clamp(Math.round(ch), 5, 95);
@@ -256,15 +257,17 @@ window.COMBAT = (function () {
     const ev = { type: 'attack', att: att.id, def: def.id, hit, chance, melee: !!w.melee, sneak, dmg: 0, crit: false, killed: false, aim, effect: '' };
     if (hit) {
       const gsk = w.melee ? 0 : R.gunSkill(att, w);
-      const critCh = (isPC(att) ? R.critChance(att) : Math.floor(R.critChance(att) / 2)) + (w.crit || 0) + (sneak ? 30 : 0) + (aim === 'head' ? 25 : 0) + Math.floor(gsk / 10);
+      const critCh = (isPC(att) ? R.critChance(att) : Math.floor(R.critChance(att) / 2)) + (w.crit || 0) + (sneak ? 30 : 0) + (aim === 'head' ? 25 : 0) + Math.floor(gsk / 10) + (att.trait === 'gunslinger' && w.icon === 'pistol' ? 5 : 0);
       const crit = R.rnd(1, 100) <= critCh;
       let dmg = R.rnd(w.dmg[0], w.dmg[1]) + (w.melee ? R.meleeBonus(att) : 0) + (w.bayonet && ENG.dist(att, def) <= 1 ? w.bayonet : 0);
       if (!w.melee) dmg = Math.round(dmg * (1 + Math.max(0, gsk - 40) / 200)); // навык оружия добавляет урон
+      if (!w.melee && att.trait === 'gunslinger' && w.icon === 'pistol' && !att.firedInCombat) dmg = Math.round(dmg * 1.1); // первый выстрел в бою
       if (aim === 'head') dmg = Math.round(dmg * 1.25);
       const dt = w.pierce ? 0 : crit ? Math.floor(R.DT(def) / 2) : R.DT(def);
       if (crit) dmg = Math.round(dmg * ((sneak ? 2.5 : 1.5) + gsk / 400)); // и силу крита
       dmg = Math.max(1, Math.round((dmg - dt) * (1 - R.DR(def) / 100)));
       def.hp -= dmg;
+      if (def.hp <= 0 && def.trait === 'survivor' && R.rnd(1, 100) <= 5) { def.hp = 1; ev.effect = 'выжил чудом'; } // «Живучий»
       ev.dmg = dmg; ev.crit = crit;
       if (def.isRemote) { def.hpLock = Date.now() + 1500; NET.event(def.pid, { kind: 'hit', dmg }); }
       if (def.isPlayer) def.damagedSinceTurn = true;
@@ -283,6 +286,7 @@ window.COMBAT = (function () {
         }
       }
     }
+    att.firedInCombat = true;
     C.showAttack(G, ev);
     if (net()) NET.fx(ev);
     if (ev.killed) kill(G, def, att);

@@ -35,21 +35,22 @@ window.R = (function () {
 
   // ---- перки ----
   const has = (a, id) => !!(a && a.perks && a.perks.includes(id));
+  const TRAIT_SKILL = { negotiator: { speech: 15 }, gunslinger: { pistols: 10 } };
   const PERK_SKILL = { eagle: { guns: 15, auto: 15, pistols: 15, shotguns: 15 }, quiet: { sneak: 20, steal: 10 }, talker: { speech: 15 } };
 
   // ---- производные ----
-  const maxHP = a => a.isPlayer ? 20 + a.stats.str + 2 * a.stats.end + (a.level - 1) * (3 + Math.floor(a.stats.end / 2)) + (has(a, 'tough') ? 12 : 0) : a.baseHP;
+  const maxHP = a => a.isPlayer ? 20 + a.stats.str + 2 * a.stats.end + (a.level - 1) * (3 + Math.floor(a.stats.end / 2)) + (has(a, 'tough') ? 12 : 0) + (a.trait === 'survivor' ? 20 : 0) : a.baseHP;
   const maxAP = a => 5 + Math.floor(a.stats.agi / 2) + (has(a, 'action') ? 1 : 0) - (a.crippled ? 2 : 0);
   const carryMax = a => 15 + 8 * a.stats.str;
   const armorOf = a => a.armor ? ITEMS[a.armor] : null;
   const mods = a => (a.armor && a.armorMods && a.armorMods[a.armor]) || 0;
   const AC = a => a.stats.agi + (armorOf(a) ? armorOf(a).ac : 0) + 3 * mods(a);
   const DT = a => (armorOf(a) ? armorOf(a).dt : 0) + (has(a, 'tough') ? 1 : 0) + mods(a);
-  const DR = a => armorOf(a) ? armorOf(a).dr : 0;
+  const DR = a => (armorOf(a) ? armorOf(a).dr : 0) + (a.trait === 'survivor' ? 5 : 0);
   const meleeBonus = a => Math.max(1, a.stats.str - 5);
   const sequence = a => 2 * a.stats.per;
   const critChance = a => a.stats.luck + (has(a, 'eagle') ? 5 : 0);
-  const healRate = a => Math.max(1, Math.floor(a.stats.end / 3));
+  const healRate = a => { const b = Math.max(1, Math.floor(a.stats.end / 3)); return a.trait === 'survivor' ? Math.ceil(b * 1.15) : b; };
   const skillPerLevel = a => 5 + 2 * a.stats.int;
   const xpForLevel = l => 100 * l * (l + 1) / 2; // уровень 2 при 100 XP, 3 при 300...
 
@@ -64,6 +65,7 @@ window.R = (function () {
     const pts = (a.skillPts && a.skillPts[id]) || 0;
     let perk = 0;
     for (const p of a.perks || []) perk += (PERK_SKILL[p] && PERK_SKILL[p][id]) || 0;
+    if (a.trait && TRAIT_SKILL[a.trait]) perk += TRAIT_SKILL[a.trait][id] || 0;
     return Math.min(300, def.base(a.stats) + (tagged ? 20 : 0) + pts * (tagged ? 2 : 1) + ((a.skillBonus && a.skillBonus[id]) || 0) + perk);
   }
 
@@ -111,8 +113,10 @@ window.R = (function () {
     if (!w) return w;
     // дальность растёт с навыком: +1 клетка за каждые 25% выше 40
     const rb = w.melee ? 0 : Math.max(0, Math.floor((gunSkill(a, w) - 40) / 25));
-    if (!m && !lvl && !rb) return w;
+    const gs = a.trait === 'gunslinger' && w.icon === 'pistol'; // «Пистолетчик»: выстрел на 1 ОД дешевле
+    if (!m && !lvl && !rb && !gs) return w;
     const o = { ...w, range: w.range + rb };
+    if (gs) o.ap = Math.max(2, w.ap - 1);
     if (!m && !lvl) return o;
     if (lvl) { o.dmg = [Math.round(w.dmg[0] * (1 + 0.15 * lvl)), Math.round(w.dmg[1] * (1 + 0.15 * lvl))]; o.crit = (w.crit || 0) + 2 * lvl; }
     if (m) {
@@ -130,8 +134,9 @@ window.R = (function () {
   }
 
   // ---- торговля ----
-  function buyMult(p, discount = 0) { return Math.max(1.05, 2.2 - skill(p, 'barter') * 0.01 - p.stats.cha * 0.04 - discount - (has(p, 'trader') ? 0.15 : 0)); }
-  function sellMult(p) { return Math.min(0.95, 0.25 + skill(p, 'barter') * 0.005 + p.stats.cha * 0.02 + (has(p, 'trader') ? 0.15 : 0)); }
+  const neg = p => p.trait === 'negotiator';
+  function buyMult(p, discount = 0) { return Math.max(1.05, (2.2 - skill(p, 'barter') * 0.01 - p.stats.cha * 0.04 - discount - (has(p, 'trader') ? 0.15 : 0)) * (neg(p) ? 0.9 : 1)); }
+  function sellMult(p) { return Math.min(neg(p) ? 1 : 0.95, (0.25 + skill(p, 'barter') * 0.005 + p.stats.cha * 0.02 + (has(p, 'trader') ? 0.15 : 0)) * (neg(p) ? 1.1 : 1)); }
 
   // ---- лечение ----
   function healAmount(a, itemId) {

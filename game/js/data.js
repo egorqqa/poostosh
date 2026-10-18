@@ -1497,6 +1497,23 @@ window.DATA = (function () {
     { id: 'sharp', slot: 'edge', name: 'Заточка и балансировка', for: 'melee', desc: '+2 к урону в ближнем бою.', need: [['junk', 3], ['roach_shell', 1]], caps: 25 },
   ];
   const WMAX_LVL = 3;
+  // готовые герои для новой игры: характеристики, профильные навыки, стартовое умение, история
+  const HEROES = [
+    { id: 'artyom', name: 'Артём', cls: 'shotguns', trait: 'survivor', portrait: 'assets/heroes/artyom.jpg',
+      stats: { str: 7, per: 5, end: 7, cha: 4, int: 5, agi: 6, luck: 6 }, tags: ['shotguns', 'steal', 'survival'],
+      story: 'Двадцать лет перегонял уцелевшие машины через пустошь — и не всегда свои. Знает каждую выбоину на дорогах и каждого, кто на них промышляет. Крепкий и упрямый, привык полагаться только на себя и на старое ружьё. За опечатанный ящик ему пообещали больше, чем за три обычных рейса.' },
+    { id: 'gosha', name: 'Гоша', cls: 'auto', trait: 'negotiator', portrait: 'assets/heroes/gosha.jpg',
+      stats: { str: 5, per: 5, end: 5, cha: 8, int: 7, agi: 4, luck: 6 }, tags: ['auto', 'lockpick', 'barter'],
+      story: 'Служил по контракту, потом осел посредником между торговцами. Знает цену любой вещи и умеет договориться даже с теми, кто сначала стреляет. Когда слова кончаются, в дело идёт автомат. Этот рейс он взял сам: платили слишком хорошо — и это его насторожило.' },
+    { id: 'roza', name: 'Роза', cls: 'pistols', trait: 'gunslinger', portrait: 'assets/heroes/roza.jpg',
+      stats: { str: 4, per: 8, end: 5, cha: 5, int: 6, agi: 8, luck: 4 }, tags: ['pistols', 'speech', 'sneak'],
+      story: 'Выросла среди охотников и научилась стрелять раньше, чем читать. Меткая, быстрая, а когда нужно — очень убедительная. Взялась сопровождать груз ради хорошей оплаты. Не любит, когда её недооценивают, — особенно те, кто потом об этом жалеет.' },
+  ];
+  const TRAITS = {
+    survivor: { name: 'Живучий', desc: 'Максимальное здоровье +20; сопротивление урону +5%; отдых восстанавливает на 15% больше; 5% шанс пережить смертельный удар с 1 ОЗ.' },
+    negotiator: { name: 'Переговорщик', desc: 'Красноречие +15; цены при покупке −10%; цены при продаже +10%.' },
+    gunslinger: { name: 'Пистолетчик', desc: 'Выстрел из пистолета стоит на 1 ОД меньше; точность пистолетов +10%; шанс крита из пистолета +5%; первый выстрел в бою наносит +10% урона; навык «Пистолеты» +10.' },
+  };
   // профиль героя: какой навык профильный и что лежит в багажнике разбитой машины
   const CLASSES = [
     { id: 'auto', name: 'Автоматчик', skill: 'auto', kit: [['ak', 1], ['ammo762', 60]], desc: 'Автомат АК и 60 патронов 7.62. Плотный огонь на средней дистанции, но патроны тяжёлые и дорогие.' },
@@ -1813,5 +1830,5 @@ window.DATA = (function () {
     { id: 'rat_stew', n: 2, need: [['rat_tail', 3], ['water', 1]], caps: 0, desc: 'Похлёбка из крысиных хвостов. Звучит мерзко, лечит хорошо.' },
   ];
 
-  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, WMODS, WMAX_LVL, CLASSES, INTERACT, PERKS, AIM, RECIPES };
+  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, WMODS, WMAX_LVL, CLASSES, HEROES, TRAITS, INTERACT, PERKS, AIM, RECIPES };
 })();

@@ -769,13 +769,14 @@
       if (G.flags.tutStep == null && G.player.xp > 0) G.flags.tutStep = 99;
       begin();
     } else {
-      UI.openCharacter(true, p => {
+      const mpStart = p => {
         G.player = p;
         G.locStates = {}; G.quests = { meds: 0 }; G.flags = {}; G.time = 8 * 60;
         G.world = WMAP.initState();
         G.startKit(p);
         begin();
-      });
+      };
+      UI.openHeroes(mpStart, () => UI.openCharacter(true, mpStart), () => { NET.disconnect && NET.disconnect(); UI.openTitle(G.hasSave(), newGame, () => G.load()); });
       const nm = document.querySelector('#c-name');
       if (nm) { nm.value = NET.name; nm.disabled = true; }
     }
@@ -841,7 +842,9 @@
   };
 
   function newGame() {
-    UI.openCharacter(true, p => {
+    const back = () => UI.openTitle(G.hasSave(), newGame, () => G.load());
+    UI.openHeroes(start, () => UI.openCharacter(true, start), back);
+    function start(p) {
       G.player = p;
       G.locStates = {}; G.quests = { meds: 0 }; G.flags = {}; G.time = 8 * 60; G.companion = null;
       G.world = WMAP.initState();
@@ -853,7 +856,7 @@
         G.log(`${p.name}, вы приходите в себя на песке у обочины. Голова гудит, во рту привкус крови.`, 'sys');
         G.log('Рядом — ваша разбитая машина. Осмотрите её: клик по машине.', 'warn');
       }));
-    });
+    }
   }
 
   // ---------- ввод ----------
@@ -902,7 +905,7 @@
         if (UI.modalOpen()) {
           const cur = UI.current();
           if (cur === 'settings' && G.player && G.scene !== 'menu') UI.openPause();
-          else if (!['create', 'title', 'dead', 'enc', 'mp', 'update', 'settings', 'wevent', 'confirm', 'prompt'].includes(cur)) UI.closeModal();
+          else if (!['create', 'heroes', 'title', 'dead', 'enc', 'mp', 'update', 'settings', 'wevent', 'confirm', 'prompt'].includes(cur)) UI.closeModal();
         } else if (G.ui.mode !== 'move') UI.setMode('move');
         else if (G.scene !== 'menu') UI.openPause();
         return;

@@ -206,3 +206,29 @@ button.primary { background: linear-gradient(180deg, #3f6a2c, #1f3a16); color: #
 #in-fade { position: absolute; inset: 0; background: #000; opacity: 1; pointer-events: none; }
 #in-hint { position: absolute; right: 24px; bottom: 16px; color: rgba(255,255,255,.4); font: 16px Consolas, monospace; pointer-events: none; }
 @media (max-width: 900px) { .in-line { font-size: 26px; line-height: 36px; } }
+
+/* ---------- выбор героя ---------- */
+.heroes-screen { width: min(1500px, 96vw); max-height: 100%; overflow: auto; padding: 20px 10px; box-sizing: border-box; }
+.heroes-screen h1 { color: var(--amber); font-size: 34px; letter-spacing: 2px; margin: 0 0 8px; text-shadow: 0 0 14px rgba(240,140,30,.35); }
+.hero-sub { color: #c9c2ae; margin-bottom: 16px; }
+.hero-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.hero-card { background: rgba(13,21,12,.92); border: 1px solid #3e4a38; border-radius: 4px; padding: 10px; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.hero-card:hover { border-color: var(--green-dim); transform: translateY(-2px); }
+.hero-card.sel { border-color: var(--amber); box-shadow: 0 0 18px rgba(240,180,60,.35); }
+.hero-top { display: flex; gap: 12px; }
+.hero-top img { width: 45%; max-width: 210px; aspect-ratio: 3/4; object-fit: cover; border: 1px solid #222; }
+.hero-stats { flex: 1; font-size: 13px; color: #c9c2ae; }
+.hero-name { color: var(--amber); font-size: 26px; margin-bottom: 4px; }
+.hs { display: flex; justify-content: space-between; max-width: 170px; line-height: 1.55; }
+.hs b { color: #e8e2d0; }
+.hs-d { color: #e8e2d0; margin-top: 4px; }
+.hero-story { color: #b9b2a0; font-size: 13px; line-height: 1.5; margin: 10px 0; }
+.hero-h { color: #9a9483; margin-bottom: 6px; }
+.hero-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.hero-chips .chip { border: 1px solid var(--amber); color: var(--amber); padding: 3px 8px; font-size: 13px; }
+.hero-chips .chip i { font-style: normal; opacity: .75; }
+.hero-trait { color: #7dd36a; margin: 6px 0 4px; }
+.hero-tdesc { color: #9a9483; font-size: 12px; line-height: 1.5; }
+.hero-kit { color: #e8e2d0; font-size: 13px; margin-top: 8px; }
+.hero-btns { display: flex; gap: 10px; margin-top: 16px; }
+.hero-btns button { min-width: 160px; }

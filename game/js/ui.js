@@ -457,7 +457,7 @@ window.UI = (function () {
         root.querySelector('#c-special').innerHTML = `<div class="warn" style="margin-bottom:4px">Характеристики${create ? ` · осталось очков: <b>${pool}</b>` : ''}</div>` + SPECIAL.map(s => `
           <div class="stat-row" data-desc="${s.id}"><span>${s.name}</span><b>${p.stats[s.id]}</b><span class="pm">${create ? `<button data-st="${s.id}" data-d="-1">−</button><button data-st="${s.id}" data-d="1">+</button>` : ''}</span></div>`).join('');
         const lvlNext = R.xpForLevel(p.level);
-        root.querySelector('#c-derived').innerHTML = `<div class="warn" style="margin-bottom:4px">${create ? 'Производные' : `${p.name} · уровень ${p.level}`}</div>
+        root.querySelector('#c-derived').innerHTML = `${!create && p.portrait ? `<img src="${p.portrait}" alt="" style="width:72px;height:96px;object-fit:cover;float:right;border:1px solid var(--green-dim);margin:0 0 4px 6px">` : ''}<div class="warn" style="margin-bottom:4px">${create ? 'Производные' : `${p.name} · уровень ${p.level}`}</div>${!create && p.trait && DATA.TRAITS[p.trait] ? `<div class="stat-row" data-desc="d_trait"><span>Умение</span><b class="good" style="font-size:12px">${DATA.TRAITS[p.trait].name}</b><span></span></div>` : ''}
           ${create ? '' : `<div class="stat-row"><span>Опыт</span><b>${p.xp}</b><span class="muted">/${lvlNext}</span></div>`}
           ${[['Очки здоровья', R.maxHP(p), 'hp'], ['Очки действия', R.maxAP(p), 'ap'], ['Класс брони', R.AC(p), 'ac'], ['Грузоподъёмность', R.carryMax(p) + ' кг', 'carry'],
              ['Урон в ближнем', '+' + R.meleeBonus(p), 'mb'], ['Шанс крита', R.critChance(p) + '%', 'crit'], ['Порядок хода', R.sequence(p), 'seq'], ['Лечение/час', R.healRate(p), 'heal'],
@@ -475,7 +475,7 @@ window.UI = (function () {
         const go = root.querySelector('#c-go');
         if (go) go.disabled = pool !== 0 || p.tags.length !== 3;
       };
-      const DERIVED = { hp: 'Очки здоровья: 20 + СИЛ + 2×ВЫН (+ за уровни).', ap: 'Очки действия в бою: 5 + ЛОВ/2. Шаг — 1 ОД, выстрел/удар — по оружию, аптечка — 2 ОД.', ac: 'Класс брони: ЛОВ + броня. Снижает шанс попадания по вам.', carry: 'Грузоподъёмность: 15 + 8×СИЛ кг. При перегрузе двигаться нельзя.', mb: 'Бонус урона в ближнем бою: СИЛ − 5 (минимум 1).', crit: 'Шанс критического попадания (×1.5 урона, частично игнорирует броню): Удача + бонус оружия. Атака из скрытности: +30% к шансу и ×2.5 урона.', seq: 'Порядок хода: 2×ВСП. Кто выше — ходит раньше.', heal: 'Сколько ОЗ восстанавливается за час отдыха: ВЫН/3.', spl: 'Очки навыков за уровень: 5 + 2×ИНТ.', rep: 'Как к вам относятся в Ржавом Ручье. Растёт за помощь жителям, падает за кражи и убийства. Влияет на цены (−20%…+30%), реплики и лечение у Ирины. Враг Ручья — с вами не торгуют, а охрана стреляет.' };
+      const DERIVED = { trait: p.trait && DATA.TRAITS[p.trait] ? `Умение «${DATA.TRAITS[p.trait].name}»: ${DATA.TRAITS[p.trait].desc}` : '', hp: 'Очки здоровья: 20 + СИЛ + 2×ВЫН (+ за уровни).', ap: 'Очки действия в бою: 5 + ЛОВ/2. Шаг — 1 ОД, выстрел/удар — по оружию, аптечка — 2 ОД.', ac: 'Класс брони: ЛОВ + броня. Снижает шанс попадания по вам.', carry: 'Грузоподъёмность: 15 + 8×СИЛ кг. При перегрузе двигаться нельзя.', mb: 'Бонус урона в ближнем бою: СИЛ − 5 (минимум 1).', crit: 'Шанс критического попадания (×1.5 урона, частично игнорирует броню): Удача + бонус оружия. Атака из скрытности: +30% к шансу и ×2.5 урона.', seq: 'Порядок хода: 2×ВСП. Кто выше — ходит раньше.', heal: 'Сколько ОЗ восстанавливается за час отдыха: ВЫН/3.', spl: 'Очки навыков за уровень: 5 + 2×ИНТ.', rep: 'Как к вам относятся в Ржавом Ручье. Растёт за помощь жителям, падает за кражи и убийства. Влияет на цены (−20%…+30%), реплики и лечение у Ирины. Враг Ручья — с вами не торгуют, а охрана стреляет.' };
       root.addEventListener('mouseover', e => {
         const r = e.target.closest('[data-desc]');
         if (!r) return;
@@ -914,6 +914,57 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
       modalRefresh = draw;
       draw();
     });
+  };
+
+  // ---------- выбор героя для новой игры ----------
+  U.openHeroes = function (onPick, onCustom, onBack) {
+    let sel = null;
+    const mk = h => {
+      const p = R.newPlayer(h.name, h.stats, h.tags);
+      Object.assign(p, { cls: h.cls, trait: h.trait, hero: h.id, portrait: h.portrait });
+      p.hp = R.maxHP(p);
+      return p;
+    };
+    const kitText = h => {
+      const cls = DATA.CLASSES.find(c => c.id === h.cls);
+      return cls.kit.map(([id, n]) => ITEMS[id].name + (n > 1 ? ' ×' + n : '')).join(', ');
+    };
+    const card = h => {
+      const p = mk(h), tr = DATA.TRAITS[h.trait];
+      return `<div class="hero-card ${sel === h.id ? 'sel' : ''}" data-hero="${h.id}">
+        <div class="hero-top"><img src="${h.portrait}" alt="${h.name}">
+          <div class="hero-stats"><div class="hero-name">${h.name}</div>
+            ${SPECIAL.map(s => `<div class="hs"><span>${s.name}</span><b>${p.stats[s.id]}</b></div>`).join('')}
+            <div class="hs-d">ОЗ ${R.maxHP(p)} · ОД ${R.maxAP(p)}</div><div class="hs-d">Груз ${R.carryMax(p)} кг</div></div></div>
+        <div class="hero-story">${h.story}</div>
+        <div class="hero-h">Сильные навыки</div>
+        <div class="hero-chips">${h.tags.map(t => `<span class="chip">${SKILLS.find(s => s.id === t).name} ${R.skill(p, t)} <i>(+20)</i></span>`).join('')}</div>
+        <div class="hero-trait">Умение: ${tr.name}</div>
+        <div class="hero-tdesc">${tr.desc}</div>
+        <div class="hero-kit">Снаряжение в машине: ${kitText(h)}, аптечка, граната</div>
+      </div>`;
+    };
+    U.openModal('heroes', `<div class="heroes-screen">
+      <h1>Кто вы?</h1>
+      <div class="hero-sub">Выберите героя. Сильные навыки, стартовое умение и снаряжение определяют стиль игры.</div>
+      <div class="hero-list" id="h-list"></div>
+      <div class="hero-btns"><button id="h-back">Назад</button><button id="h-custom">Свой персонаж</button><button class="primary" id="h-go" disabled>Начать игру ▶</button></div>
+    </div>`, root => {
+      const draw = () => {
+        root.querySelector('#h-list').innerHTML = DATA.HEROES.map(card).join('');
+        root.querySelector('#h-go').disabled = !sel;
+      };
+      const start = () => { const h = DATA.HEROES.find(x => x.id === sel); if (!h) return; UI.closeModal(); onPick(mk(h)); };
+      root.addEventListener('click', e => {
+        const c = e.target.closest('[data-hero]');
+        if (c) { sel = c.dataset.hero; SND.play('ui'); draw(); return; }
+        if (e.target.id === 'h-go') start();
+        if (e.target.id === 'h-custom') { UI.closeModal(); onCustom(); }
+        if (e.target.id === 'h-back') { UI.closeModal(); onBack(); }
+      });
+      root.addEventListener('dblclick', e => { const c = e.target.closest('[data-hero]'); if (c) { sel = c.dataset.hero; start(); } });
+      draw();
+    }, { full: true });
   };
 
   // ---------- интро новой игры ----------
