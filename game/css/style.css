@@ -197,3 +197,12 @@ button.primary { background: linear-gradient(180deg, #3f6a2c, #1f3a16); color: #
 
 #tooltip { position: absolute; pointer-events: none; z-index: 50; background: rgba(8,12,7,.94); border: 1px solid var(--green-dim); color: var(--green);
   font-size: 12px; padding: 4px 8px; border-radius: 3px; display: none; max-width: 300px; white-space: pre-line; }
+
+/* ---------- интро новой игры ---------- */
+#intro { position: fixed; inset: 0; z-index: 1000; background: #000; overflow: hidden; cursor: pointer; user-select: none; }
+#in-pic { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; transform-origin: 50% 50%; }
+#in-text { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 26px; padding: 0 6vw; }
+.in-line { color: #fff; font: 38px/52px Consolas, 'Courier New', monospace; text-align: center; opacity: 0; transform: translateY(14px); }
+#in-fade { position: absolute; inset: 0; background: #000; opacity: 1; pointer-events: none; }
+#in-hint { position: absolute; right: 24px; bottom: 16px; color: rgba(255,255,255,.4); font: 16px Consolas, monospace; pointer-events: none; }
+@media (max-width: 900px) { .in-line { font-size: 26px; line-height: 36px; } }

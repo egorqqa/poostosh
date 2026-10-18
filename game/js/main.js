@@ -831,7 +831,7 @@
       document.getElementById('log-box').innerHTML = '';
       G.log(`${p.name}, вы выходите из пустоши к поселению у старой заправки.`, 'sys');
       G.log('Подсказка: поговорите со старостой Михалычем (клик по NPC).', 'sys');
-      WORLD_API.goLocation(G, 'camp');
+      UI.openIntro(() => WORLD_API.goLocation(G, 'camp')); // стартовая сцена: авария на серпантине
     });
   }
 

@@ -901,6 +901,82 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
     });
   };
 
+  // ---------- интро новой игры ----------
+  // Фраза белым по чёрному → кадр (медленный наезд камеры) → … → «Утро...», затем игра.
+  // Каждая фраза проявляется из темноты своей строкой, с небольшим подъёмом, следующая — чуть позже.
+  // Клик / Пробел / Enter — следующий слайд, Esc — пропустить интро.
+  const INTRO = [
+    { text: ['Езда по серпантину...', 'Ночь, дождь, фары выхватывают мокрый асфальт...'] },
+    { image: 'intro_0001.jpg' },
+    { text: ['Вспышки в кустах у обочины...'] },
+    { image: 'intro_0002.jpg' },
+    { text: ['Звон стекла...', 'Руль вырывается из рук...'] },
+    { image: 'intro_0003.jpg' },
+    { text: ['Удар...', 'Темнота...'] },
+    { image: 'intro_0004.jpg' },
+    { text: ['Утро...', 'Пахнет бензином и мокрой хвоей...', 'Вы живы...'] },
+  ];
+  const IN = { image: 6, hold: 2.6, lineFade: 1.6, lineStep: 1.3, rise: 14, fadeIn: 0.9, fadeOut: 0.7, zoom: 1.07 };
+  U.openIntro = function (done) {
+    INTRO.forEach(s => { if (s.image) { const im = new Image(); im.src = 'assets/intro/' + s.image; } });
+    const el = document.createElement('div');
+    el.id = 'intro';
+    el.innerHTML = `<img id="in-pic" alt=""><div id="in-text"></div><div id="in-fade"></div><div id="in-hint">Клик — дальше  ·  Esc — пропустить</div>`;
+    document.body.appendChild(el);
+    const pic = el.querySelector('#in-pic'), text = el.querySelector('#in-text'), fade = el.querySelector('#in-fade');
+    let idx = -1, timers = [], finished = false;
+    const later = (fn, s) => timers.push(setTimeout(fn, s * 1000));
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      timers.forEach(clearTimeout);
+      removeEventListener('keydown', onKey, true);
+      fade.style.transition = `opacity ${IN.fadeOut}s ease`; fade.style.opacity = 1;
+      setTimeout(() => { el.remove(); done && done(); }, IN.fadeOut * 1000);
+    };
+    const next = () => {
+      if (finished) return;
+      timers.forEach(clearTimeout); timers = [];
+      idx++;
+      if (idx >= INTRO.length) { finish(); return; }
+      const s = INTRO[idx];
+      // из темноты
+      fade.style.transition = 'none'; fade.style.opacity = 1; void fade.offsetWidth;
+      fade.style.transition = `opacity ${IN.fadeIn}s ease-in-out`; fade.style.opacity = 0;
+      let dur;
+      if (s.image) {
+        text.style.display = 'none'; pic.style.display = 'block';
+        pic.src = 'assets/intro/' + s.image;
+        pic.style.transition = 'none'; pic.style.transform = 'scale(1)'; void pic.offsetWidth;
+        pic.style.transition = `transform ${IN.image}s cubic-bezier(.39,.58,.57,1)`; pic.style.transform = `scale(${IN.zoom})`;
+        dur = IN.image;
+      } else {
+        pic.style.display = 'none'; text.style.display = 'flex';
+        text.innerHTML = s.text.map(t => `<div class="in-line">${t}</div>`).join('');
+        [...text.children].forEach((ln, i) => {
+          const d = IN.fadeIn * 0.5 + i * IN.lineStep;
+          ln.style.transition = `opacity ${IN.lineFade}s ease-in-out ${d}s, transform ${IN.lineFade + 0.4}s cubic-bezier(.17,.84,.44,1) ${d}s`;
+          void ln.offsetWidth; // фиксируем начальное состояние, чтобы сработал переход
+          ln.style.opacity = 1; ln.style.transform = 'translateY(0)';
+        });
+        dur = IN.fadeIn * 0.5 + (s.text.length - 1) * IN.lineStep + IN.lineFade + IN.hold + IN.fadeOut;
+      }
+      // в темноту перед следующим слайдом
+      later(() => { fade.style.transition = `opacity ${IN.fadeOut}s ease-in-out`; fade.style.opacity = 1; }, dur - IN.fadeOut);
+      later(next, dur);
+    };
+    const onKey = e => {
+      if (finished) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); finish(); }
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); next(); }
+      else e.stopImmediatePropagation();
+    };
+    addEventListener('keydown', onKey, true);
+    el.addEventListener('mousedown', e => { e.preventDefault(); if (e.button === 0 || e.button === 2) next(); });
+    el.addEventListener('contextmenu', e => e.preventDefault());
+    next();
+  };
+
   // ---------- меню паузы (Esc) ----------
   U.openPause = function () {
     const mp = NET.active;
