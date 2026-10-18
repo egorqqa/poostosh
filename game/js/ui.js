@@ -548,26 +548,34 @@ window.UI = (function () {
   }
 
   // ---------- заставка / смерть ----------
+  // фон главного меню: одна из четырёх заставок, выбирается при запуске игры
+  const MENU_BG = 1 + Math.floor(Math.random() * 4);
   U.openTitle = function (hasSave, onNew, onLoad) {
     U._onNew = onNew; U._onLoad = onLoad;
-    U.openModal('title', `<div class="title-screen">
-      <h1>ПУСТОШЬ</h1><div class="sub">РЖАВЫЙ РУЧЕЙ · ДЕМО</div>
-      <button class="primary" id="t-new">Новая игра</button>
-      <button id="t-load" ${hasSave ? '' : 'disabled'}>Загрузить</button>
-      <button id="t-mp">Сетевая игра</button>
-      <button id="t-set">Настройки</button>
-      ${window.desktop ? '<button id="t-quit">Выход</button>' : ''}
-      <div class="muted" style="margin-top:22px;font-size:12px;line-height:1.6">ЛКМ — идти / действие · ПКМ — отменить режим · колесо — масштаб · 1–3 — быстрые слоты<br>
-      Q ходить · A атака · S красться · K кража · L взлом · X осмотр · H лечить · R перезарядка<br>I инвентарь · C персонаж · M карта · N мини-карта · Пробел — конец хода · F5/F9 — сохранить/загрузить</div>
+    U.openModal('title', `<div class="menu-bg" style="background-image:url('assets/menu/menu${MENU_BG}.jpg')"></div>
+    <div class="main-menu">
+      ${hasSave ? '<button class="mm-btn on" id="t-cont"><i></i>Продолжить</button>' : ''}
+      <button class="mm-btn${hasSave ? '' : ' on'}" id="t-new"><i></i>Новая игра</button>
+      <button class="mm-btn" id="t-load" ${hasSave ? '' : 'disabled'}><i></i>Загрузить</button>
+      <button class="mm-btn" id="t-mp"><i></i>Сетевая игра</button>
+      <button class="mm-btn" id="t-set"><i></i>Настройки</button>
+      <button class="mm-btn" id="t-quit"><i></i>Выход</button>
     </div>
-    <div class="version-box"><button id="t-upd" class="upd hidden" data-tip="Доступно обновление">!</button><span>${window.GAME_VERSION}</span></div>`, root => {
+    <div class="version-box menu-ver"><span>ver. ${window.GAME_VERSION}</span><button id="t-upd" class="upd hidden" data-tip="Доступно обновление">!</button></div>`, root => {
+      const cont = root.querySelector('#t-cont');
+      if (cont) cont.onclick = onLoad;
       root.querySelector('#t-new').onclick = onNew;
       root.querySelector('#t-load').onclick = onLoad;
       root.querySelector('#t-mp').onclick = () => U.openMultiplayer();
       root.querySelector('#t-set').onclick = () => U.openSettings();
       SND.setScene('menu');
       const q = root.querySelector('#t-quit');
-      if (q) q.onclick = () => window.desktop.quit();
+      if (q) q.onclick = () => {
+        if (window.desktop) { window.desktop.quit(); return; }
+        // в браузере: закрыть вкладку (работает, если игру открыли из скрипта); иначе — подсказка
+        window.close();
+        setTimeout(() => { if (!window.closed) G.hint('Закройте вкладку браузера, чтобы выйти из игры'); }, 200);
+      };
       const upd = root.querySelector('#t-upd');
       const show = info => {
         if (!info || !info.newer || !upd.isConnected) return;

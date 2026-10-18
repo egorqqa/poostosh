@@ -232,3 +232,25 @@ button.primary { background: linear-gradient(180deg, #3f6a2c, #1f3a16); color: #
 .hero-kit { color: #e8e2d0; font-size: 13px; margin-top: 8px; }
 .hero-btns { display: flex; gap: 10px; margin-top: 16px; }
 .hero-btns button { min-width: 160px; }
+
+/* ---------- главное меню ---------- */
+#modal-root.full .menu-bg { position: absolute; inset: 0; background-size: cover; background-position: center 30%; background-color: #0b0805; animation: menu-in 1.2s ease-out; }
+#modal-root.full .menu-bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,0) 55%, rgba(0,0,0,.35) 100%), linear-gradient(0deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,0) 30%); }
+@keyframes menu-in { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: scale(1); } }
+.main-menu { position: absolute; right: clamp(16px, 4vw, 72px); bottom: clamp(48px, 7vh, 90px); width: clamp(240px, 19vw, 360px); padding: 12px;
+  background: linear-gradient(180deg, rgba(62,64,62,.92), rgba(30,31,30,.94)); border: 2px solid #5b5e5a; border-radius: 3px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.06); display: flex; flex-direction: column; gap: 10px; z-index: 2; }
+.main-menu::before, .main-menu::after { content: ''; position: absolute; width: 7px; height: 7px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #bdbdb5, #3a3a36); top: 4px; left: 4px;
+  box-shadow: calc(clamp(240px, 19vw, 360px) - 15px) 0 0 #77776f; }
+.main-menu::after { top: auto; bottom: 4px; }
+.main-menu .mm-btn { display: flex; align-items: center; gap: 12px; width: 100%; margin: 0; padding: 12px 16px; text-align: left; font: 600 clamp(14px, 1.15vw, 20px) var(--font); letter-spacing: 1.5px; text-transform: uppercase;
+  color: #e8e2d0; background: linear-gradient(180deg, #4a4c4a 0%, #343534 55%, #2b2c2b 100%); border: 1px solid #1a1a19; border-top-color: #6a6c69; border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 2px 4px rgba(0,0,0,.5); cursor: pointer; transition: background .15s, color .15s, transform .1s; }
+.main-menu .mm-btn i { width: 10px; height: 10px; border-radius: 50%; flex: none; background: radial-gradient(circle at 35% 35%, #ff7a6a, #7a1208 70%); box-shadow: 0 0 4px rgba(255,60,40,.5); }
+.main-menu .mm-btn.on i, .main-menu .mm-btn:hover:not(:disabled) i { background: radial-gradient(circle at 35% 35%, #b8ff9a, #2e9a14 70%); box-shadow: 0 0 8px rgba(110,255,80,.8); }
+.main-menu .mm-btn:hover:not(:disabled) { background: linear-gradient(180deg, #5a5c58 0%, #42443f 60%, #343531 100%); color: #fff2c8; }
+.main-menu .mm-btn:active:not(:disabled) { transform: translateY(1px); }
+.main-menu .mm-btn:disabled { opacity: .45; cursor: default; }
+.menu-ver { right: auto; left: 18px; bottom: 12px; color: rgba(255,255,255,.75); text-shadow: 0 1px 2px #000; z-index: 2; }
+@media (max-width: 900px), (max-height: 560px) { .main-menu { width: 220px; padding: 8px; gap: 6px; bottom: 36px; } .main-menu .mm-btn { padding: 7px 12px; font-size: 13px; } .main-menu::before, .main-menu::after { box-shadow: 205px 0 0 #77776f; } }
+@media (max-width: 420px) { .main-menu { left: 16px; right: 16px; width: auto; } .main-menu::before, .main-menu::after { display: none; } }
