@@ -927,5 +927,15 @@ window.ASSET_MANIFEST = {
 "ax": 75,
 "ay": 106,
 "n": 16
+},
+"lada_wreck": {
+"src": "assets/sprites/lada_wreck.png",
+"w": 226,
+"h": 139
+},
+"lada_wreck_back": {
+"src": "assets/sprites/lada_wreck_back.png",
+"w": 222,
+"h": 127
 }
 };

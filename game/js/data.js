@@ -13,7 +13,11 @@ window.DATA = (function () {
 
   // base(s) — стартовое значение навыка от характеристик
   const SKILLS = [
-    { id: 'guns', name: 'Оружие', base: s => 5 + 4 * s.agi, desc: 'Владение огнестрельным оружием. Шанс попадания из пистолетов, обрезов и винтовок.' },
+    { id: 'auto', name: 'Автоматы', base: s => 5 + 2 * s.agi + 2 * s.end, desc: 'Автоматы (АК). Шанс попадания, урон (+0,5% за каждый процент навыка выше 40), дальность (+1 клетка за каждые 25% выше 40), шанс и сила критического попадания.' },
+    { id: 'pistols', name: 'Пистолеты', base: s => 5 + 4 * s.agi, desc: 'Пистолеты. Шанс попадания, урон, дальность, шанс и сила критического попадания. Пистолет быстрый и лёгкий: 4 ОД на выстрел.' },
+    { id: 'shotguns', name: 'Ружья', base: s => 5 + 2 * s.str + 2 * s.per, desc: 'Ружья: обрезы и охотничьи винтовки. Шанс попадания, урон, дальность, шанс и сила критического попадания.' },
+    { id: 'throwing', name: 'Гранаты', base: s => 5 + 2 * s.str + 2 * s.agi, desc: 'Гранаты, коктейли Молотова и метательные ножи. Точность броска, урон и дальность броска (+1 клетка за каждые 40%).' },
+    { id: 'guns', name: 'Оружие', npc: true, base: s => 5 + 4 * s.agi, desc: 'Общее владение оружием у NPC и напарников.' },
     { id: 'melee', name: 'Ближний бой', base: s => 20 + 2 * (s.agi + s.str), desc: 'Драка ножом, трубой и кулаками. Шанс попадания в ближнем бою.' },
     { id: 'medic', name: 'Медицина', base: s => 10 + 2 * (s.per + s.int), desc: 'Лечение ран. Увеличивает эффект аптечек и бинтов, позволяет оказывать первую помощь (кнопка «Лечить»).' },
     { id: 'survival', name: 'Выживание', base: s => 5 + 2 * (s.end + s.int), desc: 'Жизнь в пустоши. Снижает шанс случайных встреч на карте мира, ускоряет путешествие и отдых, помогает заметить засаду.' },
@@ -69,6 +73,7 @@ window.DATA = (function () {
     ash_ak: { name: 'АК «Феникс»', type: 'weapon', icon: 'ak', unique: true, weight: 4, value: 1400, dmg: [13, 20], ap: 5, range: 16, mag: 30, ammo: 'ammo762', crit: 8, burn: 2, desc: 'Уникальное. Автомат Вожака Пепла с закопчённым стволом и зажигательными патронами в магазине: попадание может поджечь цель.' },
     borey_rifle: { name: 'Винтовка «Борей»', type: 'weapon', icon: 'rifle', unique: true, weight: 4.5, value: 1600, dmg: [16, 28], ap: 5, range: 24, mag: 5, ammo: 'ammo762', crit: 15, pierce: true, desc: 'Уникальное. Личная винтовка маршала Бастиона. Бронебойные пули не замечают брони (порог урона цели не действует).' },
     zno_shotgun: { name: 'Обрез «Зной»', type: 'weapon', icon: 'shotgun', unique: true, weight: 3, value: 1100, dmg: [12, 24], ap: 5, range: 5, mag: 2, ammo: 'shells', crit: 5, spread: true, desc: 'Уникальное. Обрез атамана пустынников. Широкий сноп дроби задевает всех рядом с целью (половина урона).' },
+    sealed_crate: { name: 'Опечатанный ящик', type: 'quest', icon: 'meds', weight: 4, value: 0, desc: 'Тяжёлый ящик с пломбой. Тот самый, что вы везли по серпантину — и который у вас отняли. На крышке трафарет: «З-2».' },
     roach_shell: { name: 'Панцирь радтаракана', type: 'misc', icon: 'junk', weight: 0.3, value: 6, desc: 'Хитиновая пластина. Борис и торговцы принимают как хлам.' },
     wolf_armor: { name: 'Броня из волчьих шкур', type: 'armor', icon: 'jacket', weight: 6, value: 320, ac: 18, dt: 2, dr: 28, desc: 'Сшитые шкуры мутантных волков поверх кожи. +18 КБ.' },
     chitin_armor: { name: 'Хитиновая броня', type: 'armor', icon: 'armor', weight: 8, value: 420, ac: 20, dt: 4, dr: 32, desc: 'Пластины панцирей радтараканов на кожаной основе. Лёгкая и прочная.' },
@@ -156,7 +161,7 @@ window.DATA = (function () {
       inv: [['ammo762', 10], ['token', 1]], caps: 15, weapon: 'rifle', skills: { guns: 55 }, xp: 60 },
     klyk: { name: 'Главарь Клык', tint: 'boss', faction: 'raiders', hostile: true, dialog: 'klyk',
       stats: { str: 7, per: 6, end: 8, cha: 5, int: 5, agi: 7, luck: 6 }, hp: 60,
-      inv: [['ammo762', 30], ['medkit', 1], ['token', 1]], caps: 90, weapon: 'ak', armor: 'vest', skills: { guns: 65 }, xp: 150 },
+      inv: [['ammo762', 30], ['medkit', 1], ['token', 1], ['sealed_crate', 1]], caps: 90, weapon: 'ak', armor: 'vest', skills: { guns: 65 }, xp: 150 },
     vera: { name: 'Комендант Вера', tint: 'guard', faction: 'rassvet', dialog: 'vera',
       stats: { str: 6, per: 7, end: 7, cha: 7, int: 7, agi: 6, luck: 5 }, hp: 50,
       inv: [['ammo762', 20], ['medkit', 1]], caps: 60, weapon: 'rifle', armor: 'leather', skills: { guns: 70 } },
@@ -293,8 +298,14 @@ window.DATA = (function () {
   // opt: { t, go, end, act, check:{skill,diff}, ok, fail, if, once, xp }
   const DIALOGS = {
     mihalych: {
-      start: g => g.q('finale') === 1 ? 'fin1' : g.q('finale') === 2 ? 'fin_wait' : g.q('finale') === 3 ? 'fin_end' : g.quests.meds === 0 ? 'hello' : g.quests.meds >= 3 ? 'done' : g.hasItem('meds') ? 'return' : 'progress',
+      start: g => g.q('finale') === 1 ? 'fin1' : g.q('finale') === 2 ? 'fin_wait' : g.q('finale') === 3 ? 'fin_end' : g.hasItem('sealed_crate') && g.q('crate') < 9 ? 'crate_found' : g.q('crate') === 2 ? 'crate_ask' : g.quests.meds === 0 ? 'hello' : g.quests.meds >= 3 ? 'done' : g.hasItem('meds') ? 'return' : 'progress',
       nodes: {
+        crate_ask: { text: 'Обстреляли на серпантине, говоришь? Машина в кювете, груз пропал... Знакомый почерк. Дорогу за пустыней держат люди Клыка — главаря рейдеров. Они сидят на старом Блокпосте 17 и грабят всех, кто едет мимо. Если твой ящик где и есть — то у Клыка.',
+          onEnter: g => { g.setQuest('crate', 3); g.revealSite('post'); },
+          opts: [{ t: 'Значит, наведаюсь к Клыку.', go: 'hello' }] },
+        crate_found: { text: 'Это он? Пломба цела... Трафарет «З-2». Не знаю, что за груз ты вёз и кому, но лучше бы его не вскрывать при людях. Держи у себя — и держи язык за зубами.',
+          onEnter: g => { g.setQuest('crate', 9); g.reward(200, 100, []); g.addRep(5, 'вернул своё у Клыка'); },
+          opts: [{ t: 'Понял.', go: 'hello' }] },
         fin1: { text: 'Пришёл всё-таки. Глянь вокруг: старосты, караванщики, люди с «Рассвета» — Совет пустоши впервые за двадцать лет. Все хотят знать, что дальше... Погоди. Слышишь? Часовые бьют тревогу у ворот!',
           opts: [{ t: '[К воротам!]', act: g => g.finaleStart(), end: true }] },
         fin_wait: { text: 'Не стой столбом, они уже у ворот! Отобьём — тогда и поговорим.', opts: [{ t: '[В бой]', end: true }] },
@@ -1327,6 +1338,22 @@ window.DATA = (function () {
         ['scav_boss', 36, 22, { wander: 1 }], ['rat', 31, 36, { wander: 3 }], ['rat', 12, 33, { wander: 3 }],
       ],
     },
+    crash: {
+      name: 'Обочина у серпантина', w: 36, h: 30, desert: true, base: '#b08b55', ground: [],
+      road: { x0: 14, x1: 17 }, mountain: { rows: 4 }, skid: [[15, 7], [17, 10], [20, 12], [22, 14]],
+      entry: { x: 21, y: 18 },
+      exits: [{ x0: 13, y0: 28, x1: 18, y1: 29, label: 'ДОРОГА' }],
+      desc: 'Песок, скалы и пустая дорога вдоль горы. Ваша машина слетела с трассы и уткнулась в камни.',
+      objects: [
+        ['lada_wreck', 21, 12, { fw: 3, fh: 3, oy: 14, interact: 'lada_wreck' }],
+        ['rocks_big', 24, 10, {}], ['rocks', 25, 13, {}], ['rocks2', 19, 9, {}],
+        ['rocks_big', 2, 5, {}], ['rocks_big', 7, 4, {}], ['rocks', 11, 5, {}], ['rocks_big', 22, 4, {}], ['rocks2', 27, 5, {}], ['rocks_big', 31, 4, {}], ['rocks', 34, 6, {}],
+        ['rocks2', 4, 14, {}], ['rocks', 8, 21, {}], ['rocks_big', 29, 19, {}], ['rocks2', 32, 25, {}], ['rocks', 25, 24, {}],
+        ['bush_dry', 9, 11, {}], ['bush_dry', 27, 16, {}], ['bush_dry', 5, 25, {}], ['bush_dry', 30, 9, {}], ['stump', 11, 17, {}],
+        ['tires', 19, 15, {}], ['sign_quarantine', 13, 9, {}], ['jersey_red', 18, 6, {}],
+      ],
+      npcs: [],
+    },
     camp: {
       name: 'Ржавый Ручей', w: 44, h: 44, ground: ['dirt_tracks', 'rubble_ground', 'broken_pavement', 'cracked_road', 'overgrown_grassland'],
       groundW: [3, 2, 2, 1, 2], base: '#5a4a34',
@@ -1440,6 +1467,7 @@ window.DATA = (function () {
       { id: 'oasis', x: 2, y: 10, name: 'Оазис', sprite: 'tree_willow', known: false },
       { id: 'solar', x: 1, y: 15, name: 'Солнечная станция', sprite: 'transformer_big', known: false },
       { id: 'camp', x: 10, y: 12, name: 'Ржавый Ручей', sprite: 'booth', known: true },
+      { id: 'crash', x: 14, y: 13, name: 'Место аварии', sprite: 'lada_wreck', known: true },
       { id: 'post', x: 19, y: 6, name: 'Блокпост 17', sprite: 'mil_tower', known: false },
       { id: 'zarya', x: 21, y: 13, name: 'Промзона «Заря»', sprite: 'brick_factory', known: false },
       { id: 'hive', x: 15, y: 17, name: 'Улей', sprite: 'transformer_rad', known: false },
@@ -1469,6 +1497,12 @@ window.DATA = (function () {
     { id: 'sharp', slot: 'edge', name: 'Заточка и балансировка', for: 'melee', desc: '+2 к урону в ближнем бою.', need: [['junk', 3], ['roach_shell', 1]], caps: 25 },
   ];
   const WMAX_LVL = 3;
+  // профиль героя: какой навык профильный и что лежит в багажнике разбитой машины
+  const CLASSES = [
+    { id: 'auto', name: 'Автоматчик', skill: 'auto', kit: [['ak', 1], ['ammo762', 60]], desc: 'Автомат АК и 60 патронов 7.62. Плотный огонь на средней дистанции, но патроны тяжёлые и дорогие.' },
+    { id: 'pistols', name: 'Стрелок', skill: 'pistols', kit: [['pistol', 1], ['ammo9', 48], ['tknife', 3]], desc: 'Пистолет 9мм, 48 патронов и метательные ножи. Быстрые выстрелы за 4 ОД, патронов много.' },
+    { id: 'shotguns', name: 'Охотник', skill: 'shotguns', kit: [['shotgun', 1], ['shells', 24]], desc: 'Обрез и 24 патрона с дробью. Страшный урон вблизи, на дистанции — слабее.' },
+  ];
   const QUESTS = {
     debt: { title: 'Долг Тихона', giver: 'semyon', steps: { 1: 'Выбейте из бродяги Тихона 15 крышек долга (Красноречие, Сила или Кража) и отнесите их Сёме.' } },
     tools: { title: 'Инструменты Бориса', giver: 'boris', steps: { 1: 'Вскройте ящик с инструментами у гаража (Взлом) и принесите их механику Борису.' } },
@@ -1485,6 +1519,10 @@ window.DATA = (function () {
       3: 'Объект 9: проникните в хранилище (код — у радиста Кузьмы, ключ-карта — у охраны, или Взлом 60) и разберитесь со складом «З-2».',
       4: 'Вернитесь к коменданту Вере на станцию «Рассвет».' } },
     mast: { title: 'Молчащая антенна', giver: 'kuzma', steps: { 1: 'Почините радиомачту «Рассвета»: нужно 3 хлама и Интеллект 6 или Взлом 35.', 2: 'Антенна работает — сообщите радисту Кузьме.' } },
+    crate: { title: 'Опечатанный ящик', giver: 'mihalych', steps: {
+      1: 'На серпантине вашу машину обстреляли, и она вылетела с трассы. Из неё пропал опечатанный ящик. Заберите из машины всё полезное и идите по дороге на запад — к Ржавому Ручью.',
+      2: 'Вы в Ржавом Ручье. Расспросите старосту Михалыча о засаде на серпантине.',
+      3: 'Михалыч уверен: дорогу держат рейдеры Клыка с Блокпоста 17. Верните ящик — он должен быть у главаря — и покажите Михалычу.' } },
     finale: { title: 'Глава 8: Совет пустоши', giver: 'kuzma', steps: {
       1: 'Михалыч созывает Совет пустоши в Ржавом Ручье. Поговорите с ним.',
       2: 'Орда «Пепел» атакует Ржавый Ручей во время Совета! Отбейте штурм и убейте Вожака.',
@@ -1529,6 +1567,30 @@ window.DATA = (function () {
       search: { loot: [['junk', 1, 2, 70], ['food', 1, 1, 30], ['bandage', 1, 1, 25]], caps: [0, 8] } },
     bus2: { name: 'Остов автобуса', look: 'Междугородний автобус. На табличке маршрута ещё читается: «Заря — Центр».', lookXp: 5,
       search: { loot: [['junk', 1, 2, 70], ['food', 1, 1, 30], ['bandage', 1, 1, 25]], caps: [0, 8] } },
+    lada_wreck: { name: 'Ваша машина', lookXp: 15,
+      look: 'Ваши «Жигули». Капот смят о камни, лобовое в паутине трещин, в двери — пулевые отверстия. По вам стреляли из кустов у обочины. Опечатанного ящика, который вы везли, в машине нет — кто-то забрал его, пока вы лежали без сознания.',
+      onLook: g => { if (!g.q('crate')) g.setQuest('crate', 1); },
+      actions: [
+        { label: 'Обыскать бардачок', if: g => !g.flags.crashGlove, act: g => {
+          g.flags.crashGlove = true;
+          R.addItem(g.player, 'bandage', 2); g.player.caps += 75;
+          if (!g.q('crate')) g.setQuest('crate', 1);
+          if (g.world) g.world.target = 'camp';
+          SND.play('pickup'); UI.refresh();
+          g.log('Найдено: 75 крышек, Бинт ×2, накладная.', 'good');
+          return 'В бардачке — пачка крышек, два бинта и накладная: «Груз — ящик опечатанный, 1 шт. Получатель — Ржавый Ручей, у старой заправки». Ручей где-то на западе, по дороге.';
+        } },
+        { label: 'Открыть багажник', if: g => !g.flags.crashTrunk, act: g => {
+          g.flags.crashTrunk = true;
+          const cls = DATA.CLASSES.find(c => c.id === g.player.cls) || DATA.CLASSES[0];
+          const got = [];
+          for (const [id, n] of cls.kit.concat([['medkit', 1], ['water', 2], ['food', 1], ['junk', 3], ['grenade', 1]])) { R.addItem(g.player, id, n); got.push(DATA.ITEMS[id].name + (n > 1 ? ' ×' + n : '')); }
+          if (!g.q('crate')) g.setQuest('crate', 1);
+          g.giveXP(10); SND.play('pickup'); UI.refresh();
+          g.log('Найдено: ' + got.join(', ') + '.', 'good');
+          return 'Багажник заклинило, но вы отжимаете крышку. Сумка на месте: ' + got.join(', ') + '. Оружие возьмите в руки через инвентарь [I].';
+        } },
+      ] },
     wrecked_car: { name: 'Разбитая легковушка', look: 'Колёс нет, стёкла выбиты. На заднем сиденье — истлевший чемодан.', lookXp: 5, search: JUNK_CAR },
     wrecked_cars: { name: 'Груда машин', look: 'Две легковушки, сплющенные друг о друга. Видимо, их стаскивали сюда трактором.', lookXp: 5, search: JUNK_CAR },
     truck: { name: 'Грузовик', look: 'Армейский грузовик без колёс. В кабине кто-то ночует — на сиденье одеяло.', lookXp: 5,
@@ -1751,5 +1813,5 @@ window.DATA = (function () {
     { id: 'rat_stew', n: 2, need: [['rat_tail', 3], ['water', 1]], caps: 0, desc: 'Похлёбка из крысиных хвостов. Звучит мерзко, лечит хорошо.' },
   ];
 
-  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, WMODS, WMAX_LVL, INTERACT, PERKS, AIM, RECIPES };
+  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, WMODS, WMAX_LVL, CLASSES, INTERACT, PERKS, AIM, RECIPES };
 })();

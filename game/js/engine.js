@@ -135,10 +135,101 @@ window.ENG = (function () {
     g.fillStyle = 'rgba(8,6,4,0.82)';
     g.fill('evenodd');
     g.restore();
+    if (L.def.desert) drawDesert(g, L, ox, oy, r);
     if (L.def.river) drawRiver(g, L, ox, oy, r);
     if (L.def.interior) drawInterior(g, L, ox, oy, r);
     L.ground = { canvas: c, ox, oy };
   };
+
+  // песчаная пустыня: рябь дюн, дорога вдоль карты, следы заноса, гора за северным краем
+  function drawDesert(g, L, ox, oy, r) {
+    const P = (x, y) => { const p = iso(x, y); return { x: ox + p.x, y: oy + p.y }; };
+    const poly = pts => { g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.closePath(); };
+    // песок внутри карты
+    g.save(); poly([P(0, 0), P(L.w, 0), P(L.w, L.h), P(0, L.h)]); g.clip();
+    const a = P(0, 0), c = P(L.w, L.h);
+    const gr = g.createLinearGradient(a.x, a.y, c.x, c.y);
+    gr.addColorStop(0, '#b8925a'); gr.addColorStop(0.5, '#c29c63'); gr.addColorStop(1, '#a9844f');
+    g.fillStyle = gr; g.fillRect(0, 0, g.canvas.width, g.canvas.height);
+    // пятна светлого и тёмного песка
+    for (let i = 0; i < 90; i++) {
+      const p = P(r() * L.w, r() * L.h), rr = 30 + r() * 90;
+      const sp = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr);
+      sp.addColorStop(0, r() < 0.5 ? 'rgba(235,205,150,0.22)' : 'rgba(120,85,45,0.18)'); sp.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = sp; g.beginPath(); g.ellipse(p.x, p.y, rr, rr * 0.5, 0, 0, Math.PI * 2); g.fill();
+    }
+    // рябь дюн
+    g.lineWidth = 1.4;
+    for (let i = 0; i < 520; i++) {
+      const p = P(r() * L.w, r() * L.h), w = 14 + r() * 26;
+      g.strokeStyle = r() < 0.5 ? 'rgba(255,235,190,0.28)' : 'rgba(110,78,40,0.22)';
+      g.beginPath(); g.moveTo(p.x - w, p.y); g.quadraticCurveTo(p.x, p.y - 4, p.x + w, p.y + 1); g.stroke();
+    }
+    // песчинки
+    for (let i = 0; i < 6000; i++) { const p = P(r() * L.w, r() * L.h); g.fillStyle = r() < 0.5 ? 'rgba(90,60,30,0.25)' : 'rgba(255,240,200,0.25)'; g.fillRect(p.x, p.y, 1.5, 1.5); }
+    // дорога: асфальт, обочины, трещины, разметка
+    const rd = L.def.road;
+    if (rd) {
+      poly([P(rd.x0 - 0.3, 0), P(rd.x1 + 1.3, 0), P(rd.x1 + 1.3, L.h), P(rd.x0 - 0.3, L.h)]); g.fillStyle = 'rgba(70,58,40,0.45)'; g.fill();
+      poly([P(rd.x0, 0), P(rd.x1 + 1, 0), P(rd.x1 + 1, L.h), P(rd.x0, L.h)]); g.fillStyle = '#4a463f'; g.fill();
+      for (let i = 0; i < 900; i++) { const p = P(rd.x0 + r() * (rd.x1 - rd.x0 + 1), r() * L.h); g.fillStyle = r() < 0.5 ? 'rgba(0,0,0,0.25)' : 'rgba(180,170,150,0.18)'; g.fillRect(p.x, p.y, 2, 1.5); }
+      // нанесённый песок поверх асфальта
+      for (let i = 0; i < 40; i++) {
+        const p = P(rd.x0 + r() * (rd.x1 - rd.x0 + 1), r() * L.h), rr = 20 + r() * 40;
+        const sp = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr); sp.addColorStop(0, 'rgba(190,150,95,0.55)'); sp.addColorStop(1, 'rgba(190,150,95,0)');
+        g.fillStyle = sp; g.beginPath(); g.ellipse(p.x, p.y, rr, rr * 0.45, 0, 0, Math.PI * 2); g.fill();
+      }
+      g.strokeStyle = 'rgba(20,18,14,0.55)'; g.lineWidth = 1;
+      for (let i = 0; i < 26; i++) { let p = P(rd.x0 + r() * (rd.x1 - rd.x0 + 1), r() * L.h); g.beginPath(); g.moveTo(p.x, p.y); for (let k = 0; k < 4; k++) { p = { x: p.x + (r() - 0.5) * 22, y: p.y + (r() - 0.5) * 12 }; g.lineTo(p.x, p.y); } g.stroke(); }
+      // осевая разметка (стёртая)
+      const mid = (rd.x0 + rd.x1 + 1) / 2;
+      g.strokeStyle = 'rgba(225,215,170,0.55)'; g.lineWidth = 3;
+      for (let y = 0.5; y < L.h; y += 2) { if (r() < 0.3) continue; const s = P(mid, y), e = P(mid, y + 0.9); g.beginPath(); g.moveTo(s.x, s.y); g.lineTo(e.x, e.y); g.stroke(); }
+    }
+    // следы заноса от дороги к машине
+    const sk = L.def.skid;
+    if (sk) for (const off of [-0.35, 0.35]) {
+      g.strokeStyle = 'rgba(40,28,16,0.45)'; g.lineWidth = 5; g.lineCap = 'round';
+      g.beginPath(); sk.forEach(([x, y], i) => { const p = P(x + off, y - off); i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); }); g.stroke();
+    }
+    g.restore();
+    // гора: склон в северных рядах и скальная стена за краем карты
+    const mt = L.def.mountain;
+    if (mt) {
+      const n = mt.rows;
+      const H = x => 150 + Math.sin(x * 0.55) * 40 + Math.sin(x * 1.7 + 1) * 18 + Math.sin(x * 0.21 + 2) * 60;
+      // стена
+      const top = [];
+      for (let x = -2; x <= L.w + 2; x += 0.5) { const p = P(x, 0); top.push({ x: p.x, y: p.y - H(x) }); }
+      g.beginPath(); g.moveTo(P(-2, 0).x, P(-2, 0).y);
+      for (const q of top) g.lineTo(q.x, q.y);
+      g.lineTo(P(L.w + 2, 0).x, P(L.w + 2, 0).y); g.closePath();
+      const wg = g.createLinearGradient(0, P(0, 0).y - 260, 0, P(L.w, 0).y);
+      wg.addColorStop(0, '#5a4430'); wg.addColorStop(0.6, '#7a5c3c'); wg.addColorStop(1, '#8e6c46');
+      g.fillStyle = wg; g.fill();
+      // пласты и трещины
+      g.save(); g.clip();
+      for (let i = 0; i < 70; i++) {
+        const x = r() * L.w, p = P(x, 0), y = p.y - r() * H(x);
+        g.strokeStyle = r() < 0.5 ? 'rgba(40,28,18,0.45)' : 'rgba(200,160,110,0.25)'; g.lineWidth = 1 + r() * 2;
+        g.beginPath(); g.moveTo(p.x - 30 - r() * 40, y + 10); g.lineTo(p.x + 30 + r() * 40, y - 6 + r() * 6); g.stroke();
+      }
+      for (let i = 0; i < 40; i++) {
+        const x = r() * L.w, p = P(x, 0), y = p.y - r() * H(x) * 0.9;
+        g.strokeStyle = 'rgba(30,20,12,0.5)'; g.lineWidth = 1.5;
+        g.beginPath(); g.moveTo(p.x, y); g.lineTo(p.x + (r() - 0.5) * 16, y + 18 + r() * 30); g.stroke();
+      }
+      g.restore();
+      // гребень освещён
+      g.strokeStyle = 'rgba(230,190,130,0.5)'; g.lineWidth = 2; g.beginPath(); top.forEach((q, i) => i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); g.stroke();
+      // осыпь у подножия
+      poly([P(0, 0), P(L.w, 0), P(L.w, n), P(0, n)]);
+      const sg = g.createLinearGradient(P(0, 0).x, P(0, 0).y, P(0, n).x, P(0, n).y);
+      sg.addColorStop(0, 'rgba(110,82,52,0.95)'); sg.addColorStop(1, 'rgba(160,125,80,0)');
+      g.fillStyle = sg; g.fill();
+      for (let i = 0; i < 260; i++) { const p = P(r() * L.w, r() * n); g.fillStyle = r() < 0.5 ? 'rgba(60,44,30,0.6)' : 'rgba(170,135,95,0.6)'; g.beginPath(); g.ellipse(p.x, p.y, 2 + r() * 5, 1.5 + r() * 3, 0, 0, Math.PI * 2); g.fill(); }
+    }
+  }
 
   // река с мостом поперёк карты
   function drawRiver(g, L, ox, oy, r) {
@@ -739,7 +830,7 @@ window.ENG = (function () {
   function drawThrowAim(ctx, G, L, p, tile, t) {
     const it = DATA.ITEMS[G.ui.throwItem];
     if (!it) return;
-    const d = E.dist(p, tile), ok = d <= it.range && d > 0 && E.los(L, p.x, p.y, tile.x, tile.y);
+    const rng = R.throwRange(p, it), d = E.dist(p, tile), ok = d <= rng && d > 0 && E.los(L, p.x, p.y, tile.x, tile.y);
     const r = it.radius || 0;
     for (let y = tile.y - r; y <= tile.y + r; y++) for (let x = tile.x - r; x <= tile.x + r; x++) {
       if (x < 0 || y < 0 || x >= L.w || y >= L.h) continue;
@@ -754,7 +845,7 @@ window.ENG = (function () {
     ctx.stroke(); ctx.restore();
     ctx.font = 'bold 12px Consolas, monospace'; ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(b.x - 34, b.y + 8, 68, 15);
-    ctx.fillStyle = ok ? '#ffd080' : '#ff7a5a'; ctx.fillText(ok ? `${it.ap} ОД` : d > it.range ? 'далеко' : 'нет броска', b.x, b.y + 19);
+    ctx.fillStyle = ok ? '#ffd080' : '#ff7a5a'; ctx.fillText(ok ? `${it.ap} ОД` : d > rng ? 'далеко' : 'нет броска', b.x, b.y + 19);
   }
 
   // перезарядка: пустой магазин падает, новый вставляется

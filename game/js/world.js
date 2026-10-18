@@ -21,6 +21,8 @@ window.WORLD_API = (function () {
   function buildGrids(L) {
     L.blocked = new Uint8Array(L.w * L.h);
     L.sight = new Uint8Array(L.w * L.h);
+    // гора: северные ряды непроходимы
+    if (L.def.mountain) for (let y = 0; y < L.def.mountain.rows; y++) for (let x = 0; x < L.w; x++) { L.blocked[y * L.w + x] = 1; L.sight[y * L.w + x] = 1; }
     const rv = L.def.river;
     if (rv) for (let y = rv.y0; y <= rv.y1; y++) for (let x = 0; x < L.w; x++) if (x < rv.bx0 || x > rv.bx1) L.blocked[y * L.w + x] = 1;
     for (const o of L.objects) {
@@ -266,6 +268,7 @@ window.WORLD_API = (function () {
     if (id === 'mine' && G.q('north') === 1) G.setQuest('north', 2);
     if (id === 'oasis' && G.q('west') === 1) G.log('Вы добрались до Оазиса. Найдите Хранительницу Ясну.', 'good');
     if (id === 'city' && G.q('column') === 1) G.setQuest('column', 2);
+    if (id === 'camp' && G.q('crate') === 1) G.setQuest('crate', 2);
     if (id === 'observatory' && G.q('obs') === 1) G.setQuest('obs', 2);
     if (!NET.active) { W.loadLocation(G, id, opts); setTimeout(() => G.autosave(), 300); return; }
     const res = await NET.enter(id);
@@ -699,6 +702,7 @@ window.WORLD_API = (function () {
     const k = objKey(G, o, 'look');
     G.log(`${it.name}: ${it.look}`, 'sys');
     if (!G.flags[k]) { G.flags[k] = true; if (it.lookXp) G.giveXP(it.lookXp); }
+    if (it.onLook) it.onLook(G, o);
     return it.look;
   };
 

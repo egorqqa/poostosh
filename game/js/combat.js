@@ -199,7 +199,7 @@ window.COMBAT = (function () {
     const d = ENG.dist(att, def);
     if (d > w.range) return 0;
     if (!w.melee && !ENG.los(G.loc, att.x, att.y, def.x, def.y)) return 0;
-    let ch = R.skill(att, w.melee ? 'melee' : 'guns') + 15 - R.AC(def);
+    let ch = (w.melee ? R.skill(att, 'melee') : R.gunSkill(att, w)) + 15 - R.AC(def);
     if (!w.melee) ch -= Math.max(0, d - att.stats.per + 1) * (w.steady ? 1.5 : 3);
     ch += w.aim || 0;
     if (!w.melee && d > 5 && !w.laser) ch -= Math.round(12 * G.nightK()); // ночью вдаль стрелять труднее
@@ -255,12 +255,14 @@ window.COMBAT = (function () {
     }
     const ev = { type: 'attack', att: att.id, def: def.id, hit, chance, melee: !!w.melee, sneak, dmg: 0, crit: false, killed: false, aim, effect: '' };
     if (hit) {
-      const critCh = (isPC(att) ? R.critChance(att) : Math.floor(R.critChance(att) / 2)) + (w.crit || 0) + (sneak ? 30 : 0) + (aim === 'head' ? 25 : 0);
+      const gsk = w.melee ? 0 : R.gunSkill(att, w);
+      const critCh = (isPC(att) ? R.critChance(att) : Math.floor(R.critChance(att) / 2)) + (w.crit || 0) + (sneak ? 30 : 0) + (aim === 'head' ? 25 : 0) + Math.floor(gsk / 10);
       const crit = R.rnd(1, 100) <= critCh;
       let dmg = R.rnd(w.dmg[0], w.dmg[1]) + (w.melee ? R.meleeBonus(att) : 0) + (w.bayonet && ENG.dist(att, def) <= 1 ? w.bayonet : 0);
+      if (!w.melee) dmg = Math.round(dmg * (1 + Math.max(0, gsk - 40) / 200)); // навык оружия добавляет урон
       if (aim === 'head') dmg = Math.round(dmg * 1.25);
       const dt = w.pierce ? 0 : crit ? Math.floor(R.DT(def) / 2) : R.DT(def);
-      if (crit) dmg = Math.round(dmg * (sneak ? 2.5 : 1.5));
+      if (crit) dmg = Math.round(dmg * ((sneak ? 2.5 : 1.5) + gsk / 400)); // и силу крита
       dmg = Math.max(1, Math.round((dmg - dt) * (1 - R.DR(def) / 100)));
       def.hp -= dmg;
       ev.dmg = dmg; ev.crit = crit;
@@ -416,7 +418,7 @@ window.COMBAT = (function () {
   const THROW_NAMES = { grenade: ['бросаете гранату', 'бросает гранату'], molotov: ['бросаете коктейль Молотова', 'бросает коктейль Молотова'], tknife: ['метаете нож', 'метает нож'] };
   C.throwChance = function (G, a, tx, ty) {
     const d = Math.max(Math.abs(a.x - tx), Math.abs(a.y - ty));
-    const sk = Math.max(R.skill(a, 'guns'), R.skill(a, 'melee'));
+    const sk = R.skill(a, 'throwing');
     return R.clamp(Math.round(sk + 15 - Math.max(0, d - 3) * 4 - 10 * G.nightK()), 10, 95);
   };
   C.playerThrow = async function (G, tx, ty, id) {
@@ -432,7 +434,7 @@ window.COMBAT = (function () {
     tx = R.clamp(Math.round(tx), 0, L.w - 1); ty = R.clamp(Math.round(ty), 0, L.h - 1);
     const d = Math.max(Math.abs(a.x - tx), Math.abs(a.y - ty));
     if (d < 1) return 'Слишком близко — себя заденете.';
-    if (d > it.range) return `Слишком далеко: бросок ${it.range}, до цели ${d}.`;
+    if (d > R.throwRange(a, it)) return `Слишком далеко: бросок ${R.throwRange(a, it)}, до цели ${d}.`;
     if (!ENG.los(L, a.x, a.y, tx, ty)) return 'Не добросить — мешает препятствие.';
     // бросок рядом с врагами начинает бой
     if (!G.combat) {
@@ -470,7 +472,7 @@ window.COMBAT = (function () {
       if (o.dead || o.gone || o === a && !it.radius) continue;
       const od = Math.max(Math.abs(o.x - lx), Math.abs(o.y - ly));
       if (it.radius ? od > it.radius : (!hit || od > 0)) continue;
-      let dmg = R.rnd(it.dmg[0], it.dmg[1]);
+      let dmg = Math.round(R.rnd(it.dmg[0], it.dmg[1]) * (1 + Math.max(0, R.skill(a, 'throwing') - 40) / 200));
       if (it.radius && od > 0) dmg = Math.round(dmg * 0.65);
       dmg = Math.max(1, Math.round((dmg - Math.floor(R.DT(o) / (it.radius ? 2 : 1))) * (1 - R.DR(o) / 100)));
       hits.push([o.id, dmg, o.hp - dmg <= 0, it.burn && o.hp - dmg > 0 ? it.burn : 0]);
@@ -642,7 +644,7 @@ window.COMBAT = (function () {
       }
       const d = ENG.dist(a, p);
       const tid = ['grenade', 'molotov'].find(id => R.count(a, id));
-      if (tid && !a.isCompanion && a.threwRound !== G.combat.round && d >= 3 && d <= ITEMS[tid].range && a.ap >= ITEMS[tid].ap && ENG.los(G.loc, a.x, a.y, p.x, p.y) && Math.random() < 0.4) {
+      if (tid && !a.isCompanion && a.threwRound !== G.combat.round && d >= 3 && d <= R.throwRange(a, ITEMS[tid]) && a.ap >= ITEMS[tid].ap && ENG.los(G.loc, a.x, a.y, p.x, p.y) && Math.random() < 0.4) {
         a.threwRound = G.combat.round;
         await throwCore(G, a, p.x, p.y, tid);
         if (!G.combat || (p.isPlayer && p.dead)) break;

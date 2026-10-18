@@ -439,7 +439,9 @@ window.UI = (function () {
     if (!create) TUT.mark('panel');
     const p = create ? R.newPlayer('Странник', { str: 5, per: 5, end: 5, cha: 5, int: 5, agi: 5, luck: 5 }, []) : G.player;
     let pool = create ? 5 : 0;
-    let desc = create ? 'Распределите 5 очков между характеристиками и отметьте 3 профильных навыка (+20%, и каждое очко навыка даёт +2%).' : '';
+    let desc = create ? 'Выберите профиль, распределите 5 очков между характеристиками и отметьте 3 профильных навыка (+20%, и каждое очко навыка даёт +2%). Навык профиля отмечен всегда.' : '';
+    if (create && !p.tags.includes('auto')) { p.cls = 'auto'; p.tags.push('auto'); }
+    const SK_LIST = SKILLS.filter(s => !s.npc);
     U.openModal(create ? 'create' : 'character', `<div class="modal" style="width:min(980px,96vw);height:min(600px,100%)">
       <h2>${create ? 'Создание персонажа' : 'Персонаж'} ${create ? '' : '<button class="close" data-close>✕ [C]</button>'}</h2>
       <div class="cols" style="flex:1;min-height:0">
@@ -447,6 +449,7 @@ window.UI = (function () {
         <div class="screen" style="flex:0.9" id="c-derived"></div>
         <div class="screen" style="flex:1.2" id="c-skills"></div>
       </div>
+      ${create ? `<div class="cols" id="c-cls" style="margin-top:8px;gap:6px"></div>` : ''}
       <div class="screen desc-box" id="c-desc" style="margin-top:8px"></div>
       ${create ? `<div class="cols" style="margin-top:8px;justify-content:space-between;align-items:center"><label>Имя: <input id="c-name" value="Странник" maxlength="18" style="font-family:var(--font);background:#0d150c;color:var(--green);border:1px solid var(--green-dim);padding:4px"></label><button class="primary" id="c-go">Начать игру ▶</button></div>` : ''}
     </div>`, root => {
@@ -464,7 +467,8 @@ window.UI = (function () {
           ${create ? '' : `<div style="margin-top:8px" class="warn">Перки</div><div class="muted" style="font-size:12px">${(p.perks || []).map(id => (DATA.PERKS.find(k => k.id === id) || {}).name).join(', ') || 'нет'}</div>
           ${p.perkPts > 0 ? `<button class="primary" id="c-perk" style="margin-top:4px">Выбрать перк (${p.perkPts})</button>` : '<div class="muted" style="font-size:11px">Новый перк — на каждом чётном уровне.</div>'}
           <div style="margin-top:8px" class="warn">Задания <button id="c-journal" style="font-size:11px;padding:0 6px">Журнал [J]</button></div><div class="muted" style="font-size:12px">${questText()}</div>`}`;
-        root.querySelector('#c-skills').innerHTML = `<div class="warn" style="margin-bottom:4px">Навыки${create ? ` · профильных: ${p.tags.length}/3` : p.freePts ? ` · свободных очков: <b>${p.freePts}</b>` : ''}</div>` + SKILLS.map(s => `
+        if (create) root.querySelector('#c-cls').innerHTML = '<span class="warn" style="align-self:center">Профиль:</span>' + DATA.CLASSES.map(c => `<button data-cls="${c.id}" data-desc="cls_${c.id}" class="${p.cls === c.id ? 'primary' : ''}" style="flex:1">${c.name} · ${SKILLS.find(s => s.id === c.skill).name}</button>`).join('');
+        root.querySelector('#c-skills').innerHTML = `<div class="warn" style="margin-bottom:4px">Навыки${create ? ` · профильных: ${p.tags.length}/3` : p.freePts ? ` · свободных очков: <b>${p.freePts}</b>` : ''}</div>` + SK_LIST.map(s => `
           <div class="stat-row skill-row" data-desc="${s.id}">${create ? `<span class="tagbox ${p.tags.includes(s.id) ? 'on' : ''}" data-tag="${s.id}"></span>` : `<span>${p.tags.includes(s.id) ? '<span class="warn">★</span>' : ''}</span>`}
           <span>${s.name}</span><b>${R.skill(p, s.id)}%</b><span class="pm">${!create && p.freePts > 0 ? `<button data-sk="${s.id}">+</button>` : ''}</span></div>`).join('');
         root.querySelector('#c-desc').innerHTML = desc;
@@ -477,7 +481,8 @@ window.UI = (function () {
         if (!r) return;
         const k = r.dataset.desc;
         const s = SPECIAL.find(x => x.id === k) || SKILLS.find(x => x.id === k);
-        desc = s ? `<b class="warn">${s.name}</b> — ${s.desc}` : DERIVED[k.slice(2)] || '';
+        const cl = k.startsWith('cls_') && DATA.CLASSES.find(c => 'cls_' + c.id === k);
+        desc = cl ? `<b class="warn">${cl.name}</b> — профильный навык «${SKILLS.find(x => x.id === cl.skill).name}». В багажнике: ${cl.desc}` : s ? `<b class="warn">${s.name}</b> — ${s.desc}` : DERIVED[k.slice(2)] || '';
         root.querySelector('#c-desc').innerHTML = desc;
       });
       root.addEventListener('click', e => {
@@ -488,9 +493,19 @@ window.UI = (function () {
           if (d < 0 && p.stats[k] > 1) { p.stats[k]--; pool++; }
           draw(); return;
         }
+        const cb = e.target.closest('[data-cls]');
+        if (cb && create) {
+          const old = DATA.CLASSES.find(c => c.id === p.cls), nw = DATA.CLASSES.find(c => c.id === cb.dataset.cls);
+          if (old && p.tags.includes(old.skill)) p.tags.splice(p.tags.indexOf(old.skill), 1);
+          p.cls = nw.id;
+          if (!p.tags.includes(nw.skill)) { if (p.tags.length >= 3) p.tags.pop(); p.tags.push(nw.skill); }
+          desc = `<b class="warn">${nw.name}</b> — профильный навык «${SKILLS.find(x => x.id === nw.skill).name}». В багажнике: ${nw.desc}`;
+          draw(); return;
+        }
         const tg = e.target.closest('[data-tag]');
         if (tg) {
           const k = tg.dataset.tag;
+          if (create && (DATA.CLASSES.find(c => c.id === p.cls) || {}).skill === k) { G.hint('Навык профиля отмечен всегда'); return; }
           if (p.tags.includes(k)) p.tags.splice(p.tags.indexOf(k), 1);
           else if (p.tags.length < 3) p.tags.push(k);
           draw(); return;
@@ -1022,7 +1037,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
   // ---------- журнал заданий ----------
   const SITE_OF = {
     meds: g => g.hasItem('meds') ? 'camp' : 'post', pelts: g => R.count(g.player, 'wolf_pelt') >= 3 ? 'camp' : 'forest', debt: 'camp', tools: 'camp', wounded: 'camp', marauder: 'camp', ration: 'camp', south: g => ({ 1: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 2: g.flags.obsDone === 'dark' ? 'hive' : 'fort', 3: 'rassvet' })[g.q('south')], obs: g => ({ 1: 'observatory', 2: 'observatory', 3: 'observatory', 4: 'rassvet' })[g.q('obs')], north: g => ({ 1: 'mine', 2: 'mine', 3: 'bastion', 4: 'rassvet' })[g.q('north')], west: g => ({ 1: 'oasis', 2: 'solar', 3: 'oasis' })[g.q('west')], rats: 'camp', column: g => ({ 1: 'city', 2: 'city', 3: 'city', 4: 'city' })[g.q('column')],
-    battery: g => g.hasItem('battery') ? 'camp' : 'zarya', zarya: g => ({ 1: 'zarya', 2: 'zarya', 3: 'zarya', 4: 'camp' })[g.q('zarya')],
+    battery: g => g.hasItem('battery') ? 'camp' : 'zarya', crate: g => g.hasItem('sealed_crate') ? 'camp' : ({ 1: 'camp', 2: 'camp', 3: 'post' })[g.q('crate')], zarya: g => ({ 1: 'zarya', 2: 'zarya', 3: 'zarya', 4: 'camp' })[g.q('zarya')],
     thread: g => ({ 1: g.flags.bridgeOpen ? 'rassvet' : 'bridge', 2: 'object9', 3: 'object9', 4: 'rassvet' })[g.q('thread')], mast: 'rassvet',
   };
   const WHERE_HINT = { camp_cellar: 'подвал водокачки в Ржавом Ручье' };

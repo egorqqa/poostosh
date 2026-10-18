@@ -246,7 +246,7 @@
     if (a.dead || a.hostile || a.isRemote) return null;
     const q = G.q, p = G.player;
     switch (a.tpl) {
-      case 'mihalych': if (q('finale') === 1 || q('finale') === 3) return '?';
+      case 'mihalych': if (q('finale') === 1 || q('finale') === 3 || q('crate') === 2 || (G.hasItem('sealed_crate') && q('crate') < 9)) return '?';
         return (G.hasItem('meds') && G.quests.meds < 3) || (q('rats') === 1 && R.count(p, 'rat_tail') >= 5) ? '?' : G.quests.meds === 0 || q('rats') === 0 ? '!' : null;
       case 'semyon': return (G.hasItem('samples') && q('zarya') < 9) || (q('pelts') === 1 && R.count(p, 'wolf_pelt') >= 3) ? '?' : q('pelts') === 0 && q('debt') !== 0 ? '!' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
       case 'granit': return q('column') >= 1 && q('column') < 3 ? '!' : q('column') === 4 ? '?' : null;
@@ -586,6 +586,16 @@
     return `День ${d} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} · ${part}`;
   };
 
+  // снаряжение профиля сразу в руки (сетевая игра — без сцены с машиной)
+  G.startKit = function (p) {
+    const cls = DATA.CLASSES.find(c => c.id === p.cls) || DATA.CLASSES[0];
+    for (const [id, n] of cls.kit.concat([['medkit', 1], ['bandage', 2], ['water', 1], ['grenade', 1]])) R.addItem(p, id, n);
+    p.caps += 75;
+    const w = cls.kit[0][0], it = DATA.ITEMS[w];
+    R.removeItem(p, w, 1); p.weapon = w; p.loaded = 0;
+    if (it.mag) { const n = Math.min(it.mag, R.count(p, it.ammo)); R.removeItem(p, it.ammo, n); p.loaded = n; }
+  };
+
   // быстрые слоты 1–3
   G.quickSlots = function () {
     if (!G.player) return [];
@@ -753,6 +763,9 @@
     UI.closeModal();
     if (data && data.player) {
       Object.assign(G, { player: data.player, quests: data.quests, flags: data.flags, time: data.time, world: data.world, locStates: {}, combat: null, dialog: null, mode: 'play' });
+      const oldSave = !G.player.cls;
+      R.migrate(G.player);
+      if (oldSave) { G.flags.crashGlove = true; G.flags.crashTrunk = true; } // у старых героев машина уже обыскана
       if (G.flags.tutStep == null && G.player.xp > 0) G.flags.tutStep = 99;
       begin();
     } else {
@@ -760,6 +773,7 @@
         G.player = p;
         G.locStates = {}; G.quests = { meds: 0 }; G.flags = {}; G.time = 8 * 60;
         G.world = WMAP.initState();
+        G.startKit(p);
         begin();
       });
       const nm = document.querySelector('#c-name');
@@ -812,6 +826,9 @@
     UI.closeModal();
     if (window.SOC) { SOC.contract = data.contract || null; setTimeout(() => SOC.renderContract(), 0); }
     Object.assign(G, { player: data.player, companion: data.companion || null, locStates: data.locStates, quests: data.quests, flags: data.flags, time: data.time, world: data.world, combat: null, dialog: null, mode: 'play' });
+    const oldSave = !G.player.cls;
+    R.migrate(G.player);
+    if (oldSave) { G.flags.crashGlove = true; G.flags.crashTrunk = true; } // у старых героев машина уже обыскана
     G.player.dead = false;
     if (G.flags.tutStep == null && G.player.xp > 0) G.flags.tutStep = 99;
     UI.hideDialog();
@@ -828,10 +845,14 @@
       G.player = p;
       G.locStates = {}; G.quests = { meds: 0 }; G.flags = {}; G.time = 8 * 60; G.companion = null;
       G.world = WMAP.initState();
+      const cs = DATA.WORLD.sites.find(s => s.id === 'crash');
+      if (cs) { G.world.c = cs.x; G.world.r = cs.y; }
       document.getElementById('log-box').innerHTML = '';
-      G.log(`${p.name}, вы выходите из пустоши к поселению у старой заправки.`, 'sys');
-      G.log('Подсказка: поговорите со старостой Михалычем (клик по NPC).', 'sys');
-      UI.openIntro(() => WORLD_API.goLocation(G, 'camp')); // стартовая сцена: авария на серпантине
+      // стартовая сцена: авария на серпантине, герой приходит в себя у разбитой машины
+      UI.openIntro(() => WORLD_API.goLocation(G, 'crash').then(() => {
+        G.log(`${p.name}, вы приходите в себя на песке у обочины. Голова гудит, во рту привкус крови.`, 'sys');
+        G.log('Рядом — ваша разбитая машина. Осмотрите её: клик по машине.', 'warn');
+      }));
     });
   }
 
