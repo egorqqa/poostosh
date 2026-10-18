@@ -200,17 +200,17 @@ window.WMAP = (function () {
     const W = G.world, p = G.player;
     // Великая пустыня: жажда
     if (terrainAt(W.c, W.r) === 'y' && W.c < (WORLD.westShift || 0) + 1) {
-      G.flags.thirst = (G.flags.thirst || 0) + (R.skill(p, 'survival') >= 70 ? 0.5 : 1);
+      G.flags.thirst = (G.flags.thirst || 0) + (R.skill(p, 'survival') >= 70 ? 0.5 : 1) / 3; // шаг — час: пьём раз в ~6 часов, как прежде
       if (G.flags.thirst >= 2) {
         G.flags.thirst = 0;
         if (R.removeItem(p, 'water', 1)) G.log('Пустыня: вы выпиваете бутылку воды.', 'sys');
         else { p.hp = Math.max(1, p.hp - 7); G.log('Жажда! Без воды вы теряете силы: −7 ОЗ.', 'bad'); G.hint('Жажда! Нужна вода'); }
       }
     }
-    const mins = Math.round(180 * (1 - Math.min(0.5, R.skill(p, 'survival') / 300)));
+    const mins = Math.round(60 * (1 - Math.min(0.5, R.skill(p, 'survival') / 300))); // одна клетка — час пути (Выживание сокращает)
     G.passTime(mins);
     W.hexes = (W.hexes || 0) + 1;
-    if (W.hexes % 2 === 0) p.hp = Math.min(R.maxHP(p), p.hp + R.healRate(p));
+    if (W.hexes % 6 === 0) p.hp = Math.min(R.maxHP(p), p.hp + R.healRate(p)); // лечение в пути — раз в ~6 часов
     reveal(G);
     if (window.CV && CV.onStep(G)) { showPanel(G); UI.refresh(); return; }
     showPanel(G);

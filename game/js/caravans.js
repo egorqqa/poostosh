@@ -4,8 +4,9 @@
 // Караван можно встретить (торговать / напасть / пройти мимо) или наняться к нему в охрану.
 window.CV = (function () {
   const C = {};
-  const EVERY = 6 * 60;   // новый рейс — каждые 6 игровых часов
-  const HEX = 180;        // караван проходит гекс за 3 часа (как пеший путник)
+  const EVERY = 4 * 60;   // новый рейс — каждые 4 игровых часа
+  const HEX = 120;        // гружёный караван проходит клетку за 2 часа — путник (1 клетка = 1 час) его догоняет
+  const HALT = 120;       // привал, когда путник рядом: 2 игровых часа на месте
   const SEE = 3;          // видно за 3 гекса
   const TOWNS = ['camp', 'rassvet', 'oasis', 'city'];
   const ROUTES = [];
@@ -59,9 +60,13 @@ window.CV = (function () {
     const esc = G.flags.escort;
     for (let k = k1 - 18; k <= k1; k++) {
       const cv = C.get(k);
-      if (!cv || t < cv.start || t >= cv.start + cv.dur || C.isDead(G, cv.id)) continue;
+      // привал: с момента, когда путник подошёл, караван стоит HALT минут и дальше идёт с этой задержкой
+      const h = (G.flags.cvHalt || {})['cv' + k];
+      const delay = h != null ? Math.max(0, Math.min(HALT, t - h)) : 0;
+      if (!cv || t < cv.start || t >= cv.start + cv.dur + delay || C.isDead(G, cv.id)) continue;
       if (esc && esc.k === k) continue;            // тот, что мы охраняем, рисуется рядом с героем
-      const f = (t - cv.start) / HEX, i = Math.min(cv.path.length - 1, Math.floor(f));
+      cv.halted = h != null && t - h < HALT;
+      const f = (t - cv.start - delay) / HEX, i = Math.min(cv.path.length - 1, Math.floor(f));
       cv.i = i; cv.frac = f - i; cv.hex = cv.path[i];
       out.push(cv);
     }
@@ -90,6 +95,16 @@ window.CV = (function () {
       ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(gx + 2, gy - 6); ctx.lineTo(gx + 8, gy - 9); ctx.stroke();
     }
   }
+  // костерок привала
+  function drawCamp(ctx, x, y, t) {
+    ctx.fillStyle = '#3a2814'; ctx.fillRect(x - 6, y - 1, 12, 3);
+    for (let i = 0; i < 3; i++) {
+      const h = 7 + Math.sin(t * 9 + i * 2) * 2, fx = x - 3 + i * 3;
+      const g = ctx.createRadialGradient(fx, y - h / 2, 0, fx, y - h / 2, h);
+      g.addColorStop(0, 'rgba(255,230,140,0.95)'); g.addColorStop(1, 'rgba(255,90,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(fx, y - h / 2, 3, h / 1.4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
   // рисуется из WMAP.render (в координатах карты)
   C.draw = function (ctx, G, t, center, hexDist) {
     const W = G.world, me = { c: W.c, r: W.r };
@@ -98,12 +113,19 @@ window.CV = (function () {
       const a = center(cv.hex.c, cv.hex.r), nb = cv.path[Math.min(cv.path.length - 1, cv.i + 1)], b = center(nb.c, nb.r);
       const x = a.x + (b.x - a.x) * cv.frac, y = a.y + (b.y - a.y) * cv.frac + 6;
       const hostile = (G.flags.cvHostile || {})[cv.id];
+      const quiet = metInfo(G, cv.id) && !C.canMeet(G, cv); // недавно встречались — не остановит
+      if (cv.halted) drawCamp(ctx, x - 26, y + 10, t);
+      ctx.save();
+      if (quiet) { ctx.globalAlpha = 0.45; ctx.filter = 'grayscale(0.85)'; }
       drawGuards(ctx, x, y, cv.guards + 1, t);
       drawTruck(ctx, x, y, cv.fac.color, t, 0.9);
+      ctx.restore();
       ctx.font = 'bold 11px Consolas, monospace'; ctx.textAlign = 'center';
-      const txt = `«${cv.name}» · ${cv.fac.name}`, tw = ctx.measureText(txt).width + 10;
+      const txt = `«${cv.name}» · ${cv.fac.name}${cv.halted ? ' · привал' : ''}${quiet ? ' · встречались' : ''}`, tw = ctx.measureText(txt).width + 10;
       ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(x - tw / 2, y - 66, tw, 15);
-      ctx.fillStyle = hostile ? '#ff7a5a' : cv.fac.color; ctx.fillText(txt, x, y - 55);
+      ctx.globalAlpha = quiet ? 0.6 : 1;
+      ctx.fillStyle = hostile ? '#ff7a5a' : quiet ? '#bdb8a8' : cv.fac.color; ctx.fillText(txt, x, y - 55);
+      ctx.globalAlpha = 1;
     }
     // охраняемый караван — рядом с героем
     const esc = G.flags.escort;
@@ -131,6 +153,12 @@ window.CV = (function () {
   };
   C.checkMeet = function (G) {
     if (G.flags.escort) return false;
+    // путник в паре клеток — караван встаёт на привал, чтобы его можно было догнать
+    const halts = G.flags.cvHalt = G.flags.cvHalt || {};
+    for (const c of C.near(G, 2)) {
+      if (halts[c.id] == null && !(G.flags.cvHostile || {})[c.id]) { halts[c.id] = C.clock(G); G.log(`Караван «${c.name}» заметил вас и встал на привал неподалёку.`, 'sys'); }
+    }
+    for (const [id, v] of Object.entries(halts)) if (C.clock(G) - v > 4 * 24 * 60) delete halts[id];
     const near = C.near(G, 1);
     // караваны, с которыми уже разошлись, снова можно встретить (после часа)
     for (const [id, v] of Object.entries(G.flags.cvMet || {})) {
