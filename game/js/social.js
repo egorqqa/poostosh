@@ -160,6 +160,7 @@ window.SOC = (function () {
     const from = m.from, name = m.fromName || nameOf(from);
     if ((m.kind === 'party_contract' || m.kind === 'party_prog') && S.onContractEv(m)) return;
     if (String(m.kind).startsWith('party_cv') && S.party[m.from] && onCaravanEv(m)) return;
+    if (String(m.kind).startsWith('party_esc') && S.party[m.from] && window.CV && CV.onPartyEv(G, { ...m, from }, name)) return;
     switch (m.kind) {
       case 'trade_req':
         if (S.trade || G.combat || UI.modalOpen()) { send(from, { kind: 'trade_ans', ok: false, busy: true }); return; }
@@ -243,6 +244,7 @@ window.SOC = (function () {
   const cdef = id => allContracts().find(c => c.id === id);
   const members = () => Object.keys(S.party).map(Number);
   function bcast(o) { if (NET.active) for (const pid of members()) send(pid, o); }
+  S.bcast = bcast; S.send = send; S.prompt = (...a) => prompt(...a);
 
   S.openContracts = function () {
     const c = S.contract, d = c && cdef(c.id);

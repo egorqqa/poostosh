@@ -768,6 +768,7 @@
   };
 
   G.respawn = function () {
+    if (G.flags.escort && window.CV) CV.fail(G, 'Вы погибли в пути.');
     const p = G.player;
     p.dead = false;
     p.hp = Math.ceil(R.maxHP(p) / 2);

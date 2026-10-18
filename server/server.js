@@ -55,8 +55,8 @@ function createServer(opts = {}) {
   // общее игровое время: 1 игровая минута за 2 секунды
   if (!world.defense) world.defense = {};
   if (!world.stats) world.stats = {};
-  const leaders = () => Object.values(world.stats).sort((a, b) => (b.invasions || 0) * 10 + (b.contracts || 0) * 5 + (b.caravans || 0) * 3 + (b.kills || 0) * 0.1
-    - ((a.invasions || 0) * 10 + (a.contracts || 0) * 5 + (a.caravans || 0) * 3 + (a.kills || 0) * 0.1)).slice(0, 20);
+  const score = s => (s.invasions || 0) * 10 + (s.contracts || 0) * 5 + (s.caravans || 0) * 3 + (s.escorts || 0) * 6 + (s.robberies || 0) * 4 + (s.kills || 0) * 0.1;
+  const leaders = () => Object.values(world.stats).sort((a, b) => score(b) - score(a)).slice(0, 20);
   // вторжения на поселения — общие для всех игроков сервера
   const INV_LOCS = ['camp', 'rassvet'];
   function tickInvasion() {
@@ -153,7 +153,7 @@ function createServer(opts = {}) {
         if (stored && stored.hash !== h) { send(p, { t: 'error', code: 'charpass', text: `Неверный пароль персонажа «${name}». Если это не ваш персонаж — выберите другое имя.` }); setTimeout(() => ws.close(), 100); return; }
         p.name = name; p.nameKey = nameKey; p.charHash = h; p.ready = true;
         clearTimeout(kick);
-        send(p, { t: 'welcome', id: p.id, name, version, players: playerList(), serverName, motd, time: world.time, char: stored ? stored.data : null, invasion: world.invasion || null, defense: world.defense });
+        send(p, { t: 'welcome', id: p.id, name, version, players: playerList(), serverName, motd, time: world.time, char: stored ? stored.data : null, invasion: world.invasion || null, defense: world.defense, cvDead: world.cvDead || {} });
         toAll({ t: 'players', players: playerList() });
         toAll({ t: 'chat', system: true, text: `${name} заходит на сервер.` }, p.id);
         say('Вошёл:', name, `(${p.ip})`, m.version !== version ? `— версия клиента ${m.version}, сервера ${version}` : '');
@@ -206,7 +206,7 @@ function createServer(opts = {}) {
         }
         case 'ping': send(p, { t: 'pong', at: m.at }); break;
         case 'stat': {
-          const k = ['invasions', 'contracts', 'kills', 'caravans', 'caravansLost'].includes(m.k) ? m.k : null;
+          const k = ['invasions', 'contracts', 'kills', 'caravans', 'caravansLost', 'escorts', 'robberies'].includes(m.k) ? m.k : null;
           if (!k) break;
           const st = world.stats[p.nameKey] = world.stats[p.nameKey] || { name: p.name };
           st[k] = (st[k] || 0) + 1; dirty = true;
@@ -222,6 +222,15 @@ function createServer(opts = {}) {
           world.invCount = (world.invCount || 0) + 1;
           world.invasion = { id: Date.now(), loc: 'camp', kind: 'horde', wave, by: p.name, until: world.time + 24 * 60, done: false, n: world.invCount };
           dirty = true; toAll({ t: 'invasion', inv: world.invasion }); say('Орда «Пепел» идёт на camp — тревогу поднял', p.name);
+          break;
+        }
+        case 'cvdead': { // разграбленный караван — у всех исчезает с карты
+          const id = String(m.id || '').slice(0, 20);
+          if (!/^cv\d+$/.test(id)) break;
+          world.cvDead = world.cvDead || {};
+          if (!world.cvDead[id]) { world.cvDead[id] = Date.now(); dirty = true; toAll({ t: 'cvdead', id }); say('Караван разграблен:', id, '—', p.name); }
+          const ids = Object.keys(world.cvDead);
+          if (ids.length > 300) for (const k of ids.sort((a, b) => world.cvDead[a] - world.cvDead[b]).slice(0, ids.length - 300)) delete world.cvDead[k];
           break;
         }
         case 'invdone':

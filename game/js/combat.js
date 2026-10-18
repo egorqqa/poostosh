@@ -7,7 +7,7 @@ window.COMBAT = (function () {
   const net = () => window.NET && NET.active;
   const isAuth = () => !net() || NET.isAuth;
   const isPC = a => !!(a && (a.isPlayer || a.isRemote));
-  const isAlly = a => !!(a && (a.isPlayer || a.isRemote || a.isCompanion));
+  const isAlly = a => !!(a && (a.isPlayer || a.isRemote || a.isCompanion || a.ally));
 
   function players(G) { return G.loc.actors.filter(a => isAlly(a) && !a.dead && !a.gone); }
   function nearestPC(G, a) {
@@ -336,6 +336,7 @@ window.COMBAT = (function () {
     if (cv && cv.escort && cv.inFight === G.loc.id && !G.loc.actors.some(x => x.hostile && !x.dead && !x.gone && x !== a)) setTimeout(() => G.caravanDone(true, 'Нападение отбито, караван дошёл!'), 400);
     if (a.tpl === 'rzha' && !G.flags.southDone) G.southEnd('storm');
     if (a.invader && G.loc && !G.loc.actors.some(x => x.invader && !x.dead)) G.invasionCleared();
+    if (a.cvRole && window.CV) CV.onKill(G, a, by);
     if (a.finalWave && G.loc && !G.loc.actors.some(x => x.finalWave && !x.dead && !x.gone)) setTimeout(() => G.finaleWaveCleared(), 300);
     if (a.tpl === 'klyk_city') { G.flags.klykCityDead = true; if (G.q('column') >= 1 && G.q('column') < 4) G.setQuest('column', 4); }
     if (a.tpl === 'granit') { G.flags.granitDead = true; if (G.q('column') < 9) G.columnEnd('exposed'); }
@@ -596,14 +597,14 @@ window.COMBAT = (function () {
     let guard = 30;
     while (a.ap > 0 && guard-- > 0 && !a.dead && G.combat) {
       let p;
-      if (a.isCompanion) {
+      if (a.isCompanion || a.ally) {
         let bd = 1e9;
         for (const f of G.combat.list) if (!isAlly(f) && f.hostile && !f.dead && !f.gone) { const d = ENG.dist(a, f); if (d < bd) { bd = d; p = f; } }
       } else p = nearestPC(G, a).p;
       if (!p) break;
       const w = R.weaponOf(a);
       // при здоровье меньше 15% — бегство в сторону от врага (кроме боссов и напарника)
-      if (!a.isCompanion && !a.finalWave && a.hp < R.maxHP(a) * 0.15 && !NO_FLEE.includes(a.tpl) && !R.count(a, 'medkit')) {
+      if (!a.isCompanion && !a.ally && !a.finalWave && a.hp < R.maxHP(a) * 0.15 && !NO_FLEE.includes(a.tpl) && !R.count(a, 'medkit')) {
         if (!a.fleeing) { a.fleeing = true; a.bubble = { text: 'Бежим!', t: 1.6, color: '#f0b43c' }; G.log(`${a.name} в панике отступает!`, 'warn'); if (net()) NET.fx({ type: 'log', text: `${a.name} в панике отступает!`, cls: 'warn' }); }
         const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
         let best = null, bd = ENG.dist(a, p);

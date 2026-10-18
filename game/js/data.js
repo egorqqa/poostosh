@@ -124,6 +124,12 @@ window.DATA = (function () {
     guard2: { name: 'Часовой Ручья', tint: 'guard', faction: 'town', dialog: 'guard2', guard: true,
       stats: { str: 6, per: 6, end: 6, cha: 4, int: 4, agi: 6, luck: 5 }, hp: 40,
       inv: [['ammo9', 16]], caps: 15, weapon: 'pistol', armor: 'jacket', skills: { guns: 60 } },
+    cv_trader: { name: 'Торговец каравана', tint: 'trader', faction: 'caravan', dialog: 'cv_trader', trader: true, caps: 300,
+      stats: { str: 5, per: 6, end: 6, cha: 7, int: 6, agi: 5, luck: 6 }, hp: 34, inv: [], weapon: 'pistol', armor: 'jacket', skills: { guns: 45 }, xp: 60 },
+    cv_guard: { name: 'Охранник каравана', tint: 'guard', faction: 'caravan', dialog: 'cv_guard', guard: true,
+      stats: { str: 6, per: 7, end: 6, cha: 4, int: 4, agi: 6, luck: 5 }, hp: 42, inv: [['ammo762', 20], ['bandage', 1]], caps: 15, weapon: 'rifle', armor: 'leather', skills: { guns: 62 }, xp: 70 },
+    cv_guard_ak: { name: 'Охранник каравана', tint: 'guard', faction: 'caravan', dialog: 'cv_guard', guard: true,
+      stats: { str: 6, per: 6, end: 7, cha: 4, int: 4, agi: 6, luck: 5 }, hp: 46, inv: [['ammo762', 30], ['medkit', 1]], caps: 15, weapon: 'ak', armor: 'vest', skills: { guns: 58 }, xp: 80 },
     konst: { name: 'Оружейник Константин', tint: 'mech', faction: 'town', dialog: 'konst', trader: true, caps: 600,
       stats: { str: 6, per: 8, end: 6, cha: 5, int: 7, agi: 6, luck: 5 }, hp: 40,
       inv: [['pistol', 2], ['shotgun', 2], ['rifle', 1], ['knife', 2], ['ammo9', 40], ['shells', 20], ['ammo762', 30], ['junk', 6], ['grenade', 3], ['molotov', 4], ['tknife', 6]], skills: { guns: 60 } },
@@ -342,6 +348,7 @@ window.DATA = (function () {
             { t: 'Покажи товар.', act: 'trade', end: true },
             { t: 'Для меня найдётся работа?', if: g => g.q('debt') === 0, go: 'debt' },
             { t: 'Хочу снарядить свой караван.', act: g => { setTimeout(() => UI.openCaravan('camp'), 0); }, end: true },
+            { t: 'Наняться в охрану каравана.', act: g => { setTimeout(() => CV.board(g, 'camp'), 0); }, end: true },
             { t: 'Ищешь что-нибудь особенное?', if: g => g.q('pelts') === 0, go: 'pelts' },
             { t: 'Вот три волчьи шкуры.', if: g => g.q('pelts') === 1 && R.count(g.player, 'wolf_pelt') >= 3, go: 'pelts_done' },
             { t: 'Купишь ящик «З-2» с Объекта 9?', if: g => g.hasItem('z2_crate') && g.q('thread') < 9, act: g => { g.takeFrom(g.player, 'z2_crate', 1); g.flags.z2Sold = true; g.setQuest('thread', 9); g.reward(150, 600, []); g.addRep(-15, 'опасный груз продан'); }, go: 'crate' },
@@ -425,6 +432,17 @@ window.DATA = (function () {
         joined: { text: 'Наконец-то! Засиделся я в лагере. Пистолет при мне, патроны тоже. Веди.', opts: [{ t: 'Идём.', end: true }] },
       },
     },
+    cv_trader: {
+      start: () => 'hello',
+      nodes: {
+        hello: { text: 'Привал, путник. Груз свежий, цены честные — почти. Что берёшь?',
+          opts: [{ t: 'Покажи товар.', act: 'trade', end: true }, { t: 'Куда идёте?', go: 'where' }, { t: 'Бывай.', end: true }] },
+        where: { text: 'Куда хозяин скажет. Дороги нынче злые: рейдеры, мародёры. Хочешь заработать — нанимайся в охрану в городе, нам люди нужны.',
+          opts: [{ t: 'Покажи товар.', act: 'trade', end: true }, { t: 'Бывай.', end: true }] },
+      } },
+    cv_guard: {
+      start: () => 'hello',
+      nodes: { hello: { text: 'Проходи, не задерживайся. К грузу не подходи.', opts: [{ t: 'Ладно.', end: true }] } } },
     konst: {
       start: g => g.flags.metKonst ? 'hello' : 'first',
       nodes: {
@@ -579,6 +597,7 @@ window.DATA = (function () {
           opts: [
             { t: 'Покажи товар.', act: 'trade', end: true },
             { t: 'Хочу снарядить караван отсюда.', act: g => { setTimeout(() => UI.openCaravan('rassvet'), 0); }, end: true },
+            { t: 'Наняться в охрану каравана.', act: g => { setTimeout(() => CV.board(g, 'rassvet'), 0); }, end: true },
             { t: 'Вера велела выдать мне взрывчатку.', if: g => g.q('thread') >= 2 && !g.hasItem('explosive') && !g.flags.z2Done && !g.flags.palychExplosive, go: 'expl' },
             { t: 'Бывай.', end: true },
           ] },
@@ -759,7 +778,7 @@ window.DATA = (function () {
     },
     oasis_trader: {
       start: () => 'hello',
-      nodes: { hello: { text: 'Рашид, водонос. Вода, финики, плащи от солнца. Всё, что нужно, чтобы дожить до заката.', opts: [{ t: 'Покажи товар.', act: 'trade', end: true }, { t: 'Пока.', end: true }] } },
+      nodes: { hello: { text: 'Рашид, водонос. Вода, финики, плащи от солнца. Всё, что нужно, чтобы дожить до заката.', opts: [{ t: 'Наняться в охрану каравана.', act: g => { setTimeout(() => CV.board(g, 'oasis'), 0); }, end: true }, { t: 'Покажи товар.', act: 'trade', end: true }, { t: 'Пока.', end: true }] } },
     },
     oguard: { start: () => 'hello', nodes: { hello: { text: g => g.q('west') === 9 ? 'Слава путнику, вернувшему воду!' : 'Оазис под охраной. Без глупостей.', opts: [{ t: 'Ага.', end: true }] } } },
     nomad: { start: () => 'hello', nodes: { hello: { text: 'Чужак. Атаман в шатре у трансформатора. Говори с ним — или уходи в пески.', opts: [{ t: 'Ага.', end: true }] } } },

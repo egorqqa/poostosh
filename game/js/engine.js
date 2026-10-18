@@ -612,7 +612,7 @@ window.ENG = (function () {
 
   // какая модель с оружием у игрока: по значку оружия в руках
   const GUN_OF = { pistol: 'pistol', shotgun: 'rifle', rifle: 'rifle', ak: 'ak' };
-  const ARMED = ['column', 'bastion', 'remnant']; // солдаты, которые носят оружие в руках
+  const ARMED = ['column', 'bastion', 'remnant', 'caravan']; // солдаты, которые носят оружие в руках
   E.gunKey = function (a) {
     if (!a || !a.weapon || !E.guns) return null;
     const tpl = DATA.NPCS[a.tpl];

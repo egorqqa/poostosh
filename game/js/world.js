@@ -13,7 +13,7 @@ window.WORLD_API = (function () {
         block: o.block !== false, desc: o.desc || null, gate: o.gate || null, showIf: o.showIf || null, interact: o.container ? null : DATA.INTERACT[o.interact || sprite] || null,
         name: o.name || (o.container ? 'Ящик' : DATA.INTERACT[o.interact || sprite] ? DATA.INTERACT[o.interact || sprite].name : null),
         container: !!o.container, lock: o.lock || 0, owner: o.owner || null, caps: o.caps || 0,
-        inv: (o.items || []).map(([id, n]) => ({ id, n })), jammed: false,
+        inv: (o.items || []).map(([id, n]) => ({ id, n })), jammed: false, cvCargo: !!o.cvCargo,
       };
     });
   }
@@ -110,6 +110,7 @@ window.WORLD_API = (function () {
     let def = LOCATIONS[id] || (id.startsWith('apartment_') ? LOCATIONS.apartment : null);
     if (def && def.objects) def = { ...def, objects: def.objects.concat(defenseObjects(G, id)) };
     if (!def && id.startsWith('wild')) def = wildDef(id, opts.kind || 'wild');
+    if (def && def.temp && (opts.kind === 'caravan' || opts.kind === 'cvfight')) def = CV.locDef(id, opts, def);
     const saved = G.locStates[id];
     const L = { id, def, w: def.w, h: def.h, seed: opts.seed || '' };
     L.objects = buildObjects(def);
@@ -173,6 +174,7 @@ window.WORLD_API = (function () {
       G.log(`⚠ ${inv.kind === 'column' ? 'Штурмовики Колонны' : 'Обращённые'} уже здесь! Защитите поселение.`, 'bad');
     }
     if (id === 'camp' && G.q('finale') === 2 && !NET.active) W.spawnFinale(G);
+    if (L.def.cv) CV.setup(G, L);
     if (id === 'observatory' || id === 'obs_dome') {
       const friendly = G.flags.columnEnd === 'joined' || G.flags.granitYield || G.flags.obsDone;
       for (const a of L.actors) {
@@ -297,6 +299,7 @@ window.WORLD_API = (function () {
       if (!(G.combat.canFlee && G.combat.isPlayerTurn())) { G.log('Нельзя уйти во время боя! Встаньте в зелёную зону выхода и переждите ход врагов без ранений.', 'bad'); return; }
       if (G.combat.mirror) G.combat = null; else COMBAT.end(G, 'Вы уходите с поля боя.');
     }
+    CV.onLeave(G);
     if (NET.active) {
       const st = NET.isAuth && !G.loc.def.temp ? W.serializeLocation(G) : null;
       NET.leave(G.loc.id, st);

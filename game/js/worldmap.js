@@ -55,6 +55,8 @@ window.WMAP = (function () {
     }
     return null;
   }
+  M.findPath = (from, to) => findHexPath({ flags: { bridgeOpen: true } }, from, to); // караванам мост всегда открыт
+  M.hexDist = hexDist;
   function hexAt(x, y) {
     let best = null, bd = 1e9;
     const r0 = Math.round((y - HH / 2) / RH);
@@ -134,10 +136,14 @@ window.WMAP = (function () {
         const b = e.target.closest('button'); if (!b) return;
         if (b.dataset.go) M.enterSite(G, b.dataset.go);
         if (b.dataset.rest) M.rest(G);
+        if (b.dataset.esc) { CV.panelClick(G, b.dataset.esc); showPanel(G); }
       });
     }
     const s = siteHere(G);
-    panel.innerHTML = (s ? `<button class="primary" data-go="${s.id}">▶ Войти: ${s.name}</button>` : '') + `<button data-rest="1">Отдохнуть 8 ч</button>`;
+    panel.innerHTML = (window.CV ? CV.panelHtml(G) : '') + (s ? `<button class="primary" data-go="${s.id}">▶ Войти: ${s.name}</button>` : '') + (G.flags.escort ? '' : `<button data-rest="1">Отдохнуть 8 ч</button>`);
+  }
+  M.refreshPanel = function (G) {
+    if (G.scene === 'world') showPanel(G);
   }
 
   M.enterSite = function (G, id) {
@@ -163,6 +169,9 @@ window.WMAP = (function () {
     if (!h) return;
     const W = G.world;
     if (h.c === W.c && h.r === W.r) { const s = siteHere(G); if (s) M.enterSite(G, s.id); return; }
+    if (G.flags.escort) { G.hint(G.flags.escort.leader ? 'Вы в охране каравана: «Идти с караваном» или «Бросить караван»' : 'Вы в охране каравана — путь ведёт наниматель'); return; }
+    const cvh = window.CV && CV.at(G, h);
+    if (cvh && hexDist(h, { c: W.c, r: W.r }) <= 1) { CV.openMeet(G, cvh); return; }
     const path = findHexPath(G, { c: W.c, r: W.r }, h);
     if (!path) {
       G.hint(terrainAt(h.c, h.r) === 'v' ? 'Это река' : 'Туда не пройти');
@@ -203,8 +212,10 @@ window.WMAP = (function () {
     W.hexes = (W.hexes || 0) + 1;
     if (W.hexes % 2 === 0) p.hp = Math.min(R.maxHP(p), p.hp + R.healRate(p));
     reveal(G);
+    if (window.CV && CV.onStep(G)) { showPanel(G); UI.refresh(); return; }
     showPanel(G);
     UI.refresh();
+    if (window.CV && CV.checkMeet(G)) return;
     const site = WORLD.sites.find(s => s.x === W.c && s.y === W.r);
     if (site) {
       W.path = [];
@@ -461,6 +472,8 @@ window.WMAP = (function () {
         ctx.beginPath(); ctx.moveTo(W.px, W.py); ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.setLineDash([]);
       }
     }
+    // торговые караваны в пути (видно в 3 гексах)
+    if (window.CV) CV.draw(ctx, G, t, center, hexDist);
     // участники отряда
     if (window.SOC) for (const st of Object.values(SOC.partyState)) {
       if (st.c == null || Date.now() - st.at > 8000) continue;

@@ -1035,7 +1035,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
       <div class="screen" id="ld-body">Загрузка...</div></div>`, root => {
       NET.onLeaders = list => {
         const el = root.querySelector('#ld-body'); if (!el) return;
-        el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px"><tr class="warn"><td>#</td><td>Игрок</td><td>Вторжения</td><td>Контракты</td><td>Караваны</td><td>Убито</td></tr>${list.map((r, i) => `<tr style="${r.name === NET.name ? 'color:#fff' : ''}"><td>${i + 1}</td><td>${r.name}</td><td>${r.invasions || 0}</td><td>${r.contracts || 0}</td><td>${r.caravans || 0}</td><td>${r.kills || 0}</td></tr>`).join('')}</table>` + (list.length ? '' : '<div class="muted">Пока пусто.</div>');
+        el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px"><tr class="warn"><td>#</td><td>Игрок</td><td>Вторжения</td><td>Контракты</td><td>Караваны</td><td>Охрана</td><td>Грабежи</td><td>Убито</td></tr>${list.map((r, i) => `<tr style="${r.name === NET.name ? 'color:#fff' : ''}"><td>${i + 1}</td><td>${r.name}</td><td>${r.invasions || 0}</td><td>${r.contracts || 0}</td><td>${r.caravans || 0}</td><td>${r.escorts || 0}</td><td>${r.robberies || 0}</td><td>${r.kills || 0}</td></tr>`).join('')}</table>` + (list.length ? '' : '<div class="muted">Пока пусто.</div>');
       };
       NET.send({ t: 'leaders' });
     });

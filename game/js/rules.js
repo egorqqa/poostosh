@@ -25,6 +25,7 @@ window.R = (function () {
       tint: t.tint, model: t.model || null, scale: t.scale || 1, dialog: t.dialog || null, trader: !!t.trader, guard: !!t.guard, xpValue: t.xp || 25,
       stealTries: 0,
     };
+    if (opts.cvRole) a.cvRole = opts.cvRole;
     a.baseHP = t.hp;
     a.hp = t.hp;
     const w = a.weapon && ITEMS[a.weapon];

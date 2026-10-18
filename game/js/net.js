@@ -29,7 +29,7 @@ window.NET = (function () {
           if (m.t === 'error') { fail(m.text || 'Отказано'); return; }
           if (m.t === 'welcome') {
             done = true; clearTimeout(to);
-            Object.assign(N, { ws, active: true, id: m.id, name: m.name, server: `${host}:${port}`, players: m.players, serverVersion: m.version, serverName: m.serverName || 'Пустошь', motd: m.motd || '', char: m.char || null, serverTime: m.time, defense: m.defense || {}, invasion: m.invasion || null });
+            Object.assign(N, { ws, active: true, id: m.id, name: m.name, server: `${host}:${port}`, players: m.players, serverVersion: m.version, serverName: m.serverName || 'Пустошь', motd: m.motd || '', char: m.char || null, serverTime: m.time, defense: m.defense || {}, invasion: m.invasion || null, srvTime: m.time, srvAt: Date.now(), cvDead: m.cvDead || {} });
             startTimers();
             resolve(m);
           }
@@ -292,7 +292,8 @@ window.NET = (function () {
       case 'op': applyOp(m); break;
       case 'req': handleReq(m); break;
       case 'ev': handleEv(m); break;
-      case 'time': if (G.player) G.time = m.time; break;
+      case 'time': N.srvTime = m.time; N.srvAt = Date.now(); if (G.player) G.time = m.time; break;
+      case 'cvdead': N.cvDead = N.cvDead || {}; N.cvDead[m.id] = true; break;
       case 'invasion': if (G.player) G.onServerInvasion(m.inv); break;
       case 'leaders': if (N.onLeaders) N.onLeaders(m.list || []); break;
       case 'defense': N.defense = m.defense || {}; UI.refresh(); break;
