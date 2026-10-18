@@ -95,17 +95,24 @@ window.R = (function () {
   const overloaded = a => weight(a) > carryMax(a);
 
   // модификации оружия (верстак): прицел, магазин, глушитель, заточка
-  const WMOD_MARK = { scope: 'П', mag: 'М', sil: 'Г', sharp: 'З' };
+  // уровень оружия (оружейник): +15% урона и +2% крита за уровень
+  const WMOD_MARK = { scope: 'О', laser: 'Л', mag: 'М', sil: 'Г', bayonet: 'Ш', stock: 'П', sharp: 'З' };
   function weaponOf(a) {
-    const id = a.weapon || 'fists', w = ITEMS[id], m = a.wmods && a.wmods[id];
-    if (!m || !w) return w;
+    const id = a.weapon || 'fists', w = ITEMS[id], m = (a.wmods && a.wmods[id]) || null, lvl = (a.wlvl && a.wlvl[id]) || 0;
+    if ((!m && !lvl) || !w) return w;
     const o = { ...w };
-    if (m.scope && !w.melee) { o.range = w.range + 2; o.aim = 10; }
-    if (m.mag && w.mag) o.mag = Math.round(w.mag * 1.5);
-    if (m.sil && !w.melee) o.silent = true;
-    if (m.sharp && w.melee) o.dmg = [w.dmg[0] + 2, w.dmg[1] + 2];
-    const marks = Object.keys(WMOD_MARK).filter(k => m[k]).map(k => WMOD_MARK[k]).join('');
-    if (marks) o.name = `${w.name} [${marks}]`;
+    if (lvl) { o.dmg = [Math.round(w.dmg[0] * (1 + 0.15 * lvl)), Math.round(w.dmg[1] * (1 + 0.15 * lvl))]; o.crit = (w.crit || 0) + 2 * lvl; }
+    if (m) {
+      if (m.scope && !w.melee) { o.range = w.range + 2; o.aim = (o.aim || 0) + 10; }
+      if (m.laser && !w.melee) { o.aim = (o.aim || 0) + 5; o.laser = true; }
+      if (m.mag && w.mag) o.mag = Math.round(w.mag * 1.5);
+      if (m.sil && !w.melee) o.silent = true;
+      if (m.bayonet && !w.melee) o.bayonet = 4;
+      if (m.stock && !w.melee) o.steady = true;
+      if (m.sharp && w.melee) o.dmg = [o.dmg[0] + 2, o.dmg[1] + 2];
+    }
+    const marks = m ? Object.keys(WMOD_MARK).filter(k => m[k]).map(k => WMOD_MARK[k]).join('') : '';
+    o.name = w.name + (lvl ? ` +${lvl}` : '') + (marks ? ` [${marks}]` : '');
     return o;
   }
 

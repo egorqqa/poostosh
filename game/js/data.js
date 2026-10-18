@@ -118,6 +118,9 @@ window.DATA = (function () {
     guard2: { name: 'Часовой Ручья', tint: 'guard', faction: 'town', dialog: 'guard2', guard: true,
       stats: { str: 6, per: 6, end: 6, cha: 4, int: 4, agi: 6, luck: 5 }, hp: 40,
       inv: [['ammo9', 16]], caps: 15, weapon: 'pistol', armor: 'jacket', skills: { guns: 60 } },
+    konst: { name: 'Оружейник Константин', tint: 'mech', faction: 'town', dialog: 'konst', trader: true, caps: 600,
+      stats: { str: 6, per: 8, end: 6, cha: 5, int: 7, agi: 6, luck: 5 }, hp: 40,
+      inv: [['pistol', 2], ['shotgun', 2], ['rifle', 1], ['knife', 2], ['ammo9', 40], ['shells', 20], ['ammo762', 30], ['junk', 6]], skills: { guns: 60 } },
     boris: { name: 'Механик Борис', tint: 'mech', faction: 'town', dialog: 'boris',
       stats: { str: 7, per: 5, end: 6, cha: 4, int: 7, agi: 5, luck: 5 }, hp: 35,
       inv: [['junk', 4], ['water', 1]], caps: 30, weapon: 'pipe' },
@@ -416,6 +419,17 @@ window.DATA = (function () {
         joined: { text: 'Наконец-то! Засиделся я в лагере. Пистолет при мне, патроны тоже. Веди.', opts: [{ t: 'Идём.', end: true }] },
       },
     },
+    konst: {
+      start: g => g.flags.metKonst ? 'hello' : 'first',
+      nodes: {
+        first: { text: 'Константин. Чиню стволы, перебираю, подгоняю. Борис по моторам, я — по железу, которое стреляет. Принёс что-нибудь?',
+          onEnter: g => { g.flags.metKonst = true; },
+          opts: [{ t: 'Что умеешь?', go: 'how' }, { t: 'Покажи товар.', act: 'trade', end: true }, { t: 'Займись моим оружием.', act: 'gunsmith', end: true }, { t: 'Бывай.', end: true }] },
+        hello: { text: 'Снова ты. Что на этот раз — чистка, подгонка, обвес?',
+          opts: [{ t: 'Займись моим оружием.', act: 'gunsmith', end: true }, { t: 'Покажи товар.', act: 'trade', end: true }, { t: 'Как работает улучшение?', go: 'how' }, { t: 'Бывай.', end: true }] },
+        how: { text: 'Два одинаковых ствола — из двух собираю один, лучший: перебираю затвор, меняю изношенное на целое. Урон выше, крит чаще. Беру тридцать процентов от цены ствола. До трёх раз, дальше железо не выдержит. Ещё ставлю и снимаю обвес — прицелы, магазины, глушители, штыки. Снятое лежит у тебя в запасе, переставишь на другой ствол бесплатно.',
+          opts: [{ t: 'Займись моим оружием.', act: 'gunsmith', end: true }, { t: 'Понятно.', go: 'hello' }] },
+      } },
     boris: {
       start: () => 'hello',
       nodes: {
@@ -1326,7 +1340,7 @@ window.DATA = (function () {
       npcs: [
         ['semyon', 16, 23, { dir: 0 }], ['irina', 31, 22, {}], ['mihalych', 34, 34, {}],
         ['gvozd', 21, 37, {}], ['guard2', 6, 15, { wander: 4 }], ['tihon', 13, 33, { wander: 3 }],
-        ['boris', 31, 11, {}], ['lyoha', 26, 23, {}], ['marauder', 42, 26, {}],
+        ['boris', 31, 11, {}], ['lyoha', 26, 23, {}], ['marauder', 42, 26, {}], ['konst', 24, 12, { dir: 0 }],
       ],
     },
     post: {
@@ -1419,12 +1433,17 @@ window.DATA = (function () {
 
   // ---- задания (0 — не взято, 1..8 — этапы, 9 — выполнено) ----
   // модификации оружия на верстаке
+  // slot: на одно оружие ставится одна модификация каждого слота; лишняя уходит в запас
   const WMODS = [
-    { id: 'scope', name: 'Оптический прицел', for: 'ranged', desc: '+10% к попаданию, +2 к дальности.', need: [['junk', 5]], caps: 40 },
-    { id: 'mag', name: 'Увеличенный магазин', for: 'mag', desc: 'Магазин вмещает в 1,5 раза больше патронов.', need: [['junk', 6]], caps: 30 },
-    { id: 'sil', name: 'Глушитель', for: 'ranged', desc: 'Выстрел слышат только в паре шагов. Атака из скрытности не поднимает всю округу.', need: [['junk', 5], ['roach_shell', 2]], caps: 50 },
-    { id: 'sharp', name: 'Заточка и балансировка', for: 'melee', desc: '+2 к урону в ближнем бою.', need: [['junk', 3], ['roach_shell', 1]], caps: 25 },
+    { id: 'scope', slot: 'sight', name: 'Оптический прицел', for: 'ranged', desc: '+10% к попаданию, +2 к дальности.', need: [['junk', 5]], caps: 40 },
+    { id: 'laser', slot: 'sight', name: 'Лазерный целеуказатель', for: 'ranged', desc: '+5% к попаданию, ночью стрельба вдаль без штрафа.', need: [['junk', 7]], caps: 70 },
+    { id: 'mag', slot: 'mag', name: 'Увеличенный магазин', for: 'mag', desc: 'Магазин вмещает в 1,5 раза больше патронов.', need: [['junk', 6]], caps: 30 },
+    { id: 'sil', slot: 'muzzle', name: 'Глушитель', for: 'ranged', desc: 'Выстрел слышат только в паре шагов. Атака из скрытности не поднимает всю округу.', need: [['junk', 5], ['roach_shell', 2]], caps: 50 },
+    { id: 'bayonet', slot: 'muzzle', name: 'Штык', for: 'long', desc: '+4 к урону по врагу вплотную (на соседней клетке).', need: [['knife', 1], ['junk', 2]], caps: 20 },
+    { id: 'stock', slot: 'stock', name: 'Удобный приклад', for: 'ranged', desc: 'Вдвое меньше штраф к попаданию за дальность.', need: [['junk', 4], ['wolf_pelt', 1]], caps: 25 },
+    { id: 'sharp', slot: 'edge', name: 'Заточка и балансировка', for: 'melee', desc: '+2 к урону в ближнем бою.', need: [['junk', 3], ['roach_shell', 1]], caps: 25 },
   ];
+  const WMAX_LVL = 3;
   const QUESTS = {
     debt: { title: 'Долг Тихона', giver: 'semyon', steps: { 1: 'Выбейте из бродяги Тихона 15 крышек долга (Красноречие, Сила или Кража) и отнесите их Сёме.' } },
     tools: { title: 'Инструменты Бориса', giver: 'boris', steps: { 1: 'Вскройте ящик с инструментами у гаража (Взлом) и принесите их механику Борису.' } },
@@ -1705,5 +1724,5 @@ window.DATA = (function () {
     { id: 'rat_stew', n: 2, need: [['rat_tail', 3], ['water', 1]], caps: 0, desc: 'Похлёбка из крысиных хвостов. Звучит мерзко, лечит хорошо.' },
   ];
 
-  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, WMODS, INTERACT, PERKS, AIM, RECIPES };
+  return { SPECIAL, SKILLS, ITEMS, TINTS, NPCS, DIALOGS, LOCATIONS, WORLD, HEX_TILES, QUESTS, WMODS, WMAX_LVL, INTERACT, PERKS, AIM, RECIPES };
 })();

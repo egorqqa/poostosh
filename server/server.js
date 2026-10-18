@@ -213,8 +213,21 @@ function createServer(opts = {}) {
           break;
         }
         case 'leaders': send(p, { t: 'leaders', list: leaders() }); break;
+        case 'horde': { // финальная орда главы 8 — общий штурм Ржавого Ручья
+          const cur = world.invasion;
+          if (cur && !cur.done && cur.kind === 'horde') break;
+          const wave = (Array.isArray(m.wave) ? m.wave : []).slice(0, 12)
+            .filter(x => Array.isArray(x) && /^[a-z_0-9]{2,24}$/.test(String(x[0]))).map(x => [String(x[0]), String(x[1] || '').slice(0, 40)]);
+          if (!wave.length) break;
+          world.invCount = (world.invCount || 0) + 1;
+          world.invasion = { id: Date.now(), loc: 'camp', kind: 'horde', wave, by: p.name, until: world.time + 24 * 60, done: false, n: world.invCount };
+          dirty = true; toAll({ t: 'invasion', inv: world.invasion }); say('Орда «Пепел» идёт на camp — тревогу поднял', p.name);
+          break;
+        }
         case 'invdone':
           if (world.invasion && world.invasion.id === m.id && !world.invasion.done) {
+            const fighters = room(world.invasion.loc);
+            world.invasion.share = Math.max(1, fighters.length); world.invasion.party = fighters.map(f => f.name);
             world.invasion.done = 'won'; dirty = true; toAll({ t: 'invasion', inv: world.invasion }); say('Вторжение отбито:', world.invasion.loc, '—', p.name);
           }
           break;

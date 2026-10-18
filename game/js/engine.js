@@ -603,14 +603,29 @@ window.ENG = (function () {
 
   // какая модель с оружием у игрока: по значку оружия в руках
   const GUN_OF = { pistol: 'pistol', shotgun: 'rifle', rifle: 'rifle', ak: 'ak' };
-  E.gunModel = function (a) {
-    if (!a || !(a.isPlayer || a.isRemote) || !a.weapon || !E.guns) return null;
+  const ARMED = ['column', 'bastion', 'remnant']; // солдаты, которые носят оружие в руках
+  E.gunKey = function (a) {
+    if (!a || !a.weapon || !E.guns) return null;
+    const tpl = DATA.NPCS[a.tpl];
+    if (!(a.isPlayer || a.isRemote || (tpl && ARMED.includes(tpl.faction) && !a.model))) return null;
     const w = DATA.ITEMS[a.weapon];
-    return w && !w.melee ? E.guns[GUN_OF[w.icon]] || null : null;
+    return w && !w.melee && E.guns[GUN_OF[w.icon]] ? GUN_OF[w.icon] + (a.isPlayer || a.isRemote ? '' : ':' + (a.tint || 'guard')) : null;
   };
+  // лист модели; для NPC — перекрашенная копия под их окраску (кэшируется)
+  function gunSheet(key) {
+    if (!key) return null;
+    if (E.guns[key]) return E.guns[key];
+    const [base, tint] = key.split(':'), B = E.guns[base];
+    if (!B) return null;
+    const c = document.createElement('canvas'); c.width = B.canvas.width; c.height = B.canvas.height;
+    const cx = c.getContext('2d'); cx.filter = DATA.TINTS[tint] || 'none'; cx.drawImage(B.canvas, 0, 0);
+    return (E.guns[key] = { ...B, canvas: c });
+  }
+  E.gunModel = a => gunSheet(E.gunKey(a));
   function gunFrame(G, a, M) {
     const row = a.dir8 != null ? a.dir8 : DIR4_TO_8[a.dir || 0];
     if (a.aimT > 0) return { row, col: a.aimT > 0.3 ? M.fire : M.aim };   // вспышка, затем удержание прицела
+    if (a.reloadT > 0) return { row, col: 0 };                              // оружие опущено — меняем магазин
     if (a.moving) return { row, col: Math.floor(a.walkPhase * M.walk * (M.walk < 4 ? 2 : 1)) % M.walk };
     if (G.combat && G.combat.list && G.combat.list.includes(a)) return { row, col: M.aim }; // в бою — оружие наготове
     return { row, col: 0 };
@@ -642,15 +657,35 @@ window.ENG = (function () {
     let ox = 0, oy = 0;
     if (a.recoilT > 0) { const k = a.recoilT / 0.14; ox += (a.recoilX || 0) * 5 * k; oy += (a.recoilY || 0) * 3 * k; }
     if (a.shakeT > 0) { ox += (Math.random() - 0.5) * 6 * a.shakeT / 0.25; oy += (Math.random() - 0.5) * 3 * a.shakeT / 0.25; }
+    if (a.reloadT > 0) oy += Math.sin((1 - a.reloadT / 0.8) * Math.PI) * 3; // приседает, перезаряжая
     const sneakY = a.isPlayer && G.sneaking ? 4 : 0;
     if (GM) ctx.drawImage(GM.canvas, f.col * GM.fw, f.row * GM.fh, GM.fw, GM.fh, sx - GM.ax + ox, sy - GM.ay + oy + sneakY, GM.fw, GM.fh);
     else ctx.drawImage(sheet, f.col * FR.w, f.row * FR.h, FR.w, FR.h, sx - FR.ax + ox, sy - FR.ay + oy + sneakY, FR.w, FR.h);
+    if (a.reloadT > 0) drawReload(ctx, a, sx, sy);
     if (a.isCompanion) {
       ctx.strokeStyle = 'rgba(143,208,255,0.7)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.ellipse(sx, sy - 2, 18, 8, 0, 0, Math.PI * 2); ctx.stroke();
     }
     ctx.filter = 'none';
     ctx.globalAlpha = 1;
+  }
+
+  // перезарядка: пустой магазин падает, новый вставляется
+  function drawReload(ctx, a, sx, sy) {
+    const k = 1 - a.reloadT / 0.8, side = [0, 1, 2, 3].includes(a.dir8 != null ? a.dir8 : 0) ? 1 : -1;
+    ctx.save(); ctx.filter = 'none'; ctx.globalAlpha = 1;
+    if (k < 0.55) { // старый магазин падает и отскакивает
+      const t = k / 0.55, y = sy - 46 + 40 * t * t;
+      ctx.fillStyle = '#2b2b26'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+      ctx.translate(sx + side * (8 + 10 * t), Math.min(y, sy - 4)); ctx.rotate(side * t * 2);
+      ctx.fillRect(-2, -5, 4, 9); ctx.strokeRect(-2, -5, 4, 9);
+    } else { // новый магазин поднимается к оружию
+      const t = (k - 0.55) / 0.45;
+      ctx.fillStyle = '#4a4a3c'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+      ctx.translate(sx + side * 6, sy - 30 - 14 * t);
+      ctx.fillRect(-2, -5, 4, 9); ctx.strokeRect(-2, -5, 4, 9);
+    }
+    ctx.restore();
   }
 
   function drawCorpse(ctx, a) {
@@ -669,8 +704,10 @@ window.ENG = (function () {
       ctx.restore(); ctx.filter = 'none';
       return;
     }
+    const GM = gunSheet(a.corpseGun || (a.isPlayer || a.isRemote ? E.gunKey(a) : null));
     const sheet = E.sheets[a.tint || 'player'];
     const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
+    if (GM) { drawGunCorpse(ctx, a, GM, sx, sy); return; }
     // анимация падения: тело заваливается, лужа крови растекается
     if (a.deathAt == null) a.deathAt = performance.now();
     const k = Math.min(1, (performance.now() - a.deathAt) / 450);
@@ -683,6 +720,33 @@ window.ENG = (function () {
     ctx.rotate((-Math.PI / 2 + 0.25) * ease);
     ctx.filter = 'brightness(0.6) saturate(0.6)';
     ctx.drawImage(sheet, 0, a.dir === 1 ? FR.h : 0, FR.w, FR.h, -FR.ax + 4 * ease, -FR.ay + 22 * ease, FR.w, FR.h);
+    ctx.restore();
+    ctx.filter = 'none';
+  }
+
+  // смерть модели с оружием: отшатывается от попадания, оседает и падает навзничь, оружие выпадает
+  function drawGunCorpse(ctx, a, M, sx, sy) {
+    if (a.deathAt == null) a.deathAt = performance.now();
+    const ms = performance.now() - a.deathAt;
+    const row = a.dir8 != null ? a.dir8 : DIR4_TO_8[a.dir || 0];
+    const back = [0, 1, 7].includes(row) ? -1 : 1;           // падает от стрелка: в сторону, противоположную взгляду
+    const k1 = Math.min(1, ms / 160), k2 = Math.max(0, Math.min(1, (ms - 160) / 420));
+    const ease = 1 - Math.pow(1 - k2, 3);
+    const pool = Math.min(1, ms / 1800);
+    ctx.fillStyle = 'rgba(90,10,6,0.65)';
+    ctx.beginPath(); ctx.ellipse(sx + back * 6, sy - 6, 8 + 20 * pool, 3 + 8 * pool, 0.1, 0, Math.PI * 2); ctx.fill();
+    // выпавшее оружие лежит рядом
+    if (k2 > 0.6) {
+      ctx.save(); ctx.translate(sx - back * 18, sy - 4); ctx.rotate(-0.3 * back);
+      ctx.fillStyle = '#26241f'; ctx.fillRect(-11, -2, 22, 4); ctx.fillStyle = '#5a3a1e'; ctx.fillRect(-11, -2, 7, 4);
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.translate(sx + back * 5 * k1, sy - 8 * ease);
+    ctx.rotate(back * (Math.PI / 2 - 0.2) * ease);
+    ctx.filter = `brightness(${1 - 0.4 * ease}) saturate(${1 - 0.4 * ease})`;
+    const col = k2 > 0 ? 0 : M.aim;                           // в момент попадания ещё держит прицел
+    ctx.drawImage(M.canvas, col * M.fw, row * M.fh, M.fw, M.fh, -M.ax, -M.ay + 18 * ease, M.fw, M.fh);
     ctx.restore();
     ctx.filter = 'none';
   }

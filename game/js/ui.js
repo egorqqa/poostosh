@@ -771,8 +771,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
       <h2>Мастерская: ${npc.name} <button class="close" data-close>✕</button></h2>
       <div class="muted" style="margin-bottom:6px">${own ? 'Свой верстак: работа бесплатная, нужны только материалы.' : 'Борис делает полезное из хлама. Хлам находится при обыске и у торговцев.'}</div>
       <div class="screen" style="flex:1" id="cr-list"></div>
-      <h3 style="margin:8px 0 4px;color:var(--amber)">Улучшение оружия</h3>
-      <div class="screen" style="max-height:36vh" id="cr-mods"></div>
+      ${own ? '<button id="cr-guns" style="margin-top:6px">Модификации оружия…</button>' : '<div class="muted" style="margin-top:6px">Улучшение оружия и обвес — у оружейника Константина у гаража.</div>'}
       <div class="muted" style="margin-top:6px" id="cr-st"></div></div>`, root => {
       const p = G.player;
       const draw = () => {
@@ -785,35 +784,9 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
             <div><div class="nm">${ITEMS[r.id].name}${r.n > 1 ? ' ×' + r.n : ''}</div><div class="sub">${r.desc}<br>Нужно: ${needs}${cost ? `, <span class="${p.caps >= cost ? '' : 'bad'}">${cost} крышек</span>` : ''}</div></div>
             <div><button ${ok ? '' : 'disabled'} data-cr="${i}">Сделать</button></div></div>`;
         }).join('');
-        const wids = [...new Set([p.weapon, ...p.inv.map(s => s.id)].filter(id => id && ITEMS[id] && ITEMS[id].type === 'weapon' && !ITEMS[id].hidden))];
-        const rows = [];
-        for (const wid of wids) {
-          const w = ITEMS[wid], have = (p.wmods && p.wmods[wid]) || {};
-          for (const m of DATA.WMODS) {
-            if (m.for === 'melee' ? !w.melee : w.melee || (m.for === 'mag' && !w.mag)) continue;
-            const cost = own ? 0 : m.caps;
-            const needs = m.need.map(([id, n]) => `<span class="${R.count(p, id) >= n ? '' : 'bad'}">${ITEMS[id].name} ×${n} (${R.count(p, id)})</span>`).join(', ');
-            const ok = !have[m.id] && m.need.every(([id, n]) => R.count(p, id) >= n) && p.caps >= cost;
-            rows.push(`<div class="item" style="grid-template-columns:40px 1fr auto;cursor:default"><div class="ico">${itemIcon(wid)}</div>
-              <div><div class="nm">${w.name}: ${m.name}</div><div class="sub">${m.desc}${have[m.id] ? '' : `<br>Нужно: ${needs}${cost ? `, <span class="${p.caps >= cost ? '' : 'bad'}">${cost} крышек</span>` : ''}`}</div></div>
-              <div>${have[m.id] ? '<span class="good">✔ стоит</span>' : `<button ${ok ? '' : 'disabled'} data-wm="${m.id}" data-w="${wid}">Поставить</button>`}</div></div>`);
-          }
-        }
-        root.querySelector('#cr-mods').innerHTML = rows.join('') || '<div class="muted">Нет оружия, которое можно улучшить. Прицел, магазин и глушитель ставятся на огнестрел, заточка — на холодное.</div>';
       };
       root.addEventListener('click', e => {
-        const bm = e.target.closest('[data-wm]');
-        if (bm) {
-          const m = DATA.WMODS.find(x => x.id === bm.dataset.wm), wid = bm.dataset.w, cost = own ? 0 : m.caps;
-          p.wmods = p.wmods || {};
-          const have = p.wmods[wid] = p.wmods[wid] || {};
-          if (have[m.id] || !m.need.every(([id, n]) => R.count(p, id) >= n) || p.caps < cost) return;
-          m.need.forEach(([id, n]) => R.removeItem(p, id, n));
-          p.caps -= cost; have[m.id] = 1;
-          G.log(`${own ? 'Установлено' : 'Борис установил'}: ${m.name} → ${ITEMS[wid].name}.`, 'good');
-          SND.play('reload'); NET.syncSelf && NET.syncSelf();
-          U.refresh(); return;
-        }
+        if (e.target.closest('#cr-guns')) { U.openGunsmith({ name: 'Ваш верстак' }, true); return; }
         const b = e.target.closest('[data-cr]');
         if (!b) return;
         const r = DATA.RECIPES[+b.dataset.cr];
@@ -823,6 +796,88 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
         p.caps -= cost;
         R.addItem(p, r.id, r.n);
         G.log(`${own ? 'Сделано' : 'Борис сделал'}: ${ITEMS[r.id].name}${r.n > 1 ? ' ×' + r.n : ''}.`, 'good');
+        SND.play('reload');
+        U.refresh();
+      });
+      modalRefresh = draw;
+      draw();
+    });
+  };
+
+  // ---------- оружейник: улучшение (из двух одинаковых стволов — один лучший) и обвес ----------
+  U.openGunsmith = function (npc, own) {
+    U.openModal('gunsmith', `<div class="modal" style="width:min(760px,96vw);max-height:100%">
+      <h2>${own ? 'Верстак: оружие' : 'Оружейник: ' + npc.name} <button class="close" data-close>✕</button></h2>
+      <div class="muted" style="margin-bottom:6px">${own ? 'Свой верстак: обвес ставится и снимается бесплатно, нужны только материалы. Улучшение стволов — у Константина.' : 'Улучшение: нужны 2 одинаковых ствола (один уходит на детали) и 30% цены ствола. Обвес: материалы и крышки. Снятый обвес лежит в запасе — перестановка бесплатная.'}</div>
+      <div class="screen" style="flex:1" id="gs-list"></div>
+      <div class="muted" style="margin-top:6px" id="gs-st"></div></div>`, root => {
+      const p = G.player;
+      const copies = wid => R.count(p, wid) + (p.weapon === wid ? 1 : 0);
+      const fits = (m, w) => m.for === 'melee' ? w.melee : !w.melee && (m.for !== 'mag' || w.mag) && (m.for !== 'long' || w.icon !== 'pistol');
+      const upCost = wid => Math.ceil(ITEMS[wid].value * 0.3);
+      const draw = () => {
+        p.wmods = p.wmods || {}; p.wlvl = p.wlvl || {}; p.modStash = p.modStash || {};
+        const stash = Object.entries(p.modStash).filter(([, n]) => n > 0).map(([id, n]) => `${DATA.WMODS.find(m => m.id === id).name} ×${n}`);
+        root.querySelector('#gs-st').textContent = `Крышки: ${p.caps} · Хлам: ${R.count(p, 'junk')} · Обвес в запасе: ${stash.join(', ') || 'нет'}`;
+        const wids = [...new Set([p.weapon, ...p.inv.map(s => s.id)].filter(id => id && ITEMS[id] && ITEMS[id].type === 'weapon' && !ITEMS[id].hidden))];
+        if (!wids.length) { root.querySelector('#gs-list').innerHTML = '<div class="muted">У вас нет оружия.</div>'; return; }
+        root.querySelector('#gs-list').innerHTML = wids.map(wid => {
+          const w = ITEMS[wid], lvl = p.wlvl[wid] || 0, have = p.wmods[wid] || {}, n = copies(wid), cost = upCost(wid);
+          const wo = R.weaponOf({ weapon: wid, wmods: p.wmods, wlvl: p.wlvl });
+          let up = '';
+          if (!own) {
+            const ok = lvl < DATA.WMAX_LVL && n >= 2 && p.caps >= cost;
+            up = lvl >= DATA.WMAX_LVL ? '<div class="sub good">Улучшено до предела.</div>'
+              : `<div class="item" style="grid-template-columns:1fr auto;cursor:default;margin:2px 0"><div><div class="nm">Улучшить до +${lvl + 1}</div>
+                <div class="sub">Урон ${wo.dmg[0]}–${wo.dmg[1]} → ${Math.round(w.dmg[0] * (1 + 0.15 * (lvl + 1))) + (have.sharp ? 2 : 0)}–${Math.round(w.dmg[1] * (1 + 0.15 * (lvl + 1))) + (have.sharp ? 2 : 0)}, крит +2%.
+                Нужно: <span class="${n >= 2 ? '' : 'bad'}">2 одинаковых (есть ${n})</span>, <span class="${p.caps >= cost ? '' : 'bad'}">${cost} крышек</span></div></div>
+                <div><button ${ok ? '' : 'disabled'} data-up="${wid}">Улучшить</button></div></div>`;
+          }
+          const mods = DATA.WMODS.filter(m => fits(m, w)).map(m => {
+            const inSlot = DATA.WMODS.find(x => x.slot === m.slot && x.id !== m.id && have[x.id]);
+            if (have[m.id]) return `<div class="item" style="grid-template-columns:1fr auto;cursor:default;margin:2px 0"><div><div class="nm good">✔ ${m.name}</div><div class="sub">${m.desc}</div></div>
+              <div><button data-off="${m.id}" data-w="${wid}">Снять в запас</button></div></div>`;
+            const fromStash = (p.modStash[m.id] || 0) > 0, mcost = own ? 0 : m.caps;
+            const needs = m.need.map(([id, k]) => `<span class="${R.count(p, id) >= k ? '' : 'bad'}">${ITEMS[id].name} ×${k} (${R.count(p, id)})</span>`).join(', ');
+            const ok = fromStash || (m.need.every(([id, k]) => R.count(p, id) >= k) && p.caps >= mcost);
+            return `<div class="item" style="grid-template-columns:1fr auto;cursor:default;margin:2px 0"><div><div class="nm">${m.name}</div>
+              <div class="sub">${m.desc}${inSlot ? ` <span class="warn">Заменит: ${inSlot.name} (уйдёт в запас).</span>` : ''}<br>${fromStash ? '<span class="good">Есть в запасе — поставить бесплатно.</span>' : `Нужно: ${needs}${mcost ? `, <span class="${p.caps >= mcost ? '' : 'bad'}">${mcost} крышек</span>` : ''}`}</div></div>
+              <div><button ${ok ? '' : 'disabled'} data-on="${m.id}" data-w="${wid}">${fromStash ? 'Поставить' : 'Сделать'}</button></div></div>`;
+          }).join('');
+          return `<div style="border:1px solid #3e8a34;border-radius:4px;padding:6px;margin-bottom:8px">
+            <div style="display:flex;gap:8px;align-items:center"><div class="ico" style="width:40px">${itemIcon(wid)}</div>
+            <div><div class="nm" style="color:var(--amber)">${wo.name}${p.weapon === wid ? ' · в руках' : ''}</div>
+            <div class="sub">Урон ${wo.dmg[0]}–${wo.dmg[1]}${w.melee ? '' : ` · дальн. ${wo.range}${wo.mag ? ` · магазин ${wo.mag}` : ''}`} · уровень ${lvl}/${DATA.WMAX_LVL} · стволов: ${n}</div></div></div>
+            ${up}${mods}</div>`;
+        }).join('');
+      };
+      root.addEventListener('click', e => {
+        const bu = e.target.closest('[data-up]'), bon = e.target.closest('[data-on]'), boff = e.target.closest('[data-off]');
+        if (bu && !own) {
+          const wid = bu.dataset.up, lvl = p.wlvl[wid] || 0, cost = upCost(wid);
+          if (lvl >= DATA.WMAX_LVL || copies(wid) < 2 || p.caps < cost || !R.count(p, wid)) return;
+          R.removeItem(p, wid, 1); p.caps -= cost; p.wlvl[wid] = lvl + 1;
+          G.log(`${npc.name} перебрал ${ITEMS[wid].name}: теперь +${lvl + 1}. Второй ствол ушёл на детали.`, 'good');
+        } else if (bon) {
+          const m = DATA.WMODS.find(x => x.id === bon.dataset.on), wid = bon.dataset.w, have = p.wmods[wid] = p.wmods[wid] || {};
+          if (have[m.id]) return;
+          if ((p.modStash[m.id] || 0) > 0) p.modStash[m.id]--;
+          else {
+            const mcost = own ? 0 : m.caps;
+            if (!m.need.every(([id, k]) => R.count(p, id) >= k) || p.caps < mcost) return;
+            m.need.forEach(([id, k]) => R.removeItem(p, id, k)); p.caps -= mcost;
+          }
+          // в слоте может стоять другая модификация — уходит в запас
+          for (const x of DATA.WMODS) if (x.slot === m.slot && have[x.id]) { delete have[x.id]; p.modStash[x.id] = (p.modStash[x.id] || 0) + 1; }
+          have[m.id] = 1;
+          G.log(`Установлено: ${m.name} → ${ITEMS[wid].name}.`, 'good');
+        } else if (boff) {
+          const id = boff.dataset.off, wid = boff.dataset.w, have = p.wmods[wid] || {};
+          if (!have[id]) return;
+          delete have[id]; p.modStash[id] = (p.modStash[id] || 0) + 1;
+          if (id === 'mag') { const w = R.weaponOf(p); if (p.weapon === wid && w.mag && p.loaded > w.mag) { R.addItem(p, w.ammo, p.loaded - w.mag); p.loaded = w.mag; } }
+          G.log(`Снято в запас: ${DATA.WMODS.find(m => m.id === id).name}.`, 'sys');
+        } else return;
         SND.play('reload');
         U.refresh();
       });

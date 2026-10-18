@@ -296,7 +296,7 @@
   G.radioNews = function () {
     const f = G.flags, q = G.q, news = [];
     const inv = f.invasion;
-    if (inv && !inv.done) news.push(`⚠ СРОЧНО: ${inv.kind === 'column' ? 'отряд Колонны' : 'толпа обращённых'} идёт на «${DATA.LOCATIONS[inv.loc].name}»! Защитники просят помощи. Осталось часов: ${Math.max(0, Math.ceil((inv.until - G.time) / 60))}.`);
+    if (inv && !inv.done) news.push(`⚠ СРОЧНО: ${inv.kind === 'horde' ? 'орда «Пепел»' : inv.kind === 'column' ? 'отряд Колонны' : 'толпа обращённых'} идёт на «${DATA.LOCATIONS[inv.loc].name}»! Защитники просят помощи. Осталось часов: ${Math.max(0, Math.ceil((inv.until - G.time) / 60))}.`);
     if (q('obs') === 9) news.push(f.obsDone === 'dark' ? '«...жёлтое облако видели над южными пустошами. Кто вдохнул — уже не человек...»' : '«Говорит «Рассвет»: небо чистое. Колонна рассеяна, караваны снова ходят.»');
     else if (q('column') === 9) news.push('«...Колонну видели на дороге к северу, у старой обсерватории...»');
     if (f.bridgeOpen) news.push('«Ржавый мост открыт, мытари больше не дерут втридорога.»');
@@ -332,9 +332,17 @@
   };
   G.finaleStart = function () {
     G.setQuest('finale', 2);
+    if (NET.active) { // в сети орда общая: её создаёт сервер, отбивает весь отряд
+      const w = G.finaleWave();
+      NET.send({ t: 'horde', wave: w.list });
+      for (const h of w.help) G.log(h, 'good');
+      G.log('Тревога разошлась по серверу: все, кто рядом, могут прийти на помощь Ручью.', 'warn');
+      return;
+    }
     if (G.loc && G.loc.id === 'camp') WORLD_API.spawnFinale(G);
   };
-  G.finaleWaveCleared = function () {
+  G.finaleWaveCleared = function (fromServer) {
+    if (NET.active && !fromServer) return; // в сети исход штурма объявляет сервер
     if (G.q('finale') !== 2) return;
     G.setQuest('finale', 3);
     G.log('Вожак Пепла повержен. Орда бежит в пустошь. Поговорите с Михалычем.', 'good');
@@ -507,8 +515,22 @@
     if (!inv) return;
     const name = DATA.LOCATIONS[inv.loc].name;
     if (!inv.done && (!prev || prev.id !== inv.id)) {
-      G.log(`⚠ ВТОРЖЕНИЕ НА СЕРВЕРЕ! ${inv.kind === 'column' ? 'Отряд Колонны' : 'Толпа обращённых'} идёт на «${name}». Собирайте отряд! Времени: 24 игровых часа.`, 'bad');
+      G.log(inv.kind === 'horde' ? `⚠ ОРДА «ПЕПЕЛ» идёт на «${name}»${inv.by ? ` — тревогу поднял ${inv.by}` : ''}! Штурм общий для всех: награду делят те, кто будет в бою.`
+        : `⚠ ВТОРЖЕНИЕ НА СЕРВЕРЕ! ${inv.kind === 'column' ? 'Отряд Колонны' : 'Толпа обращённых'} идёт на «${name}». Собирайте отряд! Времени: 24 игровых часа.`, 'bad');
       WMAP.siteState(G, inv.loc).known = true; if (G.world) G.world.target = inv.loc; SND.play('alert');
+      // кто уже стоит в поселении — орда приходит прямо сейчас
+      if (inv.kind === 'horde' && G.loc && G.loc.id === inv.loc && G.scene === 'local') WORLD_API.spawnHorde(G, inv.wave || [], true);
+    }
+    if (inv.kind === 'horde' && inv.done === 'won' && !G.flags['invRew_' + inv.id]) {
+      G.flags['invRew_' + inv.id] = true;
+      const share = Math.max(1, inv.share || 1), pool = 1500, caps = Math.round(pool / share);
+      if (G.loc && G.loc.id === inv.loc) {
+        G.log(`Орда «Пепел» разбита! Участников боя: ${share}. Ваша доля: ${caps} из ${pool} крышек.`, 'good');
+        G.reward(500, caps, [['medkit', 1]]); SND.play('quest'); NET.send({ t: 'stat', k: 'invasions' });
+        G.addRep(10, 'защита Ручья');
+      } else G.log(`Отряд отбил орду «Пепел» у «${name}».`, 'sys');
+      if (G.q('finale') === 2) G.finaleWaveCleared(true);
+      return;
     }
     if (inv.done === 'won' && !G.flags['invRew_' + inv.id]) {
       G.flags['invRew_' + inv.id] = true;

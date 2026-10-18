@@ -189,9 +189,9 @@ window.COMBAT = (function () {
     if (d > w.range) return 0;
     if (!w.melee && !ENG.los(G.loc, att.x, att.y, def.x, def.y)) return 0;
     let ch = R.skill(att, w.melee ? 'melee' : 'guns') + 15 - R.AC(def);
-    if (!w.melee) ch -= Math.max(0, d - att.stats.per + 1) * 3;
+    if (!w.melee) ch -= Math.max(0, d - att.stats.per + 1) * (w.steady ? 1.5 : 3);
     ch += w.aim || 0;
-    if (!w.melee && d > 5) ch -= Math.round(12 * G.nightK()); // ночью вдаль стрелять труднее
+    if (!w.melee && d > 5 && !w.laser) ch -= Math.round(12 * G.nightK()); // ночью вдаль стрелять труднее
     if (!def.alerted && !isPC(def)) ch += 20;
     const A = DATA.AIM[aim] || DATA.AIM.torso;
     if (A.pen) ch -= Math.max(0, A.pen - (R.has(att, 'sniper') ? 10 : 0));
@@ -245,7 +245,7 @@ window.COMBAT = (function () {
     if (hit) {
       const critCh = (isPC(att) ? R.critChance(att) : Math.floor(R.critChance(att) / 2)) + (w.crit || 0) + (sneak ? 30 : 0) + (aim === 'head' ? 25 : 0);
       const crit = R.rnd(1, 100) <= critCh;
-      let dmg = R.rnd(w.dmg[0], w.dmg[1]) + (w.melee ? R.meleeBonus(att) : 0);
+      let dmg = R.rnd(w.dmg[0], w.dmg[1]) + (w.melee ? R.meleeBonus(att) : 0) + (w.bayonet && ENG.dist(att, def) <= 1 ? w.bayonet : 0);
       if (aim === 'head') dmg = Math.round(dmg * 1.25);
       const dt = crit ? Math.floor(R.DT(def) / 2) : R.DT(def);
       if (crit) dmg = Math.round(dmg * (sneak ? 2.5 : 1.5));
@@ -293,6 +293,7 @@ window.COMBAT = (function () {
     if (a.isPlayer) { G.gameOver(); return; }
     if (a.isRemote) { NET.event(a.pid, { kind: 'died' }); return; }
     if (a.isCompanion) { a.isCompanion = false; G.companion = null; G.log(`Ваш напарник ${a.name} погиб.`, 'bad'); SND.play('death'); }
+    a.corpseGun = ENG.gunKey ? ENG.gunKey(a) : null;
     // оружие и броня падают в лут
     if (a.weapon && ITEMS[a.weapon].hidden) a.weapon = null;
     if (a.weapon) {
@@ -331,6 +332,7 @@ window.COMBAT = (function () {
     const n = Math.min(have, need);
     R.removeItem(a, w.ammo, n);
     a.loaded += n;
+    a.reloadT = 0.8; // анимация перезарядки
     return true;
   }
 

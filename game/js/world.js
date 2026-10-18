@@ -156,7 +156,8 @@ window.WORLD_API = (function () {
     SND.setScene(LOCATIONS[id] ? id : 'wild');
     if (id === 'rassvet') { const l = L.actors.find(a => a.tpl === 'lada'); if (l && !G.flags.ladaFree) l.gone = true; }
     const inv = G.flags.invasion;
-    if (inv && !inv.done && inv.loc === id) {
+    if (inv && !inv.done && inv.loc === id && inv.kind === 'horde') W.spawnHorde(G, inv.wave || [], true);
+    else if (inv && !inv.done && inv.loc === id) {
       const k = Math.max(1, Math.min(4, inv.n || 1) + 2 - (G.defense(id).walls || 0)) - 2;
       const tpls = inv.kind === 'column' ? ['col_soldier', 'col_soldier', 'col_soldier', 'col_soldier', 'col_soldier'] : ['infected', 'infected', 'z_soldier', 'infected', 'infected_brute'];
       const ex = L.def.exits[0], cx = Math.round((ex.x0 + ex.x1) / 2), cy = Math.min(ex.y0, ex.y1) - 5;
@@ -171,7 +172,7 @@ window.WORLD_API = (function () {
       }
       G.log(`⚠ ${inv.kind === 'column' ? 'Штурмовики Колонны' : 'Обращённые'} уже здесь! Защитите поселение.`, 'bad');
     }
-    if (id === 'camp' && G.q('finale') === 2) W.spawnFinale(G);
+    if (id === 'camp' && G.q('finale') === 2 && !NET.active) W.spawnFinale(G);
     if (id === 'observatory' || id === 'obs_dome') {
       const friendly = G.flags.columnEnd === 'joined' || G.flags.granitYield || G.flags.obsDone;
       for (const a of L.actors) {
@@ -225,21 +226,27 @@ window.WORLD_API = (function () {
   };
 
   W.spawnFinale = function (G) {
-    const L = G.loc;
-    if (!L || L.actors.some(a => a.finalWave)) return;
     const wave = G.finaleWave();
+    if (!W.spawnHorde(G, wave.list, false)) return;
+    for (const h of wave.help) G.log(h, 'good');
+  };
+  // орда «Пепел» у входа в локацию; invader — общая сетевая орда (не сохраняется в состоянии локации)
+  W.spawnHorde = function (G, list, invader) {
+    const L = G.loc;
+    if (!L || L.actors.some(a => a.finalWave)) return false;
     const ex = L.def.exits[0], cx = Math.round((ex.x0 + ex.x1) / 2), cy = Math.min(ex.y0, ex.y1) - 5;
-    wave.list.forEach(([tpl, name], i) => {
+    list.slice(0, 12).forEach(([tpl, name], i) => {
+      if (!DATA.NPCS[tpl]) return;
       const a = R.makeNpc(tpl, cx, cy, {});
-      a.id = 'ash_' + i; a.finalWave = true; a.hostile = true; a.alerted = true; a.faction = 'horde'; a.name = name;
+      a.id = 'ash_' + i; a.finalWave = true; a.invader = !!invader; a.hostile = true; a.alerted = true; a.faction = 'horde'; a.name = String(name).slice(0, 40);
       const f = W.freeTile(L, cx + R.rnd(-4, 4), cy + R.rnd(-3, 3), a) || { x: cx, y: cy };
       a.x = a.rx = f.x; a.y = a.ry = f.y; a.homeX = f.x; a.homeY = f.y;
       a.path = []; a.moving = false; a.walkPhase = 0; a.aimT = 0; a.hitFlash = 0; a.deathAt = null;
       L.actors.push(a); NET.syncEnt(a);
     });
     G.log('⚠ Орда «Пепел» штурмует Ржавый Ручей!', 'bad');
-    for (const h of wave.help) G.log(h, 'good');
     SND.play('alert');
+    return true;
   };
   W.saveLocationState = function (G) {
     const L = G.loc;
@@ -330,6 +337,7 @@ window.WORLD_API = (function () {
     for (const a of L.actors) {
       if (a.dead || a.gone) continue;
       if (a.aimT > 0) a.aimT -= dt;
+      if (a.reloadT > 0) a.reloadT -= dt;
       if (a.recoilT > 0) a.recoilT -= dt;
       if (a.shakeT > 0) a.shakeT -= dt;
       if (a.hitFlash > 0) a.hitFlash -= dt;
@@ -915,6 +923,7 @@ window.WORLD_API = (function () {
       setTimeout(() => UI.openTrade(npc), 0);
     },
     craft(G, npc) { setTimeout(() => UI.openCraft(npc), 0); },
+    gunsmith(G, npc) { setTimeout(() => UI.openGunsmith(npc), 0); },
     takeQuest(G) {
       if (G.quests.meds === 0) {
         G.quests.meds = 1;
