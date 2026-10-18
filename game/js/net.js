@@ -57,7 +57,7 @@ window.NET = (function () {
   N.syncEnt = function (a) {
     if (!N.active || !G.loc || !a || a.isPlayer || a.isRemote) return;
     send({ t: 'op', kind: 'ent', id: a.id, set: { hostile: !!a.hostile, alerted: !!a.alerted, leaving: !!a.leaving, gone: !!a.gone, dead: !!a.dead, hp: a.hp,
-      inv: a.inv, caps: a.caps, weapon: a.weapon, armor: a.armor, loaded: a.loaded, stealTries: a.stealTries || 0, wander: a.wander } });
+      inv: a.inv, caps: a.caps, weapon: a.weapon, armor: a.armor, loaded: a.loaded, stealTries: a.stealTries || 0, wander: a.wander, burn: a.burn || 0 } });
   };
   N.syncObj = function (o) {
     if (!N.active || !G.loc || !o) return;
@@ -228,6 +228,7 @@ window.NET = (function () {
         COMBAT.actorAttack(G, pr, t, m.aim).then(r => ack(typeof r === 'string' ? r : null));
         break;
       }
+      case 'throw': COMBAT.actorThrow(G, pr, +m.x, +m.y, String(m.item)).then(r => ack(typeof r === 'string' ? r : null)); break;
       case 'end': COMBAT.endTurnOf(G, pr); break;
       case 'spend': pr.ap = Math.max(0, (pr.ap || 0) - (+m.n || 0)); break;
       case 'combat': {

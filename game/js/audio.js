@@ -90,6 +90,17 @@ window.SND = (function () {
     quest(t) { [392, 523, 659].forEach((f, i) => tone(t + i * 0.1, f, 0.3, { type: 'triangle', peak: 0.13 })); },
     alert(t) { tone(t, 220, 0.15, { type: 'sawtooth', peak: 0.12 }); tone(t + 0.16, 165, 0.3, { type: 'sawtooth', peak: 0.12 }); },
     death(t) { tone(t, 220, 1.4, { type: 'sawtooth', peak: 0.18, to: 55 }); },
+    boom(t, o) {
+      const v = o.vol;
+      tone(t, 70, 0.9, { peak: 0.9 * v, to: 25 });
+      noise(t, 1.4, { type: 'lowpass', freq: 1400, peak: 1.0 * v, sweepTo: 120 });
+      noise(t, 0.08, { type: 'highpass', freq: 2500, peak: 0.5 * v });
+      noise(t + 0.25, 1.6, { type: 'bandpass', freq: 300, q: 0.4, peak: 0.25 * v, attack: 0.1 });
+    },
+    glass(t, o) { for (let i = 0; i < 5; i++) tone(t + i * 0.025, 3000 + Math.random() * 2500, 0.08, { type: 'triangle', peak: 0.12 * o.vol }); noise(t, 0.2, { type: 'highpass', freq: 4000, peak: 0.25 * o.vol }); },
+    fire(t, o) { noise(t, 1.2, { type: 'lowpass', freq: 700, peak: 0.45 * o.vol, attack: 0.08, sweepTo: 300 }); for (let i = 0; i < 6; i++) noise(t + Math.random() * 1, 0.03, { type: 'highpass', freq: 3000, peak: 0.12 * o.vol }); },
+    whoosh(t, o) { noise(t, 0.3, { type: 'bandpass', freq: 600, sweepTo: 1800, q: 2, peak: 0.25 * o.vol, attack: 0.05 }); },
+    clang(t, o) { tone(t, 1700 + Math.random() * 400, 0.25, { type: 'triangle', peak: 0.14 * o.vol, to: 1500 }); tone(t, 3400, 0.08, { type: 'square', peak: 0.04 * o.vol }); noise(t, 0.03, { type: 'highpass', freq: 3000, peak: 0.2 * o.vol }); },
     search(t) { noise(t, 0.35, { type: 'bandpass', freq: 900, q: 0.8, peak: 0.15, attack: 0.05 }); noise(t + 0.3, 0.25, { type: 'bandpass', freq: 1400, q: 0.8, peak: 0.1, attack: 0.04 }); },
   };
 

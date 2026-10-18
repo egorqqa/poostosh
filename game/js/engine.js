@@ -325,10 +325,16 @@ window.ENG = (function () {
     ctx.fillRect(0, 0, E.canvas.width, E.canvas.height);
     if (!L) return;
     const vw = E.viewW(), vh = E.viewH();
-    ctx.setTransform(dpr * E.zoom, 0, 0, dpr * E.zoom, dpr * (vw / 2 - E.cam.x * E.zoom), dpr * (vh / 2 - E.cam.y * E.zoom));
+    let shx = 0, shy = 0;
+    if (E.shakeT > 0) { const k = E.shakeT / (E.shakeDur || 1); shx = (Math.random() - 0.5) * 2 * E.shakeAmp * k; shy = (Math.random() - 0.5) * 2 * E.shakeAmp * k; }
+    ctx.setTransform(dpr * E.zoom, 0, 0, dpr * E.zoom, dpr * (vw / 2 - E.cam.x * E.zoom + shx), dpr * (vh / 2 - E.cam.y * E.zoom + shy));
     ctx.imageSmoothingEnabled = true;
 
     ctx.drawImage(L.ground.canvas, -L.ground.ox, -L.ground.oy);
+    // следы на земле (копоть взрывов, гарь)
+    const nowMs = performance.now();
+    E.decals = E.decals.filter(d => d.until > nowMs);
+    for (const d of E.decals) if (d.loc === L.id) d.draw(ctx, nowMs);
 
     // зона выхода
     const pulse = 0.5 + 0.5 * Math.sin(t * 3);
@@ -361,6 +367,9 @@ window.ENG = (function () {
         }
       }
     }
+
+    // бросок: дуга и зона поражения
+    if (G.ui && G.ui.mode === 'throw' && G.ui.throwItem && E.mouse.tile && G.mode !== 'dialog') drawThrowAim(ctx, G, L, p, E.mouse.tile, t);
 
     // трупы — на земле
     for (const a of L.actors) if (a.dead) drawCorpse(ctx, a);
@@ -632,7 +641,8 @@ window.ENG = (function () {
   }
 
   function drawActor(ctx, G, a, t, hovered) {
-    if (a.model && E.models[a.model]) { drawModel(ctx, G, a, t, hovered, E.models[a.model]); return; }
+    if (a.model && E.models[a.model]) { drawModel(ctx, G, a, t, hovered, E.models[a.model]); drawBurn(ctx, a, t); return; }
+    if (a.tpl === 'konst' && E.img.npc_konst) { drawKonst(ctx, G, a, t, hovered); return; }
     const GM = E.gunModel(a);
     const sheet = E.sheets[a.tint || 'player'];
     const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
@@ -658,16 +668,93 @@ window.ENG = (function () {
     if (a.recoilT > 0) { const k = a.recoilT / 0.14; ox += (a.recoilX || 0) * 5 * k; oy += (a.recoilY || 0) * 3 * k; }
     if (a.shakeT > 0) { ox += (Math.random() - 0.5) * 6 * a.shakeT / 0.25; oy += (Math.random() - 0.5) * 3 * a.shakeT / 0.25; }
     if (a.reloadT > 0) oy += Math.sin((1 - a.reloadT / 0.8) * Math.PI) * 3; // приседает, перезаряжая
+    if (a.knockT > 0) { const k = a.knockT / 0.22; ox += (a.knockX || 0) * 7 * k; oy += (a.knockY || 0) * 4 * k; } // отбрасывает попаданием
     const sneakY = a.isPlayer && G.sneaking ? 4 : 0;
     if (GM) ctx.drawImage(GM.canvas, f.col * GM.fw, f.row * GM.fh, GM.fw, GM.fh, sx - GM.ax + ox, sy - GM.ay + oy + sneakY, GM.fw, GM.fh);
     else ctx.drawImage(sheet, f.col * FR.w, f.row * FR.h, FR.w, FR.h, sx - FR.ax + ox, sy - FR.ay + oy + sneakY, FR.w, FR.h);
     if (a.reloadT > 0) drawReload(ctx, a, sx, sy);
+    drawBurn(ctx, a, t);
     if (a.isCompanion) {
       ctx.strokeStyle = 'rgba(143,208,255,0.7)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.ellipse(sx, sy - 2, 18, 8, 0, 0, Math.PI * 2); ctx.stroke();
     }
     ctx.filter = 'none';
     ctx.globalAlpha = 1;
+  }
+
+  // горящий персонаж: языки пламени по фигуре
+  function drawBurn(ctx, a, t) {
+    if (!(a.burn > 0) || a.dead) return;
+    const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
+    ctx.save(); ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 6; i++) {
+      const ph = t * 9 + i * 1.7, x = sx + Math.sin(i * 2.3) * 10, y = sy - 10 - i * 9 - Math.abs(Math.sin(ph)) * 6;
+      const r = 7 + Math.sin(ph) * 2;
+      const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, 'rgba(255,240,170,0.9)'); gr.addColorStop(0.5, 'rgba(255,140,30,0.6)'); gr.addColorStop(1, 'rgba(200,40,0,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(x, y, r * 0.7, r * 1.3, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // оружейник Константин: стоит у верстака, при заказе работает — стучит, сыплет искры, проверяет ствол
+  const KONST = { idle: 6, left: 0, work: 2, aim: 10 };
+  function drawKonst(ctx, G, a, t, hovered) {
+    const im = E.img.npc_konst, M = window.ASSET_MANIFEST.npc_konst;
+    const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(sx, sy - 2, 16, 7, 0, 0, Math.PI * 2); ctx.fill();
+    if (hovered) { ctx.strokeStyle = '#9dff8a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(sx, sy - 2, 20, 9, 0, 0, Math.PI * 2); ctx.stroke(); }
+    const bench = tileCenter(a.x, a.y - 1);
+    let fr = KONST.idle, oy = 0;
+    const p = G.player, near = p && E.dist(a, p) <= 4;
+    // сам по себе тоже иногда возится с железом
+    const ambient = !near && (t % 9) < 1.4;
+    if (a.workT > 0 || ambient) {
+      const left = a.workT > 0 ? a.workT : 1.4 - (t % 9);
+      if (a.workT > 0 && left < 0.9) fr = KONST.aim;              // смотрит в прицел готового ствола
+      else {
+        fr = KONST.work;
+        const ph = (t * 2.9) % 1;                                  // удары молотком
+        oy = ph < 0.2 ? ph * 10 : 0;
+        const strike = Math.floor(t * 2.9);
+        if (strike !== a._strike && ph < 0.2) {
+          a._strike = strike;
+          E.sparks(bench.x + 4, bench.y - 18, a.workT > 0 ? 14 : 6);
+          if (a.workT > 0 || E.dist(a, p) <= 9) SND.at('clang', a.x, a.y, {});
+        }
+      }
+    } else if (near) {
+      const s = iso(p.x - a.x, p.y - a.y);
+      fr = s.x < -4 ? KONST.left : KONST.idle;
+    }
+    if (a.hitFlash > 0) ctx.filter = 'brightness(1.7) sepia(1) hue-rotate(-40deg) saturate(4)';
+    const breathe = Math.sin(t * 2) * 0.6;
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
+    ctx.drawImage(im, fr * M.fw, 0, M.fw, M.fh, sx - M.ax, sy - M.ay + oy + breathe, M.fw, M.fh);
+    ctx.restore(); ctx.filter = 'none';
+  }
+
+  // дуга броска и зона поражения под курсором
+  function drawThrowAim(ctx, G, L, p, tile, t) {
+    const it = DATA.ITEMS[G.ui.throwItem];
+    if (!it) return;
+    const d = E.dist(p, tile), ok = d <= it.range && d > 0 && E.los(L, p.x, p.y, tile.x, tile.y);
+    const r = it.radius || 0;
+    for (let y = tile.y - r; y <= tile.y + r; y++) for (let x = tile.x - r; x <= tile.x + r; x++) {
+      if (x < 0 || y < 0 || x >= L.w || y >= L.h) continue;
+      diamond(ctx, x, y, ok ? 'rgba(255,150,40,0.9)' : 'rgba(255,60,40,0.6)', ok ? `rgba(255,120,30,${0.18 + 0.1 * Math.sin(t * 6)})` : 'rgba(255,40,40,0.12)');
+    }
+    const a = tileCenter(p.x, p.y), b = tileCenter(tile.x, tile.y);
+    const h = 30 + 8 * d;
+    ctx.save(); ctx.setLineDash([5, 6]); ctx.lineDashOffset = -t * 20;
+    ctx.strokeStyle = ok ? 'rgba(255,220,120,0.85)' : 'rgba(255,90,60,0.7)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y - 50);
+    ctx.quadraticCurveTo((a.x + b.x) / 2, Math.min(a.y - 50, b.y) - h * 2, b.x, b.y - 4);
+    ctx.stroke(); ctx.restore();
+    ctx.font = 'bold 12px Consolas, monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(b.x - 34, b.y + 8, 68, 15);
+    ctx.fillStyle = ok ? '#ffd080' : '#ff7a5a'; ctx.fillText(ok ? `${it.ap} ОД` : d > it.range ? 'далеко' : 'нет броска', b.x, b.y + 19);
   }
 
   // перезарядка: пустой магазин падает, новый вставляется
@@ -780,6 +867,164 @@ window.ENG = (function () {
       ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, 26 * k + 6, 0, Math.PI * 2); ctx.fill();
     } });
   };
+  // ---------- броски, взрывы, попадания ----------
+  E.decals = [];
+  E.shake = function (dur, amp) { if (E.shakeT > 0 && amp < E.shakeAmp) return; E.shakeT = dur; E.shakeDur = dur; E.shakeAmp = amp; };
+  // полёт брошенного предмета по дуге; dur — в секундах
+  E.throwArc = function (from, to, item, dur) {
+    const a = tileCenter(from.x, from.y), b = tileCenter(to.x, to.y);
+    const d = Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y));
+    const H = 30 + 8 * d, spin = item === 'tknife' ? 22 : 9;
+    E.effects.push({ t: 0, life: dur, draw(ctx) {
+      const k = Math.min(1, this.t / this.life);
+      const x = a.x + (b.x - a.x) * k, gy = a.y + (b.y - a.y) * k;
+      const y = (a.y - 50) + ((b.y - 4) - (a.y - 50)) * k - 4 * H * k * (1 - k);
+      // тень на земле
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(x, gy, 5, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.translate(x, y); ctx.rotate(this.t * spin);
+      if (item === 'grenade') {
+        ctx.fillStyle = '#4e5a34'; ctx.strokeStyle = '#141a0a'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(0, 0, 4.5, 5.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#8a8a80'; ctx.fillRect(-2, -8, 4, 3);
+      } else if (item === 'molotov') {
+        ctx.fillStyle = '#6a4a1a'; ctx.strokeStyle = '#1a0e02'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-3.5, -4, 7, 11, 2) : ctx.rect(-3.5, -4, 7, 11); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#3a5a2a'; ctx.fillRect(-1.5, -8, 3, 4);
+        const f = 4 + Math.random() * 3;
+        const gr = ctx.createRadialGradient(0, -10, 0, 0, -10, f);
+        gr.addColorStop(0, 'rgba(255,240,160,1)'); gr.addColorStop(1, 'rgba(255,90,0,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, -10, f, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.strokeStyle = '#d9dbd3'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(6, 0); ctx.stroke();
+        ctx.strokeStyle = '#5a3a20'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(-3, 0); ctx.stroke();
+      }
+      ctx.restore();
+      // огненный след бутылки
+      if (item === 'molotov' && Math.random() < 0.6) E.effects.push({ t: 0, life: 0.3, x, y: y - 6, draw(c) { const q = 1 - this.t / this.life; c.fillStyle = `rgba(255,${120 + 80 * q | 0},20,${0.6 * q})`; c.beginPath(); c.arc(this.x, this.y - 8 * (1 - q), 2.5 * q + 0.5, 0, Math.PI * 2); c.fill(); } });
+    } });
+  };
+  function scorch(L, c, rad, color) {
+    const blobs = Array.from({ length: 7 }, () => ({ x: (Math.random() - 0.5) * rad * 1.2, y: (Math.random() - 0.5) * rad * 0.6, r: rad * (0.35 + Math.random() * 0.4) }));
+    const until = performance.now() + 30000;
+    E.decals.push({ loc: L ? L.id : null, until, draw(ctx, now) {
+      const fade = Math.min(1, (until - now) / 5000);
+      for (const b of blobs) {
+        const gr = ctx.createRadialGradient(c.x + b.x, c.y + b.y, 0, c.x + b.x, c.y + b.y, b.r);
+        gr.addColorStop(0, color.replace('A', 0.75 * fade)); gr.addColorStop(1, color.replace('A', 0));
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(c.x + b.x, c.y + b.y, b.r, b.r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    } });
+  }
+  // осколочный взрыв: вспышка, огненный шар, ударная волна, обломки, дым, копоть, тряска
+  E.explosion = function (L, tx, ty, r = 1) {
+    const c = tileCenter(tx, ty), R0 = 26 + 30 * r;
+    scorch(L, c, R0 * 0.9, 'rgba(20,14,8,A)');
+    E.effects.push({ t: 0, life: 0.14, draw(ctx) {
+      const k = this.t / this.life;
+      const gr = ctx.createRadialGradient(c.x, c.y - 14, 0, c.x, c.y - 14, R0 * 2.2);
+      gr.addColorStop(0, `rgba(255,255,230,${1 - k})`); gr.addColorStop(1, 'rgba(255,200,120,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(c.x, c.y - 14, R0 * 2.2, 0, Math.PI * 2); ctx.fill();
+    } });
+    const balls = Array.from({ length: 7 }, () => ({ x: (Math.random() - 0.5) * R0, y: -Math.random() * R0 * 0.8, s: 0.6 + Math.random() * 0.6, d: Math.random() * 0.12 }));
+    E.effects.push({ t: 0, life: 0.75, draw(ctx) {
+      for (const b of balls) {
+        const k = Math.max(0, Math.min(1, (this.t - b.d) / (this.life - b.d)));
+        if (k <= 0) continue;
+        const rr = R0 * 0.75 * b.s * (0.4 + k), x = c.x + b.x * (0.5 + k), y = c.y - 10 + b.y * (0.5 + k) - 18 * k;
+        const gr = ctx.createRadialGradient(x, y, 0, x, y, rr);
+        gr.addColorStop(0, `rgba(255,250,200,${(1 - k) * 0.95})`);
+        gr.addColorStop(0.35, `rgba(255,160,40,${(1 - k) * 0.9})`);
+        gr.addColorStop(0.75, `rgba(150,40,10,${(1 - k) * 0.6})`);
+        gr.addColorStop(1, 'rgba(40,20,10,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+      }
+    } });
+    E.effects.push({ t: 0, life: 0.45, draw(ctx) {
+      const k = this.t / this.life;
+      ctx.strokeStyle = `rgba(255,230,180,${0.7 * (1 - k)})`; ctx.lineWidth = 3 * (1 - k) + 1;
+      ctx.beginPath(); ctx.ellipse(c.x, c.y, 10 + R0 * 2 * k, (10 + R0 * 2 * k) * 0.5, 0, 0, Math.PI * 2); ctx.stroke();
+    } });
+    const deb = Array.from({ length: 22 }, () => ({ vx: (Math.random() - 0.5) * 320, vy: -120 - Math.random() * 260, s: 1.5 + Math.random() * 2.5, c: Math.random() < 0.5 ? '#3a2a1a' : '#6a5a40' }));
+    E.effects.push({ t: 0, life: 0.95, draw(ctx) {
+      const k = this.t;
+      for (const q of deb) {
+        const y = c.y - 10 + q.vy * k + 520 * k * k;
+        if (y > c.y + 14) continue;
+        ctx.fillStyle = q.c; ctx.fillRect(c.x + q.vx * k, y, q.s, q.s);
+      }
+    } });
+    const puffs = Array.from({ length: 9 }, () => ({ x: (Math.random() - 0.5) * R0 * 1.2, s: 0.6 + Math.random() * 0.7, d: 0.1 + Math.random() * 0.35, v: 20 + Math.random() * 30 }));
+    E.effects.push({ t: 0, life: 2.6, draw(ctx) {
+      for (const q of puffs) {
+        const k = Math.max(0, Math.min(1, (this.t - q.d) / (this.life - q.d)));
+        if (k <= 0) continue;
+        const rr = R0 * 0.5 * q.s * (0.6 + k * 1.4), x = c.x + q.x * (1 + k), y = c.y - 20 - q.v * this.t * 1.4;
+        ctx.fillStyle = `rgba(70,64,58,${0.5 * (1 - k)})`; ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+      }
+    } });
+    E.shake(0.45, 9);
+  };
+  // разбитая бутылка: всплеск огня и горящая земля в радиусе
+  E.fireArea = function (L, tx, ty, r = 1, dur = 3.2) {
+    const c = tileCenter(tx, ty);
+    scorch(L, c, 30 + 30 * r, 'rgba(30,18,6,A)');
+    const tiles = [];
+    for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) tiles.push({ c: tileCenter(x, y), ph: Math.random() * 6 });
+    E.effects.push({ t: 0, life: dur, draw(ctx) {
+      const life = this.t < 0.25 ? this.t / 0.25 : Math.min(1, (this.life - this.t) / 1);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (const tl of tiles) for (let i = 0; i < 3; i++) {
+        const ph = this.t * 8 + tl.ph + i * 2.1, x = tl.c.x + (i - 1) * 9 + Math.sin(ph) * 2, h = (12 + 8 * Math.abs(Math.sin(ph * 0.7))) * life;
+        const gr = ctx.createRadialGradient(x, tl.c.y - h * 0.5, 0, x, tl.c.y - h * 0.5, h);
+        gr.addColorStop(0, `rgba(255,230,150,${0.8 * life})`); gr.addColorStop(0.5, `rgba(255,120,20,${0.5 * life})`); gr.addColorStop(1, 'rgba(160,30,0,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(x, tl.c.y - h * 0.5, h * 0.45, h, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+      if (Math.random() < 0.5) { const tl = tiles[Math.floor(Math.random() * tiles.length)]; E.sparks(tl.c.x, tl.c.y - 10, 1, true); }
+    } });
+    E.effects.push({ t: 0, life: 0.3, draw(ctx) {
+      const k = this.t / this.life;
+      const gr = ctx.createRadialGradient(c.x, c.y - 10, 0, c.x, c.y - 10, 70 * (0.5 + k));
+      gr.addColorStop(0, `rgba(255,220,120,${0.9 * (1 - k)})`); gr.addColorStop(1, 'rgba(255,80,0,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(c.x, c.y - 10, 70 * (0.5 + k), 0, Math.PI * 2); ctx.fill();
+    } });
+    E.shake(0.2, 4);
+  };
+  // искры (верстак, рикошет, угли); ember — медленные угольки вверх
+  E.sparks = function (x, y, n = 8, ember = false) {
+    const ps = Array.from({ length: n }, () => ({ vx: (Math.random() - 0.5) * (ember ? 30 : 180), vy: ember ? -30 - Math.random() * 40 : -60 - Math.random() * 140 }));
+    E.effects.push({ t: 0, life: ember ? 0.9 : 0.45, draw(ctx) {
+      const k = this.t / this.life;
+      ctx.strokeStyle = `rgba(255,${200 - 80 * k | 0},80,${1 - k})`; ctx.lineWidth = ember ? 2 : 1.5;
+      for (const q of ps) {
+        const px = x + q.vx * this.t, py = y + q.vy * this.t + (ember ? 0 : 420 * this.t * this.t);
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - q.vx * 0.02, py - (q.vy + (ember ? 0 : 840 * this.t)) * 0.02); ctx.stroke();
+      }
+    } });
+  };
+  // попадание пули: искры и пыль у точки попадания, отброс цели
+  E.impact = function (att, def, crit) {
+    const c = tileCenter(def.x, def.y), a = tileCenter(att.x, att.y);
+    const dx = c.x - a.x, dy = c.y - a.y, l = Math.hypot(dx, dy) || 1;
+    def.knockX = dx / l; def.knockY = dy / l; def.knockT = 0.22;
+    const hx = c.x - dx / l * 6, hy = c.y - 44;
+    E.sparks(hx, hy, crit ? 12 : 6);
+    E.effects.push({ t: 0, life: 0.12, draw(ctx) {
+      const k = 1 - this.t / this.life;
+      ctx.fillStyle = `rgba(255,250,220,${0.9 * k})`; ctx.beginPath(); ctx.arc(hx, hy, (crit ? 9 : 5) * k + 1, 0, Math.PI * 2); ctx.fill();
+    } });
+  };
+  // промах: фонтанчик пыли рядом с целью
+  E.dust = function (tx, ty) {
+    const c = tileCenter(tx, ty), ox = (Math.random() - 0.5) * 40, oy = (Math.random() - 0.5) * 16;
+    const ps = Array.from({ length: 5 }, () => ({ vx: (Math.random() - 0.5) * 50, vy: -20 - Math.random() * 50, r: 2 + Math.random() * 3 }));
+    E.effects.push({ t: 0, life: 0.6, draw(ctx) {
+      const k = this.t / this.life;
+      ctx.fillStyle = `rgba(150,130,100,${0.6 * (1 - k)})`;
+      for (const q of ps) { ctx.beginPath(); ctx.arc(c.x + ox + q.vx * this.t, c.y + oy + q.vy * this.t, q.r * (1 + k), 0, Math.PI * 2); ctx.fill(); }
+    } });
+  };
+
   // брызги крови
   E.blood = function (to, n = 8) {
     const b = tileCenter(to.x, to.y);
@@ -802,6 +1047,7 @@ window.ENG = (function () {
     for (const f of E.floaters) f.t += dt;
     E.floaters = E.floaters.filter(f => f.t < f.life);
     for (const f of E.effects) f.t += dt;
+    if (E.shakeT > 0) E.shakeT -= dt;
     E.effects = E.effects.filter(f => f.t < f.life);
   };
 

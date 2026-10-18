@@ -460,6 +460,8 @@ def main():
     build_soldier(manifest)
     import build_guns
     build_guns.build(manifest)
+    import build_konst
+    build_konst.build(manifest)
     build_rat(manifest)
     build_wolf(manifest)
     build_roach(manifest)

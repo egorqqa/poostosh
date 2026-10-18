@@ -20,7 +20,7 @@ window.UI = (function () {
     { id: 'map', name: 'Карта', icon: 'map', key: 'M' },
     { id: 'save', name: 'Сохран.', icon: 'save', key: 'F5' },
   ];
-  const CURSORS = { move: 'default', attack: 'crosshair', steal: 'grab', lockpick: 'cell', look: 'help' };
+  const CURSORS = { move: 'default', attack: 'crosshair', steal: 'grab', lockpick: 'cell', look: 'help', throw: 'crosshair' };
 
   U.init = function (game) {
     G = game;
@@ -230,10 +230,11 @@ window.UI = (function () {
     if (it.type === 'weapon') return `урон ${it.dmg[0]}–${it.dmg[1]} · ОД ${it.ap}${it.range > 1 ? ' · дальн. ' + it.range : ''} · ${it.weight} кг`;
     if (it.type === 'armor') return `КБ +${it.ac} · ПУ ${it.dt} · СУ ${it.dr}% · ${it.weight} кг`;
     if (it.type === 'aid') return `лечит ${R.healAmount(G.player, id)} ОЗ · ${it.weight} кг`;
+    if (it.type === 'throw') return `урон ${it.dmg[0]}–${it.dmg[1]} · ОД ${it.ap} · бросок ${it.range}${it.radius ? ' · радиус ' + it.radius : ''} · ${it.weight} кг`;
     return `${it.weight} кг`;
   }
   function itemRow(id, n, extra = '', cls = '', data = '') {
-    return `<div class="item ${cls}" ${data}><div class="ico">${itemIcon(id)}</div><div><div class="nm">${ITEMS[id].name}</div><div class="sub">${itemSub(id)}</div></div><div class="qty">${n > 1 ? '×' + n : ''}${extra}</div></div>`;
+    return `<div class="item ${cls}" ${data}><div class="ico">${itemIcon(id)}</div><div><div class="nm"${ITEMS[id].unique ? ' style="color:#ffcf40"' : ''}>${ITEMS[id].unique ? '★ ' : ''}${ITEMS[id].name}</div><div class="sub">${itemSub(id)}</div></div><div class="qty">${n > 1 ? '×' + n : ''}${extra}</div></div>`;
   }
   U.itemIcon = itemIcon;
 
@@ -267,6 +268,7 @@ window.UI = (function () {
         const btns = [];
         if (it) {
           if (it.type === 'weapon' || it.type === 'armor') btns.push('<button class="primary" data-b="equip">Надеть / взять в руку</button>');
+          if (it.type === 'throw') { btns.push('<button class="primary" data-b="use">Бросить</button>'); btns.push('<button data-b="q0">→1</button><button data-b="q1">→2</button><button data-b="q2">→3</button>'); }
           if (it.type === 'aid') { btns.push('<button class="primary" data-b="use">Использовать</button>'); btns.push('<button data-b="q0">→1</button><button data-b="q1">→2</button><button data-b="q2">→3</button>'); }
           if (it.type !== 'quest') btns.push('<button data-b="drop">Выбросить</button>');
         }
@@ -294,7 +296,7 @@ window.UI = (function () {
         if (!row) return;
         sel = row.dataset.id;
         const t = ITEMS[sel].type;
-        act(t === 'aid' ? 'use' : (t === 'weapon' || t === 'armor') ? 'equip' : '');
+        act(t === 'aid' || t === 'throw' ? 'use' : (t === 'weapon' || t === 'armor') ? 'equip' : '');
       });
       modalRefresh = draw;
       draw();
@@ -857,6 +859,18 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
           const wid = bu.dataset.up, lvl = p.wlvl[wid] || 0, cost = upCost(wid);
           if (lvl >= DATA.WMAX_LVL || copies(wid) < 2 || p.caps < cost || !R.count(p, wid)) return;
           R.removeItem(p, wid, 1); p.caps -= cost; p.wlvl[wid] = lvl + 1;
+          if (npc && npc.tpl === 'konst' && npc.x != null) {
+            // Константин уходит к верстаку: стучит, искрит, потом проверяет ствол на прицел
+            U.closeModal(); SND.play('cash');
+            G.log(`${npc.name} забирает оба ствола и уходит к верстаку...`, 'sys');
+            npc.workT = 2.8; npc.workStart = performance.now();
+            setTimeout(() => {
+              G.log(`${npc.name}: «Готово. ${ITEMS[wid].name} теперь +${lvl + 1}. Второй ствол ушёл на детали.»`, 'good');
+              SND.play('reload'); U.refresh();
+              if (!G.combat && G.scene === 'local') U.openGunsmith(npc, false);
+            }, 2900);
+            return;
+          }
           G.log(`${npc.name} перебрал ${ITEMS[wid].name}: теперь +${lvl + 1}. Второй ствол ушёл на детали.`, 'good');
         } else if (bon) {
           const m = DATA.WMODS.find(x => x.id === bon.dataset.on), wid = bon.dataset.w, have = p.wmods[wid] = p.wmods[wid] || {};
@@ -870,6 +884,7 @@ ${(info.notes || '').replace(/</g, '&lt;')}</div>
           // в слоте может стоять другая модификация — уходит в запас
           for (const x of DATA.WMODS) if (x.slot === m.slot && have[x.id]) { delete have[x.id]; p.modStash[x.id] = (p.modStash[x.id] || 0) + 1; }
           have[m.id] = 1;
+          if (npc && npc.tpl === 'konst') { npc.workT = 1.2; npc.workStart = performance.now(); }
           G.log(`Установлено: ${m.name} → ${ITEMS[wid].name}.`, 'good');
         } else if (boff) {
           const id = boff.dataset.off, wid = boff.dataset.w, have = p.wmods[wid] || {};

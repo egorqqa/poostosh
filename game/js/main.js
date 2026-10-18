@@ -388,11 +388,13 @@
     if (G.q('north') < 4) G.setQuest('north', 4);
     G.giveXP(how === 'peace' ? 500 : 350);
     if (how === 'peace' || how === 'heir') for (const a of G.loc.actors) if (a.faction === 'bastion' && !a.dead) { a.hostile = false; NET.syncEnt(a); }
+    if ((how === 'peace' || how === 'heir') && !G.hasItem('borey_rifle')) { R.addItem(G.player, 'borey_rifle', 1); G.log('Борей снимает с плеча свою винтовку: «Мне она больше ни к чему. Тебе пригодится». Получено: ★ Винтовка «Борей».', 'good'); }
   };
 
   // ---------- глава 6 ----------
   G.westCore = function (how) {
     G.flags.westEnd = how;
+    if (how === 'deal' && !G.hasItem('zno_shotgun')) { R.addItem(G.player, 'zno_shotgun', 1); G.log('Зной протягивает свой обрез: «Знак уговора. Пока он у тебя — пески тебе не враги». Получено: ★ Обрез «Зной».', 'good'); }
     const zno = G.findNpc('zno');
     if (how !== 'storm' && how !== 'stolen') {
       const box = G.loc && G.loc.objects.find(o => o.name === 'Склад пустынников');
@@ -648,6 +650,7 @@
 
   G.useItem = function (id) {
     const p = G.player, it = ITEMS[id];
+    if (it.type === 'throw') { G.prepareThrow(id); return; }
     if (it.type !== 'aid') return;
     const uc = R.has(p, 'quick') ? 1 : 2;
     if (G.combat && !G.combat.spend(uc)) { G.log(`Нужно ${uc} ОД.`, 'warn'); return; }
@@ -659,6 +662,17 @@
     if (G.loc) ENG.floater(p.x, p.y, '+' + h, '#9dff8a');
     UI.refresh();
     if (G.combat) COMBAT.autoEnd(G);
+  };
+
+  // бросок: выбрать клетку или врага
+  G.prepareThrow = function (id) {
+    if (G.scene !== 'local') { G.hint('Бросать можно только в локации'); return; }
+    if (!R.count(G.player, id)) { G.hint(`Нет: ${DATA.ITEMS[id].name}`); return; }
+    if (G.combat && !G.combat.isPlayerTurn()) return;
+    UI.closeModal();
+    G.ui.throwItem = id;
+    UI.setMode('throw');
+    G.hint(`${DATA.ITEMS[id].name}: кликните по клетке или врагу (дальность ${DATA.ITEMS[id].range}, ${DATA.ITEMS[id].ap} ОД). Esc — отмена.`);
   };
 
   // Навык «Медицина»: первая помощь без расходников
@@ -897,7 +911,8 @@
     let cost = 0;
     if (G.combat && G.combat.isPlayerTurn() && !G.combat.busy) {
       const a = G.ui.hover.actor;
-      if (a && !a.dead && a.hostile) { cost = R.weaponOf(p).ap + COMBAT.aimCost(G.ui.aim || 'torso'); G.ui.previewPath = null; }
+      if (G.ui.mode === 'throw' && G.ui.throwItem) { cost = DATA.ITEMS[G.ui.throwItem].ap; G.ui.previewPath = null; }
+      else if (a && !a.dead && a.hostile) { cost = R.weaponOf(p).ap + COMBAT.aimCost(G.ui.aim || 'torso'); G.ui.previewPath = null; }
       else if (changed) {
         const path = ENG.findPath(G.loc, p.x, p.y, tile.x, tile.y, { maxLen: 30 });
         G.ui.previewPath = path;

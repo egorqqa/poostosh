@@ -50,5 +50,8 @@
     holotape: S('0 0 60 44', `<rect x="8" y="8" width="44" height="28" rx="3" fill="#3a3a3a" stroke="#111" stroke-width="2"/><rect x="14" y="14" width="32" height="10" fill="#7dfc6a" opacity=".6"/>`),
   };
 
+  I.grenade = S('0 0 60 44', `<ellipse cx="28" cy="26" rx="13" ry="15" fill="#4e5a34" stroke="#1a1f10" stroke-width="2"/><path d="M18 20h20M17 27h22M18 34h20" stroke="#2c3420" stroke-width="2"/><rect x="24" y="6" width="9" height="7" fill="#8a8a80" stroke="#222" stroke-width="2"/><path d="M33 8c8 0 12 4 12 12" fill="none" stroke="#a9aba3" stroke-width="3"/><circle cx="44" cy="22" r="3" fill="none" stroke="#a9aba3" stroke-width="2"/>`);
+  I.molotov = S('0 0 60 44', `<path d="M24 14h12v6c6 3 8 7 8 12v8H16v-8c0-5 2-9 8-12z" fill="#6a4a1a" stroke="#2a1a06" stroke-width="2"/><rect x="25" y="8" width="10" height="7" fill="#3a5a2a" stroke="#1a2a10" stroke-width="2"/><path d="M28 9c-2-4 2-6 1-8 4 2 6 5 3 8" fill="#ff9a20" stroke="#c04a00" stroke-width="1"/><rect x="18" y="26" width="24" height="7" fill="#d8c8a0" opacity=".7"/>`);
+  I.tknife = S('0 0 60 44', `<path d="M6 30L40 12l12 2-10 8L12 36z" fill="#c9cbc3" stroke="#333" stroke-width="2"/><path d="M6 30l6 6-4 2-6-4z" fill="#5a3a20" stroke="#222" stroke-width="2"/><path d="M14 30l26-14" stroke="#8a8c84" stroke-width="2"/>`);
   window.ICONS = { ACTION, WEAPON: W, ITEM: I };
 })();

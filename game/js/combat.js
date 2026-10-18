@@ -69,7 +69,7 @@ window.COMBAT = (function () {
   C.end = function (G, msg) {
     if (!G.combat) return;
     clearTimeout(G.combat.remoteTimer);
-    for (const a of G.combat.list) { a.crippled = false; a.stunned = false; }
+    for (const a of G.combat.list) { a.crippled = false; a.stunned = false; a.burn = 0; }
     G.combat = null;
     G.player.ap = R.maxAP(G.player);
     G.log(msg || 'Бой окончен.', 'warn');
@@ -99,6 +99,17 @@ window.COMBAT = (function () {
     if (a.dead || a.gone || (!isAlly(a) && !a.hostile) || !G.loc.actors.includes(a) && a !== G.player) return C.nextTurn(G);
     cb.current = a;
     a.ap = R.maxAP(a);
+    if (a.burn > 0) { // огонь жжёт в начале хода
+      a.burn--;
+      const bd = R.rnd(3, 5);
+      a.hp -= bd; a.hitFlash = 0.15;
+      if (a.isRemote) { a.hpLock = Date.now() + 1500; NET.event(a.pid, { kind: 'hit', dmg: bd }); }
+      ENG.floater(a.x, a.y, '🔥 -' + bd, '#ff9a30');
+      const txt = `${a === G.player ? 'Вы горите' : a.name + ' горит'}: −${bd} ОЗ.`;
+      G.log(txt, a === G.player ? 'bad' : 'sys'); if (net()) NET.fx({ type: 'log', text: txt, cls: 'sys' });
+      NET.syncEnt(a);
+      if (a.hp <= 0) { kill(G, a, null); if (!G.combat) return; return C.nextTurn(G); }
+    }
     if (a.stunned) { a.stunned = false; a.ap = Math.ceil(a.ap / 2); G.log(`${a.name} оглушён и теряет половину ОД.`, 'good'); }
     if (net()) NET.forceSnap();
     if (isPC(a) && cb.round > 1 && !anyoneSeen(G, foes)) {
@@ -201,6 +212,7 @@ window.COMBAT = (function () {
   // отображение атаки (локально и у других игроков)
   C.showAttack = function (G, ev) {
     if (ev.type === 'log') { G.log(ev.text, ev.cls); return; }
+    if (ev.type === 'throw') { C.showThrow(G, ev); return; }
     const att = NET.resolve ? NET.resolve(ev.att) : null, def = NET.resolve ? NET.resolve(ev.def) : null;
     if (!att || !def) return;
     const me = G.player;
@@ -209,7 +221,7 @@ window.COMBAT = (function () {
     att.aimT = 0.45;
     if (ev.melee) ENG.swing(att, def); else { ENG.tracer(att, def, ev.hit); ENG.muzzle(att, def); }
     { const s = ENG.iso(att.x - def.x, att.y - def.y), l = Math.hypot(s.x, s.y) || 1; att.recoilX = s.x / l; att.recoilY = s.y / l; att.recoilT = 0.14; }
-    if (ev.hit) { def.shakeT = 0.25; ENG.blood(def, ev.crit ? 14 : 7); }
+    if (ev.hit) { def.shakeT = 0.25; ENG.blood(def, ev.crit ? 14 : 7); ENG.impact(att, def, ev.crit); } else if (!ev.melee) ENG.dust(def.x, def.y);
     const w = DATA.ITEMS[att.weapon || 'fists'];
     if (ev.melee) SND.at('swing', att.x, att.y); else SND.at('shot', att.x, att.y, { weapon: w.icon === 'ak' ? 'ak' : w.icon });
     setTimeout(() => ev.hit ? SND.at('hit', def.x, def.y) : (!ev.melee && SND.at('miss', def.x, def.y)), ev.melee ? 120 : 160);
@@ -247,7 +259,7 @@ window.COMBAT = (function () {
       const crit = R.rnd(1, 100) <= critCh;
       let dmg = R.rnd(w.dmg[0], w.dmg[1]) + (w.melee ? R.meleeBonus(att) : 0) + (w.bayonet && ENG.dist(att, def) <= 1 ? w.bayonet : 0);
       if (aim === 'head') dmg = Math.round(dmg * 1.25);
-      const dt = crit ? Math.floor(R.DT(def) / 2) : R.DT(def);
+      const dt = w.pierce ? 0 : crit ? Math.floor(R.DT(def) / 2) : R.DT(def);
       if (crit) dmg = Math.round(dmg * (sneak ? 2.5 : 1.5));
       dmg = Math.max(1, Math.round((dmg - dt) * (1 - R.DR(def) / 100)));
       def.hp -= dmg;
@@ -255,6 +267,7 @@ window.COMBAT = (function () {
       if (def.isRemote) { def.hpLock = Date.now() + 1500; NET.event(def.pid, { kind: 'hit', dmg }); }
       if (def.isPlayer) def.damagedSinceTurn = true;
       if (def.hp <= 0) ev.killed = true;
+      if (!ev.killed && w.burn && R.rnd(1, 100) <= 35) { def.burn = Math.max(def.burn || 0, w.burn); ev.effect = 'горит'; }
       // эффекты прицельных выстрелов
       if (!ev.killed && !isPC(def)) {
         if (aim === 'head' && (crit || (R.has(att, 'sniper') && R.rnd(1, 100) <= 35))) { def.stunned = true; ev.effect = 'оглушён'; }
@@ -271,6 +284,15 @@ window.COMBAT = (function () {
     C.showAttack(G, ev);
     if (net()) NET.fx(ev);
     if (ev.killed) kill(G, def, att);
+    // сноп дроби «Зноя»: половина урона всем рядом с целью
+    if (hit && w.spread) for (const o of G.loc.actors.slice()) {
+      if (o === def || o === att || o.dead || o.gone || isPC(o) || o.isCompanion || ENG.dist(o, def) > 1) continue;
+      const sd = Math.max(1, Math.round((R.rnd(w.dmg[0], w.dmg[1]) / 2 - R.DT(o)) * (1 - R.DR(o) / 100)));
+      o.hp -= sd; o.hitFlash = 0.15; o.shakeT = 0.25; ENG.impact(att, o, false); ENG.floater(o.x, o.y, '-' + sd, '#ff8a5a');
+      const txt = `Дробь задевает: ${o.name} −${sd} ОЗ.`;
+      G.log(txt, 'sys'); if (net()) NET.fx({ type: 'log', text: txt, cls: 'sys' });
+      if (o.hp <= 0) kill(G, o, att); else NET.syncEnt(o);
+    }
     // атакованный и его союзники становятся враждебными
     if (isPC(att) && !isPC(def) && !def.hostile && !def.dead) {
       def.hostile = true;
@@ -389,6 +411,128 @@ window.COMBAT = (function () {
     return C.actorWalk(G, p, path, cb);
   };
 
+  // ---------- броски: граната, коктейль Молотова, метательный нож ----------
+  const THROW_NAMES = { grenade: ['бросаете гранату', 'бросает гранату'], molotov: ['бросаете коктейль Молотова', 'бросает коктейль Молотова'], tknife: ['метаете нож', 'метает нож'] };
+  C.throwChance = function (G, a, tx, ty) {
+    const d = Math.max(Math.abs(a.x - tx), Math.abs(a.y - ty));
+    const sk = Math.max(R.skill(a, 'guns'), R.skill(a, 'melee'));
+    return R.clamp(Math.round(sk + 15 - Math.max(0, d - 3) * 4 - 10 * G.nightK()), 10, 95);
+  };
+  C.playerThrow = async function (G, tx, ty, id) {
+    const p = G.player, it = ITEMS[id];
+    if (!it || it.type !== 'throw' || !R.count(p, id)) return 'Нечего бросать.';
+    if (G.combat && (!G.combat.isPlayerTurn() || G.combat.busy)) return;
+    if (!isAuth()) { if (G.combat) G.combat.busy = true; NET.req({ act: 'throw', x: tx, y: ty, item: id }); return; }
+    return C.actorThrow(G, p, tx, ty, id);
+  };
+  C.actorThrow = async function (G, a, tx, ty, id) {
+    const it = ITEMS[id], L = G.loc;
+    if (!it || !R.count(a, id)) return 'Нечего бросать.';
+    tx = R.clamp(Math.round(tx), 0, L.w - 1); ty = R.clamp(Math.round(ty), 0, L.h - 1);
+    const d = Math.max(Math.abs(a.x - tx), Math.abs(a.y - ty));
+    if (d < 1) return 'Слишком близко — себя заденете.';
+    if (d > it.range) return `Слишком далеко: бросок ${it.range}, до цели ${d}.`;
+    if (!ENG.los(L, a.x, a.y, tx, ty)) return 'Не добросить — мешает препятствие.';
+    // бросок рядом с врагами начинает бой
+    if (!G.combat) {
+      const near = L.actors.find(o => !o.dead && !o.gone && !isPC(o) && !o.isCompanion && (o.hostile || Math.max(Math.abs(o.x - tx), Math.abs(o.y - ty)) <= (it.radius || 0)) && ENG.dist(o, a) <= 16);
+      if (near) C.start(G, near, a, it.id === 'tknife' && !near.alerted);
+    }
+    const c = G.combat;
+    if (c) {
+      if (c.mirror || c.current !== a || c.busy) return;
+      if (a.ap < it.ap) return `Не хватает ОД: нужно ${it.ap}.`;
+      c.busy = true;
+    }
+    await throwCore(G, a, tx, ty, id);
+    if (!c) return;
+    if (G.combat !== c) return;
+    c.busy = false;
+    if (!hostilesLeft(G).length) { C.end(G, 'Победа! Врагов не осталось.'); return; }
+    autoEnd(G, a);
+  };
+  async function throwCore(G, a, tx, ty, id) {
+    const it = ITEMS[id], L = G.loc;
+    if (G.combat) a.ap -= it.ap;
+    R.removeItem(a, id, 1);
+    const chance = C.throwChance(G, a, tx, ty);
+    const hit = R.rnd(1, 100) <= chance;
+    let lx = tx, ly = ty;
+    if (!hit && it.radius) { // мимо: падает в стороне
+      for (let i = 0; i < 8; i++) {
+        const nx = tx + R.rnd(-2, 2), ny = ty + R.rnd(-2, 2);
+        if ((nx !== tx || ny !== ty) && nx >= 0 && ny >= 0 && nx < L.w && ny < L.h && !L.sight[ny * L.w + nx]) { lx = nx; ly = ny; break; }
+      }
+    }
+    const hits = [];
+    for (const o of L.actors) {
+      if (o.dead || o.gone || o === a && !it.radius) continue;
+      const od = Math.max(Math.abs(o.x - lx), Math.abs(o.y - ly));
+      if (it.radius ? od > it.radius : (!hit || od > 0)) continue;
+      let dmg = R.rnd(it.dmg[0], it.dmg[1]);
+      if (it.radius && od > 0) dmg = Math.round(dmg * 0.65);
+      dmg = Math.max(1, Math.round((dmg - Math.floor(R.DT(o) / (it.radius ? 2 : 1))) * (1 - R.DR(o) / 100)));
+      hits.push([o.id, dmg, o.hp - dmg <= 0, it.burn && o.hp - dmg > 0 ? it.burn : 0]);
+    }
+    const flight = 0.32 + 0.05 * Math.max(Math.abs(a.x - lx), Math.abs(a.y - ly));
+    const ev = { type: 'throw', att: a.id, item: id, from: { x: a.x, y: a.y }, to: { x: lx, y: ly }, aim: { x: tx, y: ty }, hit, chance, hits, flight };
+    C.showThrow(G, ev);
+    if (net()) NET.fx(ev);
+    await sleep(flight * 1000 + 120);
+    for (const [oid, dmg, , burn] of hits) {
+      const o = NET.resolve ? NET.resolve(oid) : L.actors.find(x => x.id === oid);
+      if (!o || o.dead) continue;
+      o.hp -= dmg;
+      if (burn) o.burn = Math.max(o.burn || 0, burn);
+      if (o.isRemote) { o.hpLock = Date.now() + 1500; NET.event(o.pid, { kind: 'hit', dmg }); }
+      if (o.isPlayer) o.damagedSinceTurn = true;
+      if (o.hp <= 0) kill(G, o, a);
+      else {
+        if (isPC(a) && !isPC(o) && !o.hostile && !o.isCompanion) {
+          o.hostile = true;
+          for (const g of L.actors) if (!g.dead && !isPC(g) && g.guard && g.faction === o.faction) { g.hostile = true; g.alerted = true; NET.syncEnt(g); }
+        }
+        o.alerted = true; NET.syncEnt(o);
+      }
+    }
+    // взрыв слышно далеко, нож — нет
+    const noise = it.radius ? 20 : 4;
+    for (const o of L.actors) if (!o.dead && !isPC(o) && o.hostile && ENG.dist(o, { x: lx, y: ly }) < noise) o.alerted = true;
+    if (G.combat) C.join(G);
+    UI.refresh();
+    await sleep(250);
+  }
+  // анимация броска (у всех игроков)
+  C.showThrow = function (G, ev) {
+    const att = NET.resolve ? NET.resolve(ev.att) : null;
+    if (!att) return;
+    const it = ITEMS[ev.item], me = G.player, an = att === me ? 'Вы' : att.name;
+    att.dir = ENG.dirFromDelta(ev.to.x - att.x, ev.to.y - att.y);
+    att.dir8 = ENG.dir8FromDelta(ev.to.x - att.x, ev.to.y - att.y);
+    att.knockT = 0; att.recoilT = 0.14; att.recoilX = 0; att.recoilY = -0.6;
+    SND.at('whoosh', att.x, att.y);
+    ENG.throwArc(ev.from, ev.to, ev.item, ev.flight);
+    const verb = (THROW_NAMES[ev.item] || ['бросаете', 'бросает'])[att === me ? 0 : 1];
+    G.log(`${an} ${verb}${ev.hit ? '' : ' — мимо цели'} (${ev.chance}%).`, att === me ? 'good' : 'sys');
+    setTimeout(() => {
+      if (ev.item === 'grenade') { ENG.explosion(G.loc, ev.to.x, ev.to.y, it.radius); SND.at('boom', ev.to.x, ev.to.y); }
+      else if (ev.item === 'molotov') { ENG.fireArea(G.loc, ev.to.x, ev.to.y, it.radius); SND.at('glass', ev.to.x, ev.to.y); SND.at('fire', ev.to.x, ev.to.y); }
+      else if (!ev.hits.length) { ENG.dust(ev.to.x, ev.to.y); SND.at('miss', ev.to.x, ev.to.y); }
+      for (const [oid, dmg, killed, burn] of ev.hits) {
+        const o = NET.resolve ? NET.resolve(oid) : null;
+        if (!o) continue;
+        o.hitFlash = 0.18; o.shakeT = 0.3;
+        if (it.radius) { const c = ENG.iso(o.x - ev.to.x, o.y - ev.to.y), l = Math.hypot(c.x, c.y) || 1; o.knockX = c.x / l; o.knockY = c.y / l; o.knockT = 0.3; }
+        else ENG.impact(att, o, false);
+        if (ev.item !== 'molotov') ENG.blood(o, 9);
+        ENG.floater(o.x, o.y, (burn ? '🔥 ' : '') + '-' + dmg, ev.item === 'molotov' ? '#ff9a30' : '#ff5a3c');
+        SND.at('hit', o.x, o.y);
+        G.log(`${o === me ? 'Вас задевает' : 'Задето: ' + o.name}${burn ? ' (горит)' : ''} −${dmg} ОЗ.`, o === me ? 'bad' : 'sys');
+        if (killed && o !== me) G.log(`${o.name} убит.`, 'warn');
+      }
+    }, ev.flight * 1000);
+  };
+
   // атака участником боя; возвращает строку-ошибку или undefined
   C.actorAttack = async function (G, a, target, aim = 'torso') {
     if (!DATA.AIM[aim]) aim = 'torso';
@@ -496,6 +640,13 @@ window.COMBAT = (function () {
         R.addItem(a, a.weapon, 1); a.weapon = null; continue; // кулаки
       }
       const d = ENG.dist(a, p);
+      const tid = ['grenade', 'molotov'].find(id => R.count(a, id));
+      if (tid && !a.isCompanion && a.threwRound !== G.combat.round && d >= 3 && d <= ITEMS[tid].range && a.ap >= ITEMS[tid].ap && ENG.los(G.loc, a.x, a.y, p.x, p.y) && Math.random() < 0.4) {
+        a.threwRound = G.combat.round;
+        await throwCore(G, a, p.x, p.y, tid);
+        if (!G.combat || (p.isPlayer && p.dead)) break;
+        continue;
+      }
       const canHit = d <= w.range && (w.melee || ENG.los(G.loc, a.x, a.y, p.x, p.y));
       if (canHit) {
         if (a.ap >= w.ap) { await attack(G, a, p); if (p.isPlayer && p.dead) break; continue; }

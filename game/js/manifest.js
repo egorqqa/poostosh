@@ -917,5 +917,15 @@ window.ASSET_MANIFEST = {
 "walk": 6,
 "aim": 6,
 "fire": 7
+},
+"npc_konst": {
+"src": "assets/chars/konst.png",
+"w": 2400,
+"h": 112,
+"fw": 150,
+"fh": 112,
+"ax": 75,
+"ay": 106,
+"n": 16
 }
 };

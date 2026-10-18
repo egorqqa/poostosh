@@ -338,6 +338,8 @@ window.WORLD_API = (function () {
       if (a.dead || a.gone) continue;
       if (a.aimT > 0) a.aimT -= dt;
       if (a.reloadT > 0) a.reloadT -= dt;
+      if (a.knockT > 0) a.knockT -= dt;
+      if (a.workT > 0) a.workT -= dt;
       if (a.recoilT > 0) a.recoilT -= dt;
       if (a.shakeT > 0) a.shakeT -= dt;
       if (a.hitFlash > 0) a.hitFlash -= dt;
@@ -595,6 +597,13 @@ window.WORLD_API = (function () {
       else if (o) G.log(`${o.name || 'Объект'}${o.desc ? '. ' + o.desc : ''}${o.container && o.lock ? ' Заперто.' : ''}`);
       else G.log('Ничего интересного.', 'sys');
       UI.setMode('move');
+      return;
+    }
+    if (mode === 'throw') {
+      const id = G.ui.throwItem, t = a && !a.dead ? { x: a.x, y: a.y } : tile;
+      if (!id || !t) { UI.setMode('move'); return; }
+      COMBAT.playerThrow(G, t.x, t.y, id).then(err => { if (err) G.log(err, 'warn'); });
+      if (!R.count(p, id) || !G.combat) UI.setMode('move');
       return;
     }
     if (mode === 'attack') {
