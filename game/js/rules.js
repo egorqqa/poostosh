@@ -26,6 +26,7 @@ window.R = (function () {
       stealTries: 0,
     };
     if (opts.cvRole) a.cvRole = opts.cvRole;
+    if (opts.tag) a.tag = opts.tag;
     if (t.heroModel) { a.heroModel = t.heroModel; a.portrait = t.portrait; }
     a.baseHP = t.hp;
     a.hp = t.hp;

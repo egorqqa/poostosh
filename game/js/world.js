@@ -183,7 +183,8 @@ window.WORLD_API = (function () {
       if (a.tpl && a.tpl.startsWith('hero_') && (a.tpl === 'hero_' + hero || (G.companion && G.companion.tpl === a.tpl))) a.gone = true;
       if (a.tpl === 'lis' && (hero !== 'artyom' || G.flags.artyomClient === 'kept')) a.gone = true;
       if (a.tpl === 'mila' && hero !== 'roza') a.gone = true;
-      if ((a.tpl === 'lis' || a.tpl === 'mila' || (a.tpl && a.tpl.startsWith('hero_'))) && !a.gone && L.blocked[a.y * L.w + a.x]) { const f = W.freeTile(L, a.x, a.y, a); if (f) { a.x = a.rx = a.homeX = f.x; a.y = a.ry = a.homeY = f.y; } }
+      if (a.tag === 'bk_wolf' && G.flags.bkWolvesDead) a.gone = true;
+      if (!a.gone && !a.isPlayer && !a.isCompanion && !a.isRemote && L.blocked[a.y * L.w + a.x]) { const f = W.freeTile(L, a.x, a.y, a); if (f) { a.x = a.rx = a.homeX = f.x; a.y = a.ry = a.homeY = f.y; } }
     }
     if (id === 'observatory' || id === 'obs_dome') {
       const friendly = G.flags.columnEnd === 'joined' || G.flags.granitYield || G.flags.obsDone;

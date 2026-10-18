@@ -8,7 +8,7 @@ window.CV = (function () {
   const HEX = 120;        // гружёный караван проходит клетку за 2 часа — путник (1 клетка = 1 час) его догоняет
   const HALT = 120;       // привал, когда путник рядом: 2 игровых часа на месте
   const SEE = 3;          // видно за 3 гекса
-  const TOWNS = ['camp', 'rassvet', 'oasis', 'city'];
+  const TOWNS = ['camp', 'rassvet', 'oasis', 'city', 'bariki'];
   const ROUTES = [];
   for (const a of TOWNS) for (const b of TOWNS) if (a !== b) ROUTES.push([a, b]);
   const FACTIONS = {
@@ -17,7 +17,9 @@ window.CV = (function () {
     rassvet: { name: 'Интендантство «Рассвета»', color: '#7ab4ea', rep: 10,
       goods: [['ammo762', 20, 60], ['shells', 10, 24], ['medkit', 2, 4], ['grenade', 1, 3], ['vest', 0, 1], ['rifle', 0, 1], ['food', 2, 5]] },
     oasis: { name: 'Водовозы Оазиса', color: '#5fd4c4', rep: 0,
-      goods: [['water', 8, 16], ['desert_robe', 0, 1], ['molotov', 1, 4], ['food', 2, 4], ['shells', 6, 14], ['bandage', 2, 5]] },
+      goods: [['water', 8, 16], ['salt', 2, 6], ['desert_robe', 0, 1], ['molotov', 1, 4], ['food', 2, 4], ['shells', 6, 14], ['bandage', 2, 5]] },
+    bariki: { name: 'Рыбацкая артель Бариков', color: '#8fc4e4', rep: 0,
+      goods: [['fish', 6, 14], ['salt', 1, 4], ['water', 2, 6], ['food', 1, 4], ['bandage', 1, 3], ['shells', 4, 12]] },
     city: { name: 'Артель мусорщиков', color: '#c8c09a', rep: 0,
       goods: [['junk', 8, 20], ['lockpicks', 1, 4], ['pistol', 0, 2], ['knife', 0, 2], ['tknife', 2, 6], ['ammo9', 10, 30], ['jacket', 0, 1]] },
   };

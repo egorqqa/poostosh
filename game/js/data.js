@@ -74,6 +74,9 @@ window.DATA = (function () {
     borey_rifle: { name: 'Винтовка «Борей»', type: 'weapon', icon: 'rifle', unique: true, weight: 4.5, value: 1600, dmg: [16, 28], ap: 5, range: 24, mag: 5, ammo: 'ammo762', crit: 15, pierce: true, desc: 'Уникальное. Личная винтовка маршала Бастиона. Бронебойные пули не замечают брони (порог урона цели не действует).' },
     zno_shotgun: { name: 'Обрез «Зной»', type: 'weapon', icon: 'shotgun', unique: true, weight: 3, value: 1100, dmg: [12, 24], ap: 5, range: 5, mag: 2, ammo: 'shells', crit: 5, spread: true, desc: 'Уникальное. Обрез атамана пустынников. Широкий сноп дроби задевает всех рядом с целью (половина урона).' },
     roza_revolver: { name: 'Отцовский револьвер', type: 'weapon', icon: 'pistol', unique: true, weight: 1.6, value: 700, dmg: [8, 15], ap: 4, range: 13, mag: 6, ammo: 'ammo9', crit: 15, desc: 'Уникальное. Револьвер отца Розы, переделанный под 9 мм. Тяжёлый спуск, но бьёт точно и больно.' },
+    fish: { name: 'Речная рыба', type: 'aid', icon: 'food', weight: 0.4, value: 6, heal: 3, healSkill: 0, desc: 'Свежая рыба из реки. Можно съесть (+3 ОЗ) или отдать тому, кто ждёт улова.' },
+    salt: { name: 'Мешочек соли', type: 'misc', icon: 'junk', weight: 0.5, value: 15, desc: 'Крупная серая соль с западных солончаков. Без неё рыба не хранится.' },
+    fuel: { name: 'Канистра топлива', type: 'misc', icon: 'water', weight: 4, value: 45, desc: 'Двадцать литров солярки. Для генератора, насоса или старого мотора.' },
     sealed_crate: { name: 'Опечатанный ящик', type: 'quest', icon: 'meds', weight: 4, value: 0, desc: 'Тяжёлый ящик с пломбой. Тот самый, что вы везли по серпантину — и который у вас отняли. На крышке трафарет: «З-2».' },
     roach_shell: { name: 'Панцирь радтаракана', type: 'misc', icon: 'junk', weight: 0.3, value: 6, desc: 'Хитиновая пластина. Борис и торговцы принимают как хлам.' },
     wolf_armor: { name: 'Броня из волчьих шкур', type: 'armor', icon: 'jacket', weight: 6, value: 320, ac: 18, dt: 2, dr: 28, desc: 'Сшитые шкуры мутантных волков поверх кожи. +18 КБ.' },
@@ -130,6 +133,18 @@ window.DATA = (function () {
     guard2: { name: 'Часовой Ручья', tint: 'guard', faction: 'town', dialog: 'guard2', guard: true,
       stats: { str: 6, per: 6, end: 6, cha: 4, int: 4, agi: 6, luck: 5 }, hp: 40,
       inv: [['ammo9', 16]], caps: 15, weapon: 'pistol', armor: 'jacket', skills: { guns: 60 } },
+    guber: { name: 'Губер', tint: 'trader', faction: 'bariki', dialog: 'guber',
+      stats: { str: 5, per: 6, end: 5, cha: 8, int: 7, agi: 5, luck: 6 }, hp: 30, inv: [], caps: 400, weapon: 'pistol', armor: 'jacket', skills: { guns: 40 }, xp: 40 },
+    lyova: { name: 'Рыбак Лёва', tint: 'bum', faction: 'bariki', dialog: 'lyova', stats: { str: 6, per: 6, end: 6, cha: 4, int: 4, agi: 5, luck: 5 }, hp: 30, inv: [['fish', 1]], caps: 20, xp: 20 },
+    klava: { name: 'Вдова Клава', tint: 'elder', faction: 'bariki', dialog: 'klava', stats: { str: 3, per: 6, end: 5, cha: 5, int: 6, agi: 4, luck: 5 }, hp: 20, inv: [], caps: 15, xp: 10 },
+    ostap: { name: 'Кузнец Остап', tint: 'mech', faction: 'bariki', dialog: 'ostap', stats: { str: 9, per: 5, end: 8, cha: 4, int: 5, agi: 4, luck: 5 }, hp: 45, inv: [['junk', 2]], caps: 30, weapon: 'pipe', xp: 30 },
+    raya: { name: 'Охотница Рая', tint: 'guard', faction: 'bariki', dialog: 'raya', stats: { str: 5, per: 8, end: 6, cha: 5, int: 5, agi: 8, luck: 5 }, hp: 34, inv: [['shells', 10]], caps: 25, weapon: 'shotgun', armor: 'leather', skills: { guns: 60 }, xp: 40 },
+    mitrich: { name: 'Дед Митрич', tint: 'elder', faction: 'bariki', dialog: 'mitrich', stats: { str: 3, per: 7, end: 4, cha: 6, int: 7, agi: 3, luck: 7 }, hp: 18, inv: [['fish', 2]], caps: 10, xp: 10 },
+    sveta: { name: 'Торговка Света', tint: 'trader', faction: 'bariki', dialog: 'sveta', trader: true, caps: 350, stats: { str: 4, per: 6, end: 5, cha: 7, int: 6, agi: 5, luck: 6 }, hp: 24,
+      inv: [['fish', 6], ['water', 4], ['food', 3], ['bandage', 3], ['salt', 1], ['shells', 10], ['lockpicks', 1]], xp: 20 },
+    arkady: { name: 'Учитель Аркадий', tint: 'doctor', faction: 'bariki', dialog: 'arkady', stats: { str: 3, per: 6, end: 4, cha: 6, int: 9, agi: 4, luck: 5 }, hp: 18, inv: [], caps: 10, xp: 10 },
+    petrovich: { name: 'Механик Петрович', tint: 'mech', faction: 'bariki', dialog: 'petrovich', stats: { str: 6, per: 5, end: 6, cha: 4, int: 7, agi: 5, luck: 5 }, hp: 30, inv: [['junk', 3]], caps: 20, xp: 20 },
+    olya: { name: 'Оля', tint: 'bum', faction: 'bariki', dialog: 'olya', stats: { str: 2, per: 7, end: 4, cha: 7, int: 6, agi: 7, luck: 7 }, hp: 14, inv: [], caps: 2, xp: 5 },
     hero_artyom: { name: 'Артём', tint: 'player', faction: 'town', dialog: 'hero_npc', heroModel: 'artyom', portrait: 'assets/heroes/artyom.jpg',
       stats: { str: 7, per: 5, end: 7, cha: 4, int: 5, agi: 6, luck: 6 }, hp: 52, inv: [['shells', 18], ['bandage', 2]], caps: 30, weapon: 'shotgun', armor: 'jacket', skills: { guns: 62, melee: 55 }, xp: 120 },
     hero_gosha: { name: 'Гоша', tint: 'player', faction: 'town', dialog: 'hero_npc', heroModel: 'gosha', portrait: 'assets/heroes/gosha.jpg',
@@ -148,7 +163,7 @@ window.DATA = (function () {
       stats: { str: 6, per: 6, end: 7, cha: 4, int: 4, agi: 6, luck: 5 }, hp: 46, inv: [['ammo762', 30], ['medkit', 1]], caps: 15, weapon: 'ak', armor: 'vest', skills: { guns: 58 }, xp: 80 },
     konst: { name: 'Оружейник Константин', tint: 'mech', faction: 'town', dialog: 'konst', trader: true, caps: 600,
       stats: { str: 6, per: 8, end: 6, cha: 5, int: 7, agi: 6, luck: 5 }, hp: 40,
-      inv: [['pistol', 2], ['shotgun', 2], ['rifle', 1], ['knife', 2], ['ammo9', 40], ['shells', 20], ['ammo762', 30], ['junk', 6], ['grenade', 3], ['molotov', 4], ['tknife', 6]], skills: { guns: 60 } },
+      inv: [['pistol', 2], ['shotgun', 2], ['rifle', 1], ['knife', 2], ['ammo9', 40], ['shells', 20], ['ammo762', 30], ['junk', 6], ['grenade', 3], ['molotov', 4], ['tknife', 6], ['fuel', 2]], skills: { guns: 60 } },
     boris: { name: 'Механик Борис', tint: 'mech', faction: 'town', dialog: 'boris',
       stats: { str: 7, per: 5, end: 6, cha: 4, int: 7, agi: 5, luck: 5 }, hp: 35,
       inv: [['junk', 4], ['water', 1]], caps: 30, weapon: 'pipe' },
@@ -255,7 +270,7 @@ window.DATA = (function () {
       stats: { str: 4, per: 7, end: 6, cha: 8, int: 8, agi: 5, luck: 6 }, hp: 30, inv: [['water', 3]], caps: 100 },
     oasis_trader: { name: 'Водонос Рашид', tint: 'trader', faction: 'oasis', dialog: 'oasis_trader', trader: true, caps: 500,
       stats: { str: 5, per: 6, end: 6, cha: 7, int: 6, agi: 5, luck: 6 }, hp: 30,
-      inv: [['water', 12], ['food', 6], ['desert_robe', 1], ['medkit', 2], ['bandage', 4], ['ammo762', 20]], weapon: 'knife' },
+      inv: [['water', 12], ['food', 6], ['desert_robe', 1], ['medkit', 2], ['bandage', 4], ['ammo762', 20], ['salt', 6]], weapon: 'knife' },
     oguard: { name: 'Страж Оазиса', tint: 'guard', faction: 'oasis', dialog: 'oguard', guard: true,
       stats: { str: 6, per: 7, end: 6, cha: 4, int: 4, agi: 6, luck: 5 }, hp: 40,
       inv: [['ammo762', 10]], caps: 10, weapon: 'rifle', armor: 'desert_robe', skills: { guns: 60 } },
@@ -314,8 +329,8 @@ window.DATA = (function () {
         crate_ask: { text: 'Обстреляли на серпантине, говоришь? Машина в кювете, груз пропал... Знакомый почерк. Дорогу за пустыней держат люди Клыка — главаря рейдеров. Они сидят на старом Блокпосте 17 и грабят всех, кто едет мимо. Если твой ящик где и есть — то у Клыка.',
           onEnter: g => { g.setQuest('crate', 3); g.revealSite('post'); },
           opts: [{ t: 'Значит, наведаюсь к Клыку.', go: 'hello' }] },
-        crate_found: { text: 'Это он? Пломба цела... Трафарет «З-2». Не знаю, что за груз ты вёз и кому, но лучше бы его не вскрывать при людях. Держи у себя — и держи язык за зубами.',
-          onEnter: g => { g.setQuest('crate', 9); g.reward(200, 100, []); g.addRep(5, 'вернул своё у Клыка'); },
+        crate_found: { text: 'Это он? Пломба цела... Трафарет «З-2». Не знаю, что за груз ты вёз и кому. Хочешь узнать — покажи Вере, коменданту «Рассвета»: она про «З-2» знает больше всех в пустоши. Только при людях не вскрывай.',
+          onEnter: g => { g.setQuest('crate', 9); g.reward(200, 100, []); g.addRep(5, 'вернул своё у Клыка'); if (!g.q('crate_open')) { g.setQuest('crate_open', 1); g.revealSite('rassvet'); } },
           opts: [{ t: 'Понял.', go: 'hello' }] },
         fin1: { text: 'Пришёл всё-таки. Глянь вокруг: старосты, караванщики, люди с «Рассвета» — Совет пустоши впервые за двадцать лет. Все хотят знать, что дальше... Погоди. Слышишь? Часовые бьют тревогу у ворот!',
           opts: [{ t: '[К воротам!]', act: g => g.finaleStart(), end: true }] },
@@ -471,6 +486,131 @@ window.DATA = (function () {
         joined: { text: 'Наконец-то! Засиделся я в лагере. Пистолет при мне, патроны тоже. Веди.', opts: [{ t: 'Идём.', end: true }] },
       },
     },
+    guber: {
+      start: g => g.q('bk_election') === 0 ? 'hello' : g.q('bk_election') === 9 ? 'mayor' : g.votes() >= 9 ? 'win' : 'progress',
+      nodes: {
+        hello: { text: 'Губер. Будущий мэр Бариков — если люди захотят. Посёлок живёт рекой и караванами, а решить ничего не может: каждый тянет одеяло на себя. Мне нужны голоса всех девяти семей. Поможешь людям — они поверят и мне. Соберёшь все голоса — тысяча крышек твои. Ну, шестьсот, тысяча — это я для красного словца.',
+          onEnter: g => { g.setQuest('bk_election', 1); },
+          opts: [{ t: 'Кто здесь живёт?', go: 'who' }, { t: 'Займусь.', end: true }] },
+        who: { text: 'Лёва ловит рыбу и отправляет караваны. Остап — кузнец. Рая сторожит ворота от волков. Света торгует. Аркадий учит детей. Петрович чинит водокачку. Вдова Клава, дед Митрич, малышка Оля. У каждого своя беда — помоги, и голос твой. Ну, мой.',
+          opts: [{ t: 'Понял.', end: true }] },
+        progress: { text: g => `Голосов за меня: ${g.votes()} из 9. Не останавливайся.`, opts: [{ t: 'Кто ещё не решил?', go: 'left' }, { t: 'Работаю.', end: true }] },
+        left: { text: g => 'Ещё сомневаются: ' + g.votesLeft().join(', ') + '.', opts: [{ t: 'Ясно.', end: true }] },
+        win: { text: 'Девять из девяти! Барики выбрали. Шестьсот крышек, как обещал, — и слово мэра: Барики теперь открыты для караванов, а ты здесь свой.',
+          onEnter: g => { g.setQuest('bk_election', 9); g.reward(400, 600, [['medkit', 2]]); g.flags.bkMayor = true; g.log('Губер избран мэром Бариков. Рыбацкая артель отправляет караваны по пустоши.', 'good'); },
+          opts: [{ t: 'Поздравляю, мэр.', end: true }] },
+        mayor: { text: 'Мэр Губер к вашим услугам. Барики помнят, кто их выбрал.', opts: [{ t: 'Бывай.', end: true }] },
+      } },
+    lyova: {
+      start: g => g.q('bk_fish') === 0 ? 'hello' : g.q('bk_fish') === 9 ? 'after' : 'wait',
+      nodes: {
+        hello: { text: 'Лёва. Рыбачу, отправляю караваны артели. Улов в этом месяце — курам на смех: сети рваные, руки одни. Принеси три рыбины — снасти у мостков, река щедрая к терпеливым. Тогда и за Губера скажу словечко.',
+          onEnter: g => g.setQuest('bk_fish', 1), opts: [{ t: 'Принесу.', end: true }, { t: 'Наняться в охрану каравана.', act: g => { setTimeout(() => CV.board(g, 'bariki'), 0); }, end: true }] },
+        wait: { text: 'Три рыбины, не меньше.', opts: [
+          { t: 'Держи улов.', if: g => R.count(g.player, 'fish') >= 3, act: g => { g.takeFrom(g.player, 'fish', 3); g.setQuest('bk_fish', 9); g.reward(80, 40, []); g.vote('lyova'); }, go: 'thanks' },
+          { t: 'Наняться в охрану каравана.', act: g => { setTimeout(() => CV.board(g, 'bariki'), 0); }, end: true },
+          { t: 'Позже.', end: true }] },
+        thanks: { text: 'Вот это улов! Голос мой — за Губера. И за тебя, если что.', opts: [{ t: 'Бывай.', end: true }] },
+        after: { text: 'Клюёт, клюёт. Караваны артели снова ходят — нанимайся, если руки чешутся.', opts: [{ t: 'Наняться в охрану каравана.', act: g => { setTimeout(() => CV.board(g, 'bariki'), 0); }, end: true }, { t: 'Бывай.', end: true }] },
+      } },
+    ostap: {
+      start: g => g.q('bk_forge') === 0 ? 'hello' : g.q('bk_forge') === 9 ? 'after' : 'wait',
+      nodes: {
+        hello: { text: 'Остап. Кузнец. Горн треснул — мех рваный, колосник прогорел. Принеси четыре куска хлама на заплаты — или сам глянь, если голова на месте.',
+          onEnter: g => g.setQuest('bk_forge', 1), opts: [{ t: 'Посмотрю.', end: true }] },
+        wait: { text: 'Горн стоит. Дело стоит.', opts: [
+          { t: 'Вот хлам на заплаты.', if: g => R.count(g.player, 'junk') >= 4, act: g => { g.takeFrom(g.player, 'junk', 4); g.setQuest('bk_forge', 9); g.reward(100, 40, []); g.vote('ostap'); }, go: 'thanks' },
+          { t: 'Дай гляну сам.', check: { stat: 'int', diff: 7 }, ok: 'fixed', fail: 'nofix' },
+          { t: 'Позже.', end: true }] },
+        fixed: { text: 'Ты гляди — тягу через поддувало пустил, и мех не нужен! Голова. Голос — за Губера.', onEnter: g => { g.setQuest('bk_forge', 9); g.reward(140, 40, []); g.vote('ostap'); }, opts: [{ t: 'Бывай.', end: true }] },
+        nofix: { text: 'Не, так не пойдёт. Неси хлам.', opts: [{ t: 'Ладно.', end: true }] },
+        thanks: { text: 'Горн дышит! Губер так Губер.', opts: [{ t: 'Бывай.', end: true }] },
+        after: { text: 'Звенит наковальня — значит, живём.', opts: [{ t: 'Бывай.', end: true }] },
+      } },
+    raya: {
+      start: g => g.q('bk_wolves') === 0 ? 'hello' : g.q('bk_wolves') === 9 ? 'after' : g.q('bk_wolves') === 2 ? 'done' : 'wait',
+      nodes: {
+        hello: { text: 'Рая. За восточными воротами — стая, трое. Таскают собак и кур, скоро за детей возьмутся. Одна я их не возьму. Перебей — и голос мой, и патроны.',
+          onEnter: g => g.setQuest('bk_wolves', g.flags.bkWolvesDead ? 2 : 1), opts: [{ t: 'Разберусь.', end: true }] },
+        wait: { text: 'Волки всё ещё там. Слышишь, воют?', opts: [{ t: 'Иду.', end: true }] },
+        done: { text: 'Тихо стало. Спасибо. Голос — за Губера, и вот, держи дробь.', onEnter: g => { g.setQuest('bk_wolves', 9); g.reward(180, 60, [['shells', 8]]); g.vote('raya'); }, opts: [{ t: 'Бывай.', end: true }] },
+        after: { text: 'Тихо у ворот. Хорошо.', opts: [{ t: 'Бывай.', end: true }] },
+      } },
+    sveta: {
+      start: g => g.q('bk_salt') === 0 ? 'hello' : 'shop',
+      nodes: {
+        hello: { text: 'Света. Рыбу продаю, крупу, мелочёвку. Соли нет — рыбу солить нечем, пропадает. Четыре мешочка соли — и голос мой. Соль возят водовозы с запада, у Рашида в Оазисе бывает.',
+          onEnter: g => g.setQuest('bk_salt', 1), opts: [{ t: 'Покажи товар.', act: 'trade', end: true }, { t: 'Поищу соль.', end: true }] },
+        shop: { text: 'Чего надо?', opts: [
+          { t: 'Покажи товар.', act: 'trade', end: true },
+          { t: 'Вот четыре мешочка соли.', if: g => g.q('bk_salt') === 1 && R.count(g.player, 'salt') >= 4, act: g => { g.takeFrom(g.player, 'salt', 4); g.setQuest('bk_salt', 9); g.reward(90, 50, []); g.vote('sveta'); }, go: 'thanks' },
+          { t: 'Бывай.', end: true }] },
+        thanks: { text: 'Соль! Теперь рыба не пропадёт. Голос мой — за Губера.', opts: [{ t: 'Покажи товар.', act: 'trade', end: true }, { t: 'Бывай.', end: true }] },
+      } },
+    arkady: {
+      start: g => g.q('bk_school') === 0 ? 'hello' : g.q('bk_school') === 9 ? 'after' : 'wait',
+      nodes: {
+        hello: { text: 'Аркадий, учитель. В школе двенадцать детей и ни одного нормального обеда. Пять банок консервов — и я поверю, что Губеру есть дело до будущего.',
+          onEnter: g => g.setQuest('bk_school', 1), opts: [{ t: 'Найду.', end: true }] },
+        wait: { text: 'Пять банок. Дети ждут.', opts: [
+          { t: 'Вот консервы.', if: g => R.count(g.player, 'food') >= 5, act: g => { g.takeFrom(g.player, 'food', 5); g.setQuest('bk_school', 9); g.reward(100, 40, []); g.vote('arkady'); g.addRep(3, 'накормили школу в Бариках'); }, go: 'thanks' },
+          { t: 'Позже.', end: true }] },
+        thanks: { text: 'Спасибо. Голос мой — за Губера. А ты заходи: дети любят истории про пустошь.', opts: [{ t: 'Бывай.', end: true }] },
+        after: { text: 'Дети сыты и учат буквы. Это главное.', opts: [{ t: 'Бывай.', end: true }] },
+      } },
+    petrovich: {
+      start: g => g.q('bk_pump') === 0 ? 'hello' : g.q('bk_pump') === 9 ? 'after' : 'wait',
+      nodes: {
+        hello: { text: 'Петрович. Водокачка встала — топлива ни капли, а без насоса весь посёлок носит воду вёдрами с реки. Канистру бы. Или помоги перебрать насос на ручной привод — если соображаешь.',
+          onEnter: g => g.setQuest('bk_pump', 1), opts: [{ t: 'Поищу канистру.', end: true }] },
+        wait: { text: 'Насос молчит.', opts: [
+          { t: 'Вот канистра топлива.', if: g => g.hasItem('fuel'), act: g => { g.takeFrom(g.player, 'fuel', 1); g.setQuest('bk_pump', 9); g.reward(120, 50, []); g.vote('petrovich'); }, go: 'thanks' },
+          { t: 'Перекинем на ручной привод.', check: { stat: 'int', diff: 8 }, ok: 'fixed', fail: 'nofix' },
+          { t: 'Позже.', end: true }] },
+        fixed: { text: 'Качает! Рычагом, по-дедовски, но качает. Голос — за Губера.', onEnter: g => { g.setQuest('bk_pump', 9); g.reward(160, 50, []); g.vote('petrovich'); }, opts: [{ t: 'Бывай.', end: true }] },
+        nofix: { text: 'Не, так шестерню сорвём. Неси топливо — канистры бывают у оружейника в Ручье.', opts: [{ t: 'Ладно.', end: true }] },
+        thanks: { text: 'Заработал! Вода пошла. Голос мой — за Губера.', opts: [{ t: 'Бывай.', end: true }] },
+        after: { text: 'Слышишь, как стучит? Музыка.', opts: [{ t: 'Бывай.', end: true }] },
+      } },
+    olya: {
+      start: g => g.q('bk_cat') === 0 ? 'hello' : g.q('bk_cat') === 2 ? 'found' : g.q('bk_cat') === 9 ? 'after' : 'wait',
+      nodes: {
+        hello: { text: 'Дяденька... то есть, ну... Боцман потерялся! Рыжий, толстый, хвост облезлый. Он всегда у мостков рыбу клянчит, а теперь нету. Найдёте — мама с папой за Губера проголосуют, честно-честно!',
+          onEnter: g => g.setQuest('bk_cat', 1), opts: [{ t: 'Найду твоего Боцмана.', end: true }] },
+        wait: { text: 'Не нашли ещё?.. Он у причалов где-то.', opts: [{ t: 'Ищу.', end: true }] },
+        found: { text: 'БОЦМАН! Ты где был, морда рыжая! Спасибо-спасибо! Вот, это вам — мама в дорогу дала.', onEnter: g => { g.setQuest('bk_cat', 9); g.reward(90, 0, [['food', 1]]); g.vote('olya'); }, opts: [{ t: 'Береги его.', end: true }] },
+        after: { text: 'Боцман больше не убегает. Почти.', opts: [{ t: 'Пока, Оля.', end: true }] },
+      } },
+    klava: {
+      start: g => g.flags.bkVote_klava ? 'after' : 'hello',
+      nodes: {
+        hello: { text: 'Клава. Вдова. Мужа река забрала прошлой весной, а Губер и тогда обещал, и сейчас обещает. Слова — вода. Что мне с его выборов?',
+          opts: [
+            { t: 'Губер поставит мостки с перилами. Больше никто не утонет.', check: { skill: 'speech', diff: 50 }, ok: 'yes', fail: 'no' },
+            { t: 'Вот 100 крышек — на жизнь. Голос за Губера.', if: g => g.player.caps >= 100, act: g => { g.player.caps -= 100; g.vote('klava'); }, go: 'bribe' },
+            { t: 'Прости, что потревожил.', end: true }] },
+        yes: { text: 'Перила... Он бы, может, и правда жив был. Ладно. Проголосую.', onEnter: g => { g.vote('klava'); g.giveXP(60); }, opts: [{ t: 'Спасибо.', end: true }] },
+        no: { text: 'Все так говорят.', opts: [{ t: 'Понимаю.', end: true }] },
+        bribe: { text: 'Крышки — это хоть что-то. Проголосую.', opts: [{ t: 'Бывай.', end: true }] },
+        after: { text: 'Проголосую, проголосую. Не надо дважды.', opts: [{ t: 'Бывай.', end: true }] },
+      } },
+    mitrich: {
+      start: g => 'hello',
+      nodes: {
+        hello: { text: 'Митрич. Рыбачу тут шестьдесят лет, всё вижу, всё помню. Чего тебе, мил человек?',
+          opts: [
+            { t: 'На серпантине меня ограбили. Опечатанный ящик — не видел?', if: g => g.q('crate') >= 1 && g.q('crate') < 9 && !g.hasItem('sealed_crate') && !g.flags.mitrichCrate, go: 'crate' },
+            { t: 'Проголосуешь за Губера?', if: g => !g.flags.bkVote_mitrich, go: 'vote' },
+            { t: 'Бывай, дед.', end: true }] },
+        crate: { text: 'Ящик с пломбой? Видал. Неделю назад люди Клыка тащили такой через брод — трое несли, ругались, тяжёлый. На Блокпост 17 понесли, больше некуда. Ты туда один не ходи.',
+          onEnter: g => { g.flags.mitrichCrate = true; g.giveXP(60); g.revealSite('post'); if (g.q('crate') < 3) g.setQuest('crate', 3); }, opts: [{ t: 'Спасибо, дед.', go: 'hello' }] },
+        vote: { text: g => g.flags.klykDead || g.quests.meds >= 3 ? 'Клыка прижали — значит, есть в пустоши порядок. Губер парень пустой, но раз порядок — проголосую.' : 'Пока Клык на блокпосте грабит всё, что плывёт и едет, — какие выборы? Разберись с Клыком — тогда и поговорим.',
+          opts: [
+            { t: 'Значит, за Губера?', if: g => (g.flags.klykDead || g.quests.meds >= 3) && !g.flags.bkVote_mitrich, act: g => { g.vote('mitrich'); g.giveXP(60); }, go: 'hello' },
+            { t: 'Клык никуда не денется, а рыба — денется. Голосуй сейчас.', if: g => !(g.flags.klykDead || g.quests.meds >= 3), check: { skill: 'speech', diff: 70 }, ok: 'talked', fail: 'hello' },
+            { t: 'Ладно.', go: 'hello' }] },
+        talked: { text: 'Ишь, языкастый. Ладно, уговорил.', onEnter: g => g.vote('mitrich'), opts: [{ t: 'Бывай, дед.', end: true }] },
+      } },
     hero_npc: {
       start: g => 'hello',
       nodes: {
@@ -598,11 +738,19 @@ window.DATA = (function () {
     vera: {
       start: g => g.q('thread') === 4 ? 'report' : 'hello',
       nodes: {
+        crate_v: { text: 'Дай-ка... Пломба армейская, настоящая. Внутри — ампулы реагента «З-2», партия седьмая, и накладная. Получатель: Бастион «Сталь», север. Вот куда уходит «З-2» со всей пустоши. А ты, выходит, вёз его им — сам того не зная.',
+          onEnter: g => { g.flags.crateTruth = true; g.giveXP(150); },
+          opts: [
+            { t: 'Уничтожь его. Пусть хоть эта партия не дойдёт.', act: g => { g.takeFrom(g.player, 'sealed_crate', 1); g.setQuest('crate_open', 9); g.reward(250, 0, [['medkit', 2]]); g.flags.crateDestroyed = true; g.addRep(10, 'партия «З-2» уничтожена'); }, go: 'crate_burn' },
+            { t: 'Оставлю у себя. Ещё пригодится.', act: g => { g.setQuest('crate_open', 9); g.giveXP(100); g.flags.crateKept = true; }, go: 'crate_keep' }] },
+        crate_burn: { text: 'Правильно. Сожжём в котельной. И запомни слово «Бастион» — мы о нём ещё услышим.', opts: [{ t: 'Запомню.', go: 'hello' }] },
+        crate_keep: { text: 'Твоё право. Только не держи его у костра — и не продавай кому попало.', opts: [{ t: 'Понял.', go: 'hello' }] },
         hello: { text: 'Комендант станции, Вера. Чужаков здесь не любят, но ты, вижу, не из рейдеров. Чего надо?',
           opts: [
             { t: 'Я из Ржавого Ручья. Ищу, куда ушла партия «З-2» из «Зари».', if: g => g.q('thread') === 1, go: 'thread' },
             { t: 'Напомни, что с Объектом 9.', if: g => g.q('thread') === 2 || g.q('thread') === 3, go: 'obj9' },
             { t: 'Пойдёшь со мной? Станция под охраной, а мне нужен лучший стрелок.', if: g => g.q('thread') === 9 && g.canRecruit(), go: 'join' },
+            { t: 'Посмотри этот ящик. Пломба «З-2».', if: g => g.q('crate_open') === 1 && g.hasItem('sealed_crate'), go: 'crate_v' },
             { t: 'Что у вас за беда?', go: 'about' },
             { t: 'Бывай.', end: true },
           ] },
@@ -1429,6 +1577,35 @@ window.DATA = (function () {
         ['scav_boss', 36, 22, { wander: 1 }], ['rat', 31, 36, { wander: 3 }], ['rat', 12, 33, { wander: 3 }],
       ],
     },
+    bariki: {
+      name: 'Барики', w: 44, h: 40, ground: ['dirt_tracks', 'overgrown_grassland', 'rubble_ground'], groundW: [4, 3, 1], base: '#5a4c34',
+      river: { y0: 33, y1: 39, bx0: 8, bx1: 9 },
+      entry: { x: 22, y: 4 },
+      exits: [{ x0: 18, y0: 0, x1: 26, y1: 1, label: 'ДОРОГА' }],
+      desc: 'Рыбацкий посёлок у реки: лодки на гальке, сети на заборах и площадь, где спорят о том, кому быть мэром.',
+      objects: [
+        ['booth', 30, 8, { fw: 5, fh: 5, oy: 6, name: 'Дом Губера' }],
+        ['shop_big', 5, 8, { fw: 7, fh: 5, oy: 8, name: 'Лавка Светы', desc: 'Сушёная рыба на верёвках, крупа в мешках.' }],
+        ['garage', 31, 17, { fw: 7, fh: 5, oy: 14, name: 'Кузница Остапа', desc: 'Из-под ворот тянет углём и окалиной.' }],
+        ['quonset', 11, 17, { fw: 6, fh: 4, oy: 8, name: 'Школа', desc: 'Ангар с самодельными партами. На стене углём: «Мама мыла раму».' }],
+        ['water_tower', 37, 26, { fw: 3, fh: 3, oy: 6, name: 'Водокачка' }],
+        ['stall_food', 18, 26, { fw: 4, fh: 4, oy: 8, name: 'Рыбный ряд' }],
+        ['tent_white', 3, 23, { fw: 4, fh: 3, oy: 6, name: 'Дом вдовы Клавы' }],
+        ['tent_green', 24, 19, { fw: 4, fh: 3, oy: 6, name: 'Дом Лёвы' }],
+        ['tent_green_lit', 39, 8, { fw: 4, fh: 3, oy: 6, name: 'Сторожка Раи' }],
+        ['windmill', 2, 15, { fw: 2, fh: 2, oy: 4, name: 'Ветряк' }],
+        ['barrels', 14, 30, {}], ['crate_pile', 20, 31, {}], ['pallet', 11, 31, { block: false, name: 'Сети на просушке' }],
+        ['crate_small', 9, 37, { interact: 'bk_pier' }],
+        ['crate_small', 15, 32, { interact: 'bk_cat' }],
+        ['fence_wire', 36, 12, { fw: 4, fh: 1 }], ['fence_wire', 36, 20, { fw: 4, fh: 1 }],
+        ['pole', 22, 12, {}], ['lamp_post', 20, 15, {}], ['tires', 27, 28, {}], ['bush_dry', 42, 14, {}], ['rocks', 42, 22, {}],
+      ],
+      npcs: [
+        ['guber', 29, 14, {}], ['lyova', 12, 29, {}], ['klava', 6, 21, { wander: 2 }], ['ostap', 30, 23, {}], ['raya', 37, 15, {}],
+        ['mitrich', 7, 31, {}], ['sveta', 9, 14, {}], ['arkady', 15, 22, {}], ['petrovich', 34, 27, {}], ['olya', 19, 23, { wander: 3 }],
+        ['wolf', 41, 26, { wander: 2, tag: 'bk_wolf' }], ['wolf', 42, 29, { wander: 2, tag: 'bk_wolf' }], ['wolf', 40, 31, { wander: 2, tag: 'bk_wolf' }],
+      ],
+    },
     crash: {
       name: 'Обочина у серпантина', w: 36, h: 30, desert: true, base: '#b08b55', ground: [],
       road: { x0: 14, x1: 17 }, mountain: { rows: 4 }, skid: [[15, 7], [17, 10], [20, 12], [22, 14]],
@@ -1559,6 +1736,7 @@ window.DATA = (function () {
       { id: 'solar', x: 1, y: 15, name: 'Солнечная станция', sprite: 'transformer_big', known: false },
       { id: 'camp', x: 10, y: 12, name: 'Ржавый Ручей', sprite: 'booth', known: true },
       { id: 'crash', x: 14, y: 13, name: 'Место аварии', sprite: 'lada_wreck', known: true },
+      { id: 'bariki', x: 23, y: 11, name: 'Барики', sprite: 'stall_awning', known: true },
       { id: 'post', x: 19, y: 6, name: 'Блокпост 17', sprite: 'mil_tower', known: false },
       { id: 'zarya', x: 21, y: 13, name: 'Промзона «Заря»', sprite: 'brick_factory', known: false },
       { id: 'hive', x: 15, y: 17, name: 'Улей', sprite: 'transformer_rad', known: false },
@@ -1627,6 +1805,15 @@ window.DATA = (function () {
       3: 'Объект 9: проникните в хранилище (код — у радиста Кузьмы, ключ-карта — у охраны, или Взлом 60) и разберитесь со складом «З-2».',
       4: 'Вернитесь к коменданту Вере на станцию «Рассвет».' } },
     mast: { title: 'Молчащая антенна', giver: 'kuzma', steps: { 1: 'Почините радиомачту «Рассвета»: нужно 3 хлама и Интеллект 6 или Взлом 35.', 2: 'Антенна работает — сообщите радисту Кузьме.' } },
+    bk_election: { title: 'Выборы в Бариках', giver: 'guber', steps: { 1: 'Губер хочет стать мэром Бариков: нужны голоса всех девяти семей. Помогите жителям — и они проголосуют. Голоса считает Губер.' } },
+    bk_fish: { title: 'Улов для Лёвы', giver: 'lyova', steps: { 1: 'Принесите рыбаку Лёве 3 речные рыбы. Рыбачить можно со снастей у мостков.' } },
+    bk_forge: { title: 'Горн кузнеца', giver: 'ostap', steps: { 1: 'Кузнецу Остапу нужны 4 хлама на починку горна. Или почините горн сами (Интеллект 7).' } },
+    bk_wolves: { title: 'Волки у ворот', giver: 'raya', steps: { 1: 'Перебейте стаю из трёх волков за восточными воротами Бариков.', 2: 'Стая перебита. Вернитесь к охотнице Рае.' } },
+    bk_salt: { title: 'Соль для Светы', giver: 'sveta', steps: { 1: 'Принесите торговке Свете 4 мешочка соли. Соль возят водовозы с запада, бывает у Рашида в Оазисе.' } },
+    bk_school: { title: 'Обед для школы', giver: 'arkady', steps: { 1: 'Принесите учителю Аркадию 5 банок консервов для школы.' } },
+    bk_pump: { title: 'Насос водокачки', giver: 'petrovich', steps: { 1: 'Механику Петровичу нужна канистра топлива (бывает у оружейника Константина в Ручье). Или переделайте насос на ручной привод (Интеллект 8).' } },
+    bk_cat: { title: 'Кот по кличке Боцман', giver: 'olya', steps: { 1: 'Найдите рыжего кота Боцмана у причалов Бариков.', 2: 'Боцман нашёлся. Верните его Оле.' } },
+    crate_open: { title: 'Что в ящике', giver: 'vera', steps: { 1: 'Ящик «З-2» с пломбой у вас. Михалыч советует показать его Вере, коменданту станции «Рассвет»: она разбирается в «З-2».' } },
     p_artyom: { title: 'Старый заказчик', giver: 'lis', steps: {
       1: 'Посредник Лис требует вернуть опечатанный ящик заказчику: деньги за рейс взяты вперёд. Ящик у Клыка на Блокпосте 17. Отдать ли его Лису — решать вам.' } },
     p_gosha: { title: 'Старый долг', giver: 'semyon', steps: {
@@ -1684,6 +1871,20 @@ window.DATA = (function () {
       search: { loot: [['junk', 1, 2, 70], ['food', 1, 1, 30], ['bandage', 1, 1, 25]], caps: [0, 8] } },
     bus2: { name: 'Остов автобуса', look: 'Междугородний автобус. На табличке маршрута ещё читается: «Заря — Центр».', lookXp: 5,
       search: { loot: [['junk', 1, 2, 70], ['food', 1, 1, 30], ['bandage', 1, 1, 25]], caps: [0, 8] } },
+    bk_pier: { name: 'Рыбацкие снасти', look: 'Удочки, донки и ведро с червями на краю мостков. Река тут глубокая и неторопливая.', lookXp: 5,
+      actions: [{ label: 'Порыбачить (1 час)', act: g => {
+        if (g.time - (g.flags.lastFish || -999) < 55) return 'Рыба распугана. Подождите час-другой.';
+        g.flags.lastFish = g.time; g.passTime(60);
+        const ch = 35 + Math.floor(R.skill(g.player, 'survival') / 2) + g.player.stats.luck * 2;
+        const n = R.rnd(1, 100) <= ch ? (R.rnd(1, 100) <= 30 ? 2 : 1) : 0;
+        if (!n) return 'Час на мостках — и ни поклёвки.';
+        R.addItem(g.player, 'fish', n); SND.play('pickup'); UI.refresh();
+        g.log(`Улов: Речная рыба ×${n}.`, 'good');
+        return `Поплавок дёрнулся — есть! Речная рыба ×${n}.`;
+      } }] },
+    bk_cat: { name: 'Ящик у причала', look: 'Старый ящик из-под сетей. Изнутри доносится жалобное мяуканье и запах рыбы.', lookXp: 5,
+      actions: [{ label: 'Выманить кота', if: g => g.q('bk_cat') === 1, act: g => { g.setQuest('bk_cat', 2); g.giveXP(30); return 'Вы приоткрываете крышку и шуршите рыбьей шкуркой. Рыжий толстый кот с облезлым хвостом выбирается наружу и трётся о ноги. Боцман, не иначе.'; } },
+        { label: 'Заглянуть внутрь', if: g => g.q('bk_cat') !== 1, act: g => g.q('bk_cat') >= 2 ? 'Пусто, только рыжая шерсть.' : 'Кто-то рыжий шипит из темноты и не даётся. Видно, ждёт кого-то знакомого.' }] },
     lada_wreck: { name: 'Ваша машина', lookXp: 15,
       look: 'Ваши «Жигули». Капот смят о камни, лобовое в паутине трещин, в двери — пулевые отверстия. По вам стреляли из кустов у обочины. Опечатанного ящика, который вы везли, в машине нет — кто-то забрал его, пока вы лежали без сознания.',
       onLook: g => { if (!g.q('crate')) g.setQuest('crate', 1); },

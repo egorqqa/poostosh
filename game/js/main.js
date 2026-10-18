@@ -80,6 +80,16 @@
     G.recruit(tpl, { weapon: t.weapon, loaded: (DATA.ITEMS[t.weapon] || {}).mag || 0, skills: t.skills });
     if (G.companion) { G.companion.heroModel = t.heroModel; G.companion.portrait = t.portrait; G.flags['heroJoined_' + tpl] = true; }
   };
+  // выборы в Бариках: голоса девяти семей
+  const BK_VOTERS = { lyova: 'Лёва', klava: 'Клава', ostap: 'Остап', raya: 'Рая', mitrich: 'Митрич', sveta: 'Света', arkady: 'Аркадий', petrovich: 'Петрович', olya: 'семья Оли' };
+  G.votes = () => Object.keys(BK_VOTERS).filter(k => G.flags['bkVote_' + k]).length;
+  G.votesLeft = () => Object.keys(BK_VOTERS).filter(k => !G.flags['bkVote_' + k]).map(k => BK_VOTERS[k]);
+  G.vote = function (id) {
+    if (G.flags['bkVote_' + id]) return;
+    G.flags['bkVote_' + id] = true;
+    G.log(`Голос за Губера: ${BK_VOTERS[id]}. Всего ${G.votes()} из 9.`, 'good');
+    if (G.votes() >= 9 && G.q('bk_election') === 1) G.log('Все девять семей за Губера! Возвращайтесь к нему.', 'good');
+  };
   // Клык отдаёт опечатанный ящик
   G.klykCrate = function () {
     const k = G.findNpc('klyk');
@@ -260,6 +270,15 @@
     if (a.dead || a.hostile || a.isRemote) return null;
     const q = G.q, p = G.player;
     switch (a.tpl) {
+      case 'guber': return q('bk_election') === 0 ? '!' : q('bk_election') === 1 && G.votes() >= 9 ? '?' : null;
+      case 'lyova': return q('bk_fish') === 0 ? '!' : q('bk_fish') === 1 && R.count(p, 'fish') >= 3 ? '?' : null;
+      case 'ostap': return q('bk_forge') === 0 ? '!' : q('bk_forge') === 1 && R.count(p, 'junk') >= 4 ? '?' : null;
+      case 'raya': return q('bk_wolves') === 0 ? '!' : q('bk_wolves') === 2 ? '?' : null;
+      case 'sveta': return q('bk_salt') === 0 ? '!' : q('bk_salt') === 1 && R.count(p, 'salt') >= 4 ? '?' : null;
+      case 'arkady': return q('bk_school') === 0 ? '!' : q('bk_school') === 1 && R.count(p, 'food') >= 5 ? '?' : null;
+      case 'petrovich': return q('bk_pump') === 0 ? '!' : q('bk_pump') === 1 && G.hasItem('fuel') ? '?' : null;
+      case 'olya': return q('bk_cat') === 0 ? '!' : q('bk_cat') === 2 ? '?' : null;
+      case 'mitrich': return q('crate') >= 1 && q('crate') < 9 && !G.flags.mitrichCrate && !G.hasItem('sealed_crate') ? '!' : null;
       case 'lis': return q('p_artyom') === 0 ? '!' : G.hasItem('sealed_crate') && q('p_artyom') === 1 ? '?' : null;
       case 'mila': return q('p_roza') === 0 ? '!' : q('p_roza') === 2 ? '?' : null;
       case 'mihalych': if (q('finale') === 1 || q('finale') === 3 || q('crate') === 2 || (G.hasItem('sealed_crate') && q('crate') < 9)) return '?';
@@ -272,7 +291,8 @@
       case 'borey': return q('north') === 3 && !G.flags.northEnd ? '!' : null;
       case 'yasna': return G.hasItem('pump_core') ? '?' : q('west') === 1 ? '!' : null;
       case 'zno': return q('west') === 2 && !G.flags.westEnd ? '!' : null;
-      case 'vera': return q('thread') === 1 ? '!' : q('thread') === 4 && (G.flags.z2Destroyed || G.hasItem('z2_crate')) ? '?' : null;
+      case 'vera': if (q('crate_open') === 1 && G.hasItem('sealed_crate')) return '?';
+        return q('thread') === 1 ? '!' : q('thread') === 4 && (G.flags.z2Destroyed || G.hasItem('z2_crate')) ? '?' : null;
       case 'lada': return G.flags.ladaFree ? null : '!';
       case 'rzha': return q('south') >= 1 && q('south') < 3 && !G.flags.southDone ? '!' : null;
       case 'kuzma': return q('obs') === 4 || q('south') === 3 ? '?' : (q('obs') === 9 && q('south') === 0) || (q('south') === 9 && q('west') === 0) || (q('west') === 9 && q('north') === 0) ? '!' : q('north') === 4 ? '?' : q('north') === 9 && q('finale') === 0 ? '!' : q('column') === 9 && q('obs') === 0 ? '!' : q('mast') === 2 ? '?' : q('mast') === 0 || (q('thread') === 9 && q('column') === 0) ? '!' : null;
