@@ -118,11 +118,26 @@ window.CV = (function () {
     return C.active(G).filter(cv => WMAP.hexDist(cv.hex, me) <= dist);
   };
   // вызывается на каждом шаге по карте; true — встреча состоялась
+  // после любого выбора («Торговать», «Напасть», «Пройти мимо») караван не останавливает героя
+  // ближайший игровой час — и пока они не разойдутся
+  const MEET_COOLDOWN = 60;
+  function metInfo(G, id) {
+    const m = (G.flags.cvMet = G.flags.cvMet || {})[id];
+    return m == null ? null : typeof m === 'number' ? { t: m, away: false } : m;
+  }
+  C.canMeet = function (G, cv) {
+    const m = metInfo(G, cv.id);
+    return !m || (C.clock(G) - m.t >= MEET_COOLDOWN && m.away);
+  };
   C.checkMeet = function (G) {
     if (G.flags.escort) return false;
-    G.flags.cvMet = G.flags.cvMet || {};
-    const t = C.clock(G);
-    const cv = C.near(G, 1).find(c => !(G.flags.cvMet[c.id] > t - 8 * 60));
+    const near = C.near(G, 1);
+    // караваны, с которыми уже разошлись, снова можно встретить (после часа)
+    for (const [id, v] of Object.entries(G.flags.cvMet || {})) {
+      if (!near.some(c => c.id === id)) { const m = metInfo(G, id); m.away = true; G.flags.cvMet[id] = m; }
+      if (C.clock(G) - (typeof v === 'number' ? v : v.t) > 48 * 60) delete G.flags.cvMet[id];
+    }
+    const cv = near.find(c => C.canMeet(G, c));
     if (!cv) return false;
     C.openMeet(G, cv);
     return true;
@@ -130,7 +145,8 @@ window.CV = (function () {
 
   C.openMeet = function (G, cv) {
     G.flags.cvMet = G.flags.cvMet || {};
-    G.flags.cvMet[cv.id] = C.clock(G);
+    G.flags.cvMet[cv.id] = { t: C.clock(G), away: false };
+    const resume = G.world.path.slice(); // куда герой шёл — продолжит после «Пройти мимо»
     G.world.path = [];
     const hostile = (G.flags.cvHostile || {})[cv.id];
     SND.play(hostile ? 'alert' : 'dialog');
@@ -143,7 +159,7 @@ window.CV = (function () {
         <button id="m-attack" style="border-color:#a03a2a">Напасть</button>
         <button class="primary" id="m-trade" ${hostile ? 'disabled' : ''}>Торговать</button>
       </div></div>`, root => {
-      root.querySelector('#m-pass').onclick = () => { UI.closeModal(); G.log(`Караван «${cv.name}» проходит мимо.`, 'sys'); };
+      root.querySelector('#m-pass').onclick = () => { UI.closeModal(); G.log(`Караван «${cv.name}» идёт своей дорогой, вы — своей.`, 'sys'); G.world.path = resume; };
       root.querySelector('#m-trade').onclick = () => C.enter(G, cv, 'trade');
       root.querySelector('#m-attack').onclick = () => C.enter(G, cv, 'attack');
     });

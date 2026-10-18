@@ -171,7 +171,7 @@ window.WMAP = (function () {
     if (h.c === W.c && h.r === W.r) { const s = siteHere(G); if (s) M.enterSite(G, s.id); return; }
     if (G.flags.escort) { G.hint(G.flags.escort.leader ? 'Вы в охране каравана: «Идти с караваном» или «Бросить караван»' : 'Вы в охране каравана — путь ведёт наниматель'); return; }
     const cvh = window.CV && CV.at(G, h);
-    if (cvh && hexDist(h, { c: W.c, r: W.r }) <= 1) { CV.openMeet(G, cvh); return; }
+    if (cvh && hexDist(h, { c: W.c, r: W.r }) <= 1 && CV.canMeet(G, cvh)) { CV.openMeet(G, cvh); return; }
     const path = findHexPath(G, { c: W.c, r: W.r }, h);
     if (!path) {
       G.hint(terrainAt(h.c, h.r) === 'v' ? 'Это река' : 'Туда не пройти');
