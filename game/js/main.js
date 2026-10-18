@@ -73,6 +73,20 @@
     G.log(`${c.name} присоединяется к вам. Клик по напарнику — команды и обмен вещами.`, 'good');
     SND.play('quest');
   };
+  // герой-напарник (другие герои стартового выбора)
+  G.recruitHero = function (tpl) {
+    if (G.companion) { G.log(`${G.companion.name} уходит: в отряде место только для одного напарника.`, 'sys'); G.dismissCompanion(); }
+    const t = DATA.NPCS[tpl];
+    G.recruit(tpl, { weapon: t.weapon, loaded: (DATA.ITEMS[t.weapon] || {}).mag || 0, skills: t.skills });
+    if (G.companion) { G.companion.heroModel = t.heroModel; G.companion.portrait = t.portrait; G.flags['heroJoined_' + tpl] = true; }
+  };
+  // Клык отдаёт опечатанный ящик
+  G.klykCrate = function () {
+    const k = G.findNpc('klyk');
+    if (k) R.removeItem(k, 'sealed_crate', 1);
+    if (!G.hasItem('sealed_crate')) R.addItem(G.player, 'sealed_crate', 1);
+    G.log('Получено: Опечатанный ящик.', 'good'); G.giveXP(60);
+  };
   G.companionEquip = function (verbose) {
     const c = G.companion;
     if (!c) return;
@@ -246,9 +260,12 @@
     if (a.dead || a.hostile || a.isRemote) return null;
     const q = G.q, p = G.player;
     switch (a.tpl) {
+      case 'lis': return q('p_artyom') === 0 ? '!' : G.hasItem('sealed_crate') && q('p_artyom') === 1 ? '?' : null;
+      case 'mila': return q('p_roza') === 0 ? '!' : q('p_roza') === 2 ? '?' : null;
       case 'mihalych': if (q('finale') === 1 || q('finale') === 3 || q('crate') === 2 || (G.hasItem('sealed_crate') && q('crate') < 9)) return '?';
         return (G.hasItem('meds') && G.quests.meds < 3) || (q('rats') === 1 && R.count(p, 'rat_tail') >= 5) ? '?' : G.quests.meds === 0 || q('rats') === 0 ? '!' : null;
-      case 'semyon': return (G.hasItem('samples') && q('zarya') < 9) || (q('pelts') === 1 && R.count(p, 'wolf_pelt') >= 3) ? '?' : q('pelts') === 0 && q('debt') !== 0 ? '!' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
+      case 'semyon': if (p.hero === 'gosha' && (!G.flags.goshaSema || q('p_gosha') === 3)) return '?';
+        return (G.hasItem('samples') && q('zarya') < 9) || (q('pelts') === 1 && R.count(p, 'wolf_pelt') >= 3) ? '?' : q('pelts') === 0 && q('debt') !== 0 ? '!' : q('debt') === 0 ? '!' : q('debt') === 1 && p.caps >= 15 && G.flags.tihonDebtPaid ? '?' : null;
       case 'granit': return q('column') >= 1 && q('column') < 3 ? '!' : q('column') === 4 ? '?' : null;
       case 'klyk_city': return q('column') === 3 ? '!' : null;
       case 'miron': return !G.flags.minersFree ? '!' : null;

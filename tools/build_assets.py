@@ -464,6 +464,8 @@ def main():
     build_konst.build(manifest)
     import build_car
     build_car.build(manifest)
+    import build_heroes
+    build_heroes.build(manifest)
     build_rat(manifest)
     build_wolf(manifest)
     build_roach(manifest)

@@ -26,6 +26,7 @@ window.R = (function () {
       stealTries: 0,
     };
     if (opts.cvRole) a.cvRole = opts.cvRole;
+    if (t.heroModel) { a.heroModel = t.heroModel; a.portrait = t.portrait; }
     a.baseHP = t.hp;
     a.hp = t.hp;
     const w = a.weapon && ITEMS[a.weapon];

@@ -177,6 +177,14 @@ window.WORLD_API = (function () {
     }
     if (id === 'camp' && G.q('finale') === 2 && !NET.active) W.spawnFinale(G);
     if (L.def.cv) CV.setup(G, L);
+    // герои: сам себя не встретишь; Лис — только для Артёма, Мила — только для Розы
+    const hero = G.player.hero;
+    for (const a of L.actors) {
+      if (a.tpl && a.tpl.startsWith('hero_') && (a.tpl === 'hero_' + hero || (G.companion && G.companion.tpl === a.tpl))) a.gone = true;
+      if (a.tpl === 'lis' && (hero !== 'artyom' || G.flags.artyomClient === 'kept')) a.gone = true;
+      if (a.tpl === 'mila' && hero !== 'roza') a.gone = true;
+      if ((a.tpl === 'lis' || a.tpl === 'mila' || (a.tpl && a.tpl.startsWith('hero_'))) && !a.gone && L.blocked[a.y * L.w + a.x]) { const f = W.freeTile(L, a.x, a.y, a); if (f) { a.x = a.rx = a.homeX = f.x; a.y = a.ry = a.homeY = f.y; } }
+    }
     if (id === 'observatory' || id === 'obs_dome') {
       const friendly = G.flags.columnEnd === 'joined' || G.flags.granitYield || G.flags.obsDone;
       for (const a of L.actors) {

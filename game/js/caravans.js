@@ -387,6 +387,7 @@ window.CV = (function () {
     G.reward(rw.xp, rw.caps);
     const fac = FACTIONS[esc.from];
     if (fac && fac.rep) G.addRep(3, `караван «${fac.name}» доведён`);
+    if (esc.from === 'camp' && G.q('p_gosha') === 2) G.setQuest('p_gosha', 3); // долг Гоши отработан
     SND.play('quest');
     if (window.NET && NET.active) { NET.send({ t: 'stat', k: 'escorts' }); if (window.SOC) SOC.bcast({ kind: 'party_escdone', caps: rw.caps, xp: rw.xp, name: esc.name, dest: esc.to }); } // не «to» — это адресат сообщения
     WMAP.refreshPanel(G);

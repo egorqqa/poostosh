@@ -39,6 +39,22 @@ window.ENG = (function () {
         const ox = o.getContext('2d'); ox.shadowColor = 'rgba(0,0,0,0.85)'; ox.shadowBlur = 3; ox.drawImage(im, 0, 0);
         E.guns[key.slice(4)] = { canvas: o, fw: man.fw, fh: man.fh, ax: man.ax, ay: man.ay, walk: man.walk, aim: man.aim, fire: man.fire };
       }
+      // внешность героев: hero_soldier_<герой> (без оружия), hero_pl_<ствол>_<герой> (с оружием)
+      E.heroSheets = {};
+      const outline = (im, filter) => {
+        const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+        const cx = c.getContext('2d'); cx.filter = filter || 'none'; cx.drawImage(im, 0, 0);
+        const o = document.createElement('canvas'); o.width = c.width; o.height = c.height;
+        const ox = o.getContext('2d'); ox.shadowColor = 'rgba(0,0,0,0.85)'; ox.shadowBlur = 3; ox.drawImage(c, 0, 0);
+        return o;
+      };
+      for (const key of Object.keys(window.ASSET_MANIFEST)) {
+        if (!key.startsWith('hero_') || !E.img[key]) continue;
+        const m = key.match(/^hero_(soldier|pl_(pistol|rifle|ak))_(\w+)$/);
+        if (!m) continue;
+        if (m[1] === 'soldier') E.heroSheets[m[3]] = outline(E.img[key], 'brightness(1.12) contrast(1.06)');
+        else if (E.guns[m[2]]) E.guns[m[2] + '@' + m[3]] = { ...E.guns[m[2]], canvas: outline(E.img[key]) };
+      }
       // перекрашенные копии модели персонажа
       const base = E.img.char_soldier;
       for (const [k, f] of Object.entries(DATA.TINTS)) {
@@ -707,9 +723,12 @@ window.ENG = (function () {
   E.gunKey = function (a) {
     if (!a || !a.weapon || !E.guns) return null;
     const tpl = DATA.NPCS[a.tpl];
-    if (!(a.isPlayer || a.isRemote || (tpl && ARMED.includes(tpl.faction) && !a.model))) return null;
+    const hero = a.hero || a.heroModel;
+    if (!(a.isPlayer || a.isRemote || hero || (tpl && ARMED.includes(tpl.faction) && !a.model))) return null;
     const w = DATA.ITEMS[a.weapon];
-    return w && !w.melee && E.guns[GUN_OF[w.icon]] ? GUN_OF[w.icon] + (a.isPlayer || a.isRemote ? '' : ':' + (a.tint || 'guard')) : null;
+    if (!w || w.melee || !E.guns[GUN_OF[w.icon]]) return null;
+    if (hero && E.guns[GUN_OF[w.icon] + '@' + hero]) return GUN_OF[w.icon] + '@' + hero;
+    return GUN_OF[w.icon] + (a.isPlayer || a.isRemote ? '' : ':' + (a.tint || 'guard'));
   };
   // лист модели; для NPC — перекрашенная копия под их окраску (кэшируется)
   function gunSheet(key) {
@@ -735,7 +754,8 @@ window.ENG = (function () {
     if (a.model && E.models[a.model]) { drawModel(ctx, G, a, t, hovered, E.models[a.model]); drawBurn(ctx, a, t); return; }
     if (a.tpl === 'konst' && E.img.npc_konst) { drawKonst(ctx, G, a, t, hovered); return; }
     const GM = E.gunModel(a);
-    const sheet = E.sheets[a.tint || 'player'];
+    const hs = E.heroSheets && E.heroSheets[a.hero || a.heroModel];
+    const sheet = hs || E.sheets[a.tint || 'player'];
     const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
     // тень
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -883,7 +903,7 @@ window.ENG = (function () {
       return;
     }
     const GM = gunSheet(a.corpseGun || (a.isPlayer || a.isRemote ? E.gunKey(a) : null));
-    const sheet = E.sheets[a.tint || 'player'];
+    const sheet = (E.heroSheets && E.heroSheets[a.hero || a.heroModel]) || E.sheets[a.tint || 'player'];
     const sx = (a.rx - a.ry) * HW, sy = (a.rx + a.ry) * HH + HH;
     if (GM) { drawGunCorpse(ctx, a, GM, sx, sy); return; }
     // анимация падения: тело заваливается, лужа крови растекается

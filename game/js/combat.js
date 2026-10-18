@@ -334,6 +334,10 @@ window.COMBAT = (function () {
     if (by && by.isPlayer) { G.giveXP(a.xpValue || 25); if (net()) NET.send({ t: 'stat', k: 'kills' }); }
     if (by && by.isRemote) NET.event(by.pid, { kind: 'xp', n: a.xpValue || 25 });
     if (a.tpl === 'klyk') G.flags.klykDead = true;
+    if (a.tpl === 'wolf_alpha' && G.loc && G.loc.id === 'forest') {
+      G.flags.wolfAlphaDead = true;
+      if (G.q('p_roza') === 1) { G.setQuest('p_roza', 2); R.addItem(G.player, 'roza_revolver', 1); G.log('У логова вожака, в траве, — тяжёлый револьвер. Отцовский. Получено: ★ Отцовский револьвер.', 'good'); }
+    }
     if (a.tpl === 'marauder') G.flags.marauderKilled = true;
     if (a.tpl === 'mytar') G.openBridge();
     if (a.tpl === 'borey' && !G.flags.northEnd) G.northEnd('killed');

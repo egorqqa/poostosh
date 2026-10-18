@@ -937,5 +937,89 @@ window.ASSET_MANIFEST = {
 "src": "assets/sprites/lada_wreck_back.png",
 "w": 222,
 "h": 127
+},
+"hero_soldier_artyom": {
+"src": "assets/chars/soldier_artyom.png",
+"w": 960,
+"h": 440,
+"fw": 120,
+"fh": 110
+},
+"hero_pl_pistol_artyom": {
+"src": "assets/chars/pl_pistol_artyom.png",
+"w": 600,
+"h": 896,
+"fw": 150,
+"fh": 112
+},
+"hero_pl_rifle_artyom": {
+"src": "assets/chars/pl_rifle_artyom.png",
+"w": 750,
+"h": 896,
+"fw": 150,
+"fh": 112
+},
+"hero_pl_ak_artyom": {
+"src": "assets/chars/pl_ak_artyom.png",
+"w": 1200,
+"h": 896,
+"fw": 150,
+"fh": 112
+},
+"hero_soldier_roza": {
+"src": "assets/chars/soldier_roza.png",
+"w": 960,
+"h": 440,
+"fw": 120,
+"fh": 110
+},
+"hero_pl_pistol_roza": {
+"src": "assets/chars/pl_pistol_roza.png",
+"w": 600,
+"h": 896,
+"fw": 150,
+"fh": 112
+},
+"hero_pl_rifle_roza": {
+"src": "assets/chars/pl_rifle_roza.png",
+"w": 750,
+"h": 896,
+"fw": 150,
+"fh": 112
+},
+"hero_pl_ak_roza": {
+"src": "assets/chars/pl_ak_roza.png",
+"w": 1200,
+"h": 896,
+"fw": 150,
+"fh": 112
+},
+"hero_soldier_gosha": {
+"src": "assets/chars/soldier_gosha.png",
+"w": 960,
+"h": 440,
+"fw": 120,
+"fh": 110
+},
+"hero_pl_pistol_gosha": {
+"src": "assets/chars/pl_pistol_gosha.png",
+"w": 600,
+"h": 896,
+"fw": 150,
+"fh": 112
+},
+"hero_pl_rifle_gosha": {
+"src": "assets/chars/pl_rifle_gosha.png",
+"w": 750,
+"h": 896,
+"fw": 150,
+"fh": 112
+},
+"hero_pl_ak_gosha": {
+"src": "assets/chars/pl_ak_gosha.png",
+"w": 1200,
+"h": 896,
+"fw": 150,
+"fh": 112
 }
 };
